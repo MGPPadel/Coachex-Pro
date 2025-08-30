@@ -70,7 +70,8 @@
     const auth = firebase.auth();
     const db = firebase.firestore();
     
-    
+    const logoCircularBase64 = "data:image/png;base64,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tWrVePXVV/nss8/YuHEjMjMzmThxIl5//XUWLFiAadOmYciQIUhLS0NqaipCQkLw4MEDnD59mnXr1uGyyy5Dr169sHjxYixatAjPPfccS5cuRXJyMmJjYxETE4PExETExMQgLi4OQUFBCAwMxNSpU/HHH3/w5JNPcu/ePfzyl7/Eo48+ivz8fLzzzjtIT09HXl4eXnzxRSxatAh/+tOfOHbsGOx2O0JDQxEREYF79+7h1q1b+OGHHxgaGoLDw/u4ffs21q5diwceeICUlBSMHz8eXbt25d///newWq148MEHuWvXLuzdu5clS5bg3//+N2bOnImxsbHEx8czbtw4JCQk4MKFC7hz5w58Ph/sdjveeecd/v3vf2Pbtm0sWLCA0aNHc9ppp2HdunU4ODjg3LlzCAgIQFhYGIYOHYrhw4dDJpOhqKgImZmZTJ48mSeeeILNmzcjJSUFWVlZnDx5kujoaKxevRqTJ0/GysoKrly5wkknnYTnnnuOlStX4oUXXmDNmjWYPn06vvvuu7766iuqqqooKCiAy+WCu7t75Obm4tGjR6iqquKtt97iX//6V7788kusX78eGzdu5IcffmDjxo1Ys2YNnn32WZYtW4anT5/iyJEjmDRpEnbt2sUbb7zBuXPn8OabbzJ06FDs3r2bgQMHYubMmVixYgXWrl2LjIwMnDp1invvvZcRI0YwduxYPPfcc9x9990AHD9+nMDAQPzwhz/EtGnTcOjQIaSlpfH6668zZ84cBAUF4b333mPhwoV4//33+fLLL9Hb24u77rqLX/3qV3z99dfY2Nhg27ZtWLFiBfn5+SxYsICxY8eybds2XH311axdu5all13G3Llzeeqpp9i/fz/ee+89hg8fjq1btzJkyBC++OILRo8ezenTp/npp59YtWoVli9fzhtvvMH06dM5derUN4C1tbW54IILmDZtGiZOnMiYMWOYMGHCm5aWloqnnnoKExMTjB07Fr/5zW+45ppruOGGG5g2bRpGRkZIS0vD559/ztixYxkxYgRjxoxh3LhxTJo0CQkJCZibm8P4+DjGxsZw9+5dxMbGsGzZMpw8eRKHDx+GzWbDT3/6U3p1683ChQs5d+4cpk+fzksvvQRbt25l1KhRnHnmmSxcuJDVq1dz8803M3z4cAYPHgwA//nPfxg6dCj2799vdnZ2/PXXX8yePZsDBw5w0003YXR0FGvXrmXTpk0MHDiQW2+9lUWLFvHkk0+ybNmyr2WzZs2K2NhYjBgxAm+//TalpaXMnDmTefPmoaurC3V1dcycOZP33nuPJ598kpdffpnJkydz3nnnYWBgwBtvvMH3339vdnZ23HLLLcjNzeXuu+/m+eefZ86cOZimKfz85z/n/PPPV72nTp2KkSNH4qabbuL666/noosuYvDgwUycOBHz58+v+h/84Ad888033H///axdu5ann36aVatWsWjRIu666y7GjBljbm5ufvvb3/LVV1/x8ssvc/nllzNp0iSee+45Ro0axZQpU1ixYgX33XcfM2bM4D//+Q8PP/wwH3zwAb169cKDDz7Ipk2bmDFjBlatWsXSpUuZPXs2zzzzDH//+9959tlnWbFiBfr6+vjss8+YPHnyG97a2tp8+umnXH/99Vx00UU89dRT/O///s+oUaMAlJSU4Mknn+Thhx/m5ptvZvny5fzsZz/D5ZdfzpNPPsngwYPx8MMP4+zsjDvuuIN//etf/OpXv+LHH3/kzjvvZNeuXbzwwh7cddddfP3117z++utUVVWxbNky7rzzTtasWcN///tfxo0bx+LFi7nmmuu46KKLmDBhAu666y6WLFnCPffcw5lnnslZZ53FggUL+N///s/555/PH/7wB6ZNm8a4ceN44403mDVrFu677z4AYmNjsX37djZt2sRbb71FSkqK9555n2uuuQYrVqygpaWF22+/nQsuuIBPP/0UkydP5sYbbwSgsLDQ66/97//+DwAfffQRTz75JLfddhvPPfccAwYMIDU1lZtvvhmAkJAQRkZG+Pvf/y61P/7xD958801+8IMf4OzsjJtuuomKigo+/vjjm97r6+vTzMwMv//97zl9+jQPPvggzz77LHl5eSxdupQVK1bg4MGD9Pb2snfvXgIDAzk3N1fq//6/Wf6/p6dH8fHxL5eWlr6WJG3atOnUqVPL169ff5j//fff/73d3d3/tNNOO317e3uSJKlpmqZpXFxcfDjn/5v85z+fTUlKSkr4f+utt/5VSqn9ftQy/Q/9o2l8fHz4+vqipaUFlZWV6N+/PxkZGbzxxhvExcWxcuVKLFy4EB07duTNN9/Em2++CUBAQEAvr/3iiy9y+vRpRo0axdSpU/n6668ZOXIk//3vfzl8+DAvvPACW7duxdSpU1m6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/f9fX1/n5ubmHw5eXl5wcnKy6e/s7AwHBwf09fWxsbHx2z//5s2b/y1J+ve///3f8vnz529evHhxfHx8rP/bt2/fys/Pz9/f/1uS/j83Nzf7eDjn/38O+f+a/N9//fXXb2VlZSX/L0lSr9frdVX/P/Wf//zn1w1Jkj/U/9ekv6+rq+v29vby8vLy5v9N+v+dnp7+6evrq15fX5/6x/S/3N3d7efr/1f/+8b/L0n6/036/8vLy0tLS0vz/9f//729vev/af4/nJyc/Ovr6/P/j+m/1cXFBd///vevW7du/X/l//9fXFyMvr6+b/P/a/7/lStX/vW///u//2v+f+v/q39KSkpKSkpq/+f+/ftZ+/f0/y+Vv7+pqcnX1dXl5eXlbVNTk//r/z/y/0v94+zs7P+7vb19q/+/+sc0/n93d/dXnZ2dn7X//0v/b2pqqv4f2//X//8n/X/t/y//X729vZ9l/Z+V/n/1/3/L+n/r/5L+31Qq/W9+/vnnn/+b//81f+X/P/f+v1f//9X/b63//2/r/186/3/t/3/l/6v/f63//7a+v/X/P5Wqqv7/f6/+v63//6/+v63//2v//18q/+96f2v/v+X/r/7/a/+/pff/5c//k//v//j/+P6/J0iSfpL/vyT9/+v/f6X/v+b//yX/v7X+/19K6v9v6f1v6f1//P4v5f+/pff/lf//lf+/pf//lf//lf//lf/v7//6f8v/v1/9/xf/v+n/r+n//+f8/1/8/y/+/pf/fpb+/pf//5f+/y/+/pf//+f//xf+/8n//5v+/lf//+P7//1dK/3/V8r/v/X8r/v/r/V/+/1f+/5f+/4v+/tf//Wfr/2/9/lf//+v//lf//pP+/8v//+n+f8v//+v/fpP+fP//88/+7ubn5q87Ozj9L/3+T/v/l5eXla//n//9/29vbn2X9n5X+/2v/f0n/v2r/f6X//7n//2/y/+/y//+l+v+X6v+/pP/fpP+/+f9/2/+/Sv//Uv1/pf//Uv3/V/1/Vf+/+v/fpf/fpf+/Uv//1P//Vf//kv5/Jb9/+f8P/X8S/n+l//9c//9b8v+X7v+/pf+/pf+/pP+/Sv+/+v//kv7/5f+/pff/pf+/pf+/pfe/pf/fpfe/Sv+/8v//+n//0v//Uv7/kv5/Jb///b+l//9b+//X/v+7+v9/lf7/V/v/r/T/V6X//7v+/y/+f6/+f1/9/3f1//+6+v9f6f6/5f+/8v/f6f//7n//6//f9X//+f/f/n//+v+/2/+f5/k/7+k//+k//+k//+k//+k//9v/n+f/v9f+/9v/n9f/f+/4v/f+v/v+r/v9v/n+f//9b/f1f//7v+/6v+/7v+/+v+/7P+/2/+f7P+/6v+/0v3f5v+/3/+/8v3f5Pu//f4/w/9v+v9//v+f+v9/k/5/JP3/SP7/JP3/SP7/JP3/SP7/JP3/SP7/JP3/SP7/JP3/SP7/k/7/JP3/SP7/kv7/JP3/SP7/JP3/SP7/JP3/SP7/k/5/kv5/kv5/kv5/kv5/kv5/kv5/SP7/SP7/SP7/SP7/JP3/JP3/SP7/JP3/k/5/kv5/JP3/k/5/kv5/kv5/kv5/kv5/SP7/k/5/kv5/k/5/kv5/kv5/JP3/SP7/SP7/JP3/k/5/kv5/kv5/JP3/JP3/JP3/k/5/kv5/SP7/k/5/kv5/JP3/kv5/kv5/JP3/SP7/SP7/JP3/k/5/kv5/kv5/JP3/SP7/k/5/kv5/JP3/kv5/kv5/kv5/k/5/SP7/SP7/SP7/SP7/kv5/JP3/JP3/JP3/k/5/kv5/SP7/k/5/kv5/k/5/kv5/kv5/JP3/SP7/SP7/JP3/k/5/kv5/kv5/JP3/JP3/JP3/k/5/kv5/k/5/SP7/k/5/kv5/kv5/kv5/kv5/JP3/SP7/SP7/JP3/SP7/k/5/kv5/kv5/JP3/k/5/kv5/k/5/k/5/k/5/SP7/SP7/SP7/SP7/kv5/kv5/JP3/JP3/JP3/k/5/kv5/SP7/k/5/k/5/kv5/kv5/JP3/SP7/SP7/JP3/SP7/k/5/kv5/kv5/JP3/k/5/k/5/kv5/kv5/k/5/k/5/k/5/kv5/SP7/k/5/SP7/k/5/kv5/kv5/JP3/JP3/JP3/SP7/SP7/SP7/SP7/SP7/k/5/kv5/JP3/kv5/kv5/kv5/kv5/JP3/k/5/k/5/k/5/k/5/SP7/kv5/k/5/SP7/SP7/SP7/SP7/k/5/k/5/k/5/SP7/SP7/JP3/JP3/SP7/SP7/SP7/SP7/k/5/k/5/JP3/kv5/k/5/JP3/k/5/kv5/kv5/SP7/SP7/SP7/k/5/k/5/kv5/JP3/JP3/k/5/kv5/SP7/kv5/k/5/k/5/SP7/SP7/k/5/JP3/JP3/SP7/SP7/k/5/kv5/kv5/kv5/k/5/SP7/k/5/SP7/SP7/SP7/kv5/SP7/k/5/JP3/SP7/k/5/kv5/kv5/kv5/k/5/k/5/kv5/k/5/k/5/SP7/SP7/k/5/kv5/k/5/kv5/SP7/JP3/SP7/SP7/JP3/SP7/k/5/k/5/k/5/k/5/JP3/kv5/kv5/kv5/SP7/k/5/kv5/k/5/k/5/SP7/k/5/kv5/k/5/kv5/k/5/k/5/kv5/k/5/k/5/k/5/kv5/kv5/kv5/SP7/SP7/k/5/SP7/JP3/JP3/JP3/JP3/JP3/SP7/k/5/k/5/k/5/kv5/k/5/k/5/kv5/k/5/k/5/kv5/k/5/kv5/k/5/SP7/k/5/k/5/JP3/k/5/k/5/JP3/k/5/k/5/JP3/JP3/JP3/JP3/JP3/SP7/SP7/SP7/SP7/k/5/5/k/5/k/5/k/5/kv5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/JP3/JP3/JP3/JP3/JP3/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/k/5/kv5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/JP3/JP3/JP3/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/k/5/k/5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/JP3/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/k/5/JP3/k/5/JP3/JP3/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/k/5/k/5/k/5/kv5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/JP3/JP3/JP3/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/kv5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/JP3/JP3/k/5/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/JP3/JP3/JP3/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/a"
+    const logoCoachexBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAakAAAAhCAYAAADf3/kYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAHBhaW50Lm5ldCA0LjEuNWRHWFIAABNqSURBVHhe7Z1tExtHFsZ/7iTbcBu3A0iAJEACyE0AERAgkECAAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAIElE/zQd4m16k027kBCwA5gB7AD2AHsALYTWP0N2mF5P/vX5n0d2A7sALYDW997D2A7sF2w/T2fB8AOYTsw/fXlYwdhB7ADWE2r7bJm5f348x3YDrCagD2w3l5kO7AD2AHsAI4DWy5tD2AHsANs8w/sQhL/j32P+9eM24TtwDbQeD9kYDewXfD8Y4f/O+wHdgBbP8f97uEHewBdhD/N+F/9f6/k/Qf8H/sM/6f//vf2P6/P8I+5uL8v//882/w/9X/83P+v0v//0n///z/Z2f+n/j/n//93/n/z//3/3L+fy///2v+n5L+/+//v+z/r///n//1/1f9f2v+/1n//0n7//n//0n7//n/n7b/nxv/35b/v+P/n7b/n/f/j/b/b///P97v//29//8f+v5f///z//3/j///n//v//3/b///t/3+Yv///f//+b+P///f//+b+v/3///+/9v9//z+X/v9v/v+X/v8v/f9v/v8n/v8n/f9P+v/f/P/P+v/P+v/f/P/f+v9/8/9f+v9/9f8/9f+/+v+f/v9P/v/f/P/P+v9v/n/b/v+X/v+v+f+/9f//2v//6v//6v//6v//6v//6v9/8/+/Wf//2v//6v//6v9/9f+f/P/P+v/P+v/P+v/f/P/f+v/P+v/f/P9v/n+b/v8n/f9v/v8n/f9P+v9v/n+b/v82/f9v/v+b/v8v/f9v/n+T/n8yP/9k=";
     
     // ------------------------------ Constantes y Utilidades ------------------------------
     const initialState = { 
@@ -213,10 +214,6 @@
     
     function Dashboard({ state, goToNewClass }) {
         const { clases, pagos, gastos, alumnos, perfil } = state;
-        const [currentDate, setCurrentDate] = useState(new Date());
-        const [mostrarSoloHorarioLaboral, setMostrarSoloHorarioLaboral] = useState(false);
-        const weekStartDate = getWeekStartDate(currentDate);
-        const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
         const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, `${a.apellido || ''} ${a.nombre || ''}`.trim()])), [alumnos]);
 
         const hoy = formatDate(new Date());
@@ -347,76 +344,53 @@
       );
     }
     
-function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHorarioLaboral }) {
-  const getStatusColor = (status) => {
-    switch (status) { case "Realizada": return "bg-green-200 border-green-400"; case "Cancelada": return "bg-red-200 border-red-400"; case "Ausente": return "bg-yellow-200 border-yellow-400"; default: return "bg-blue-200 border-blue-400"; }
-  };
-  const clasesPorDiaHora = useMemo(() => { const map = {}; clases.forEach(clase => { const key = `${clase.fecha}_${clase.hora}`; if (!map[key]) map[key] = []; map[key].push(clase); }); return map; }, [clases]);
-  
-  const esHoraLaboral = (fecha, hora) => {
-    if (!horarioLaboral || horarioLaboral.length !== 7) return true;
-    const diaIndex = new Date(fecha).getDay();
-    const diaSemana = horarioLaboral[diaIndex === 0 ? 6 : diaIndex - 1];
-    if (!diaSemana.activo) return false;
-    return hora >= diaSemana.desde && hora < diaSemana.hasta;
-  };
-
-  // --- LÓGICA NUEVA PARA FILTRAR LAS HORAS ---
-  const horasParaMostrar = useMemo(() => {
-    // Si la vista compacta no está activa, muestra todas las horas.
-    if (!mostrarSoloHorarioLaboral) {
-      return HORAS;
+    function CalendarioSemanal({ week, clases, onEdit, horarioLaboral }) {
+      const getStatusColor = (status) => {
+        switch (status) { case "Realizada": return "bg-green-200 border-green-400"; case "Cancelada": return "bg-red-200 border-red-400"; case "Ausente": return "bg-yellow-200 border-yellow-400"; default: return "bg-blue-200 border-blue-400"; }
+      };
+      const clasesPorDiaHora = useMemo(() => { const map = {}; clases.forEach(clase => { const key = `${clase.fecha}_${clase.hora}`; if (!map[key]) map[key] = []; map[key].push(clase); }); return map; }, [clases]);
+      
+      const esHoraLaboral = (fecha, hora) => {
+        if (!horarioLaboral || horarioLaboral.length !== 7) return true;
+        const diaIndex = new Date(fecha).getDay();
+        const diaSemana = horarioLaboral[diaIndex === 0 ? 6 : diaIndex - 1];
+        if (!diaSemana.activo) return false;
+        return hora >= diaSemana.desde && hora < diaSemana.hasta;
+      };
+    
+      return (
+        <div className="grid grid-cols-[auto_repeat(7,1fr)] gap-px bg-slate-200 border border-slate-200">
+          <div className="bg-white p-2"></div>
+          {week.map(day => (<div key={day} className="bg-white p-2 text-center font-semibold text-sm"><div>{DIAS_SEMANA_NOMBRES[new Date(day).getDay() === 0 ? 6 : new Date(day).getDay() - 1]}</div><div className="text-xs text-slate-500">{formatDate(new Date(day), 'dd/mm')}</div></div>))}
+          {HORAS.map(hora => (
+            <React.Fragment key={hora}>
+              <div className="bg-white text-center text-xs p-2">{hora}</div>
+              {week.map(day => {
+                const esLaboral = esHoraLaboral(day, hora);
+                return (
+                  <div key={`${day}-${hora}`} className={`${esLaboral ? 'bg-slate-50' : 'bg-slate-200'} min-h-[60px] p-1`}>
+                    {(clasesPorDiaHora[`${day}_${hora}`] || []).map(clase => (
+                      <div key={clase.id} onClick={() => onEdit(clase)} className={`text-xs p-1 rounded border cursor-pointer mb-1 ${getStatusColor(clase.estado)}`}>
+                        {clase.nombresAlumnos}
+                        <div className="text-[10px] opacity-70">{clase.cancha}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+      );
     }
     
-    // Si la vista compacta SÍ está activa, calcula el rango de horas de trabajo.
-    const horasActivas = horarioLaboral
-        .filter(d => d.activo)
-        .flatMap(d => [d.desde, d.hasta]);
-
-    if (horasActivas.length === 0) return []; // Si no hay días activos, no muestra nada.
-
-    const minHora = horasActivas.reduce((a, b) => a < b ? a : b);
-    const maxHora = horasActivas.reduce((a, b) => a > b ? a : b);
-
-    // Devuelve solo las horas que están dentro del rango de trabajo de la semana.
-    return HORAS.filter(h => h >= minHora && h < maxHora);
-
-  }, [mostrarSoloHorarioLaboral, horarioLaboral]);
-  // --- FIN DE LA LÓGICA NUEVA ---
-
-  return (
-    <div className="grid grid-cols-[auto_repeat(7,1fr)] gap-px bg-slate-200 border border-slate-200">
-      <div className="bg-white p-2"></div>
-      {week.map(day => (<div key={day} className="bg-white p-2 text-center font-semibold text-sm"><div>{DIAS_SEMANA_NOMBRES[new Date(day).getDay() === 0 ? 6 : new Date(day).getDay() - 1]}</div><div className="text-xs text-slate-500">{formatDate(new Date(day), 'dd/mm')}</div></div>))}
-      
-      {/* 👇 CAMBIO IMPORTANTE: AHORA USAMOS 'horasParaMostrar' EN LUGAR DE 'HORAS' 👇 */}
-      {horasParaMostrar.map(hora => (
-        <React.Fragment key={hora}>
-          <div className="bg-white text-center text-xs p-2">{hora}</div>
-          {week.map(day => {
-            const esLaboral = esHoraLaboral(day, hora);
-            return (
-              <div key={`${day}-${hora}`} className={`${esLaboral ? 'bg-slate-50' : 'bg-slate-200'} min-h-[60px] p-1`}>
-                {(clasesPorDiaHora[`${day}_${hora}`] || []).map(clase => (
-                  <div key={clase.id} onClick={() => onEdit(clase)} className={`text-xs p-1 rounded border cursor-pointer mb-1 ${getStatusColor(clase.estado)}`}>
-                    {clase.nombresAlumnos}
-                    <div className="text-[10px] opacity-70">{clase.cancha}</div>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
-    
     function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPayMixto, user }) {
+        console.log("User en Clases:", user);
       const [showForm, setShowForm] = useState(false);
       const [editing, setEditing] = useState(null);
       const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
       const [form, setForm] = useState(emptyForm);
+      const [currentDate, setCurrentDate] = useState(new Date());
       const [grupos, setGrupos] = useState([]);
       // Carga los grupos y escucha cambios en tiempo real
 useEffect(() => {
@@ -433,6 +407,8 @@ useEffect(() => {
       const [filtroEstado, setFiltroEstado] = useState(""); // Guarda el estado de la clase
       const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
       const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
+      const weekStartDate = getWeekStartDate(currentDate);
+      const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
       const alumnosActivos = useMemo(() => alumnos.filter(a => a.estado === 'activo'), [alumnos]);
       const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
       
@@ -569,6 +545,7 @@ useEffect(() => {
               </form>
             ) : ( <p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p> )}
           </Card>
+          <Card title="Calendario Semanal" right={<div className="flex items-center gap-2"><button onClick={() => changeWeek(-1)} className="px-3 py-1.5 text-sm rounded-lg border">‹ Ant</button><button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg border">Hoy</button><button onClick={() => changeWeek(1)} className="px-3 py-1.5 text-sm rounded-lg border">Sig ›</button></div>}><CalendarioSemanal week={weekDates} clases={clasesDeLaSemana} onEdit={openEdit} horarioLaboral={perfil.horarioLaboral} /></Card>
           <Card title="Listado de clases">
           <div className="grid md:grid-cols-4 gap-3 mb-4 p-2 border rounded-lg">
     <select value={filtroAlumno} onChange={(e) => setFiltroAlumno(e.target.value)}>
@@ -1452,16 +1429,15 @@ useEffect(() => {
     }
     
     function MainApp({ user, onLogout }) {
-  const [current, setCurrent] = useState("dashboard");
-  const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState("");
-  const [deletingInfo, setDeletingInfo] = useState({ id: null, type: null, collection: null });
-  const [payingMixtoClase, setPayingMixtoClase] = useState(null);
-  const [payingCuota, setPayingCuota] = useState({alumno: null, mes: null});
-  
-  // --- 👇 NUEVO ESTADO PARA CONECTAR DASHBOARD Y CLASES 👇 ---
-  const [claseParaEditar, setClaseParaEditar] = useState(null);
+        console.log("User en MainApp:", user);
+      const [current, setCurrent] = useState("dashboard");
+      const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
+      const [loading, setLoading] = useState(true);
+      const [toast, setToast] = useState("");
+      const [deletingInfo, setDeletingInfo] = useState({ id: null, type: null, collection: null });
+      const [payingMixtoClase, setPayingMixtoClase] = useState(null);
+      const [payingCuota, setPayingCuota] = useState({alumno: null, mes: null});
+      const [goToClassForm, setGoToClassForm] = useState(false);
 
       useEffect(() => {
         if (!user) return;
@@ -1581,9 +1557,9 @@ useEffect(() => {
         <div className="min-h-screen bg-slate-50 font-sans">
           <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} />
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
-            {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
+            {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} />}
             {current === "alumnos" && <Alumnos alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} />}
-            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPayMixto={claseCrud.onPayMixto} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
+            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPayMixto={claseCrud.onPayMixto} user={user} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
             {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
