@@ -390,6 +390,7 @@
       const [editing, setEditing] = useState(null);
       const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
       const [form, setForm] = useState(emptyForm);
+      const [formStep, setFormStep] = useState(1); // 1: Seleccionar alumno, 2: Elegir horario, 3: Rellenar detalles
       const [currentDate, setCurrentDate] = useState(new Date());
       const [grupos, setGrupos] = useState([]);
       // Carga los grupos y escucha cambios en tiempo real
@@ -458,20 +459,60 @@ useEffect(() => {
       }
       
       function handleAlumnoChange(index, newId) {
-        setForm(prev => {
-            const newAlumnoIds = prev.alumnoIds.map((id, i) => i === index ? newId : id);
-            const primerAlumno = alumnoMap.get(newAlumnoIds[0]);
-            const esPlanMensual = primerAlumno?.plan === 'mensual';
-            
-            const nuevoPrecio = esPlanMensual ? "0" : (perfil.precios[prev.tipo.toLowerCase()] || "");
-            
-            return {
-                ...prev,
-                alumnoIds: newAlumnoIds,
-                precio: nuevoPrecio
-            };
-        });
-      }
+    // Primero, actualizamos el formulario como antes para guardar el alumno seleccionado
+    setForm(prev => {
+        const newAlumnoIds = prev.alumnoIds.map((id, i) => i === index ? newId : id);
+        const primerAlumno = alumnoMap.get(newAlumnoIds[0]);
+        const esPlanMensual = primerAlumno?.plan === 'mensual';
+        
+        const nuevoPrecio = esPlanMensual ? "0" : (perfil.precios[prev.tipo.toLowerCase()] || "");
+        
+        return {
+            ...prev,
+            alumnoIds: newAlumnoIds,
+            precio: nuevoPrecio
+        };
+    });
+    // --- LÓGICA NUEVA Y MÁS INTELIGENTE ---
+    // Solo reaccionamos cuando se elige el primer alumno y no está vacío
+    if (index === 0 && newId) { 
+        const alumnoSeleccionado = alumnoMap.get(newId);
+
+        // Verificamos si el alumno tiene horarios fijos registrados y si la lista no está vacía
+        if (alumnoSeleccionado && alumnoSeleccionado.horarios && alumnoSeleccionado.horarios.length > 0) {
+            setFormStep(2); // Si tiene horarios, vamos al paso 2: "Elegir horario"
+        } else {
+            setFormStep(3); // Si no tiene, vamos directo al paso 3: "Rellenar detalles"
+        }
+    }
+}
+const getNextDateForDay = (dayName) => {
+    const dayIndex = DIAS_SEMANA_NOMBRES.indexOf(dayName);
+    if (dayIndex === -1) return new Date(); // Devuelve hoy si el día no es válido
+
+    const today = new Date();
+    const resultDate = new Date(today.getTime());
+    
+    // Calcula cuántos días faltan para llegar al próximo día de la semana deseado
+    const daysUntilTarget = (dayIndex - today.getDay() + 7) % 7;
+    
+    // Si el día objetivo es hoy, agendamos para la semana que viene. Si no, para el próximo que venga.
+    resultDate.setDate(today.getDate() + (daysUntilTarget === 0 ? 7 : daysUntilTarget));
+    
+    return resultDate;
+};
+
+function handleScheduleSelect(horario) {
+    const proximaFecha = getNextDateForDay(horario.dia);
+    
+    setForm(prev => ({
+        ...prev,
+        fecha: formatDate(proximaFecha), // Formatea la fecha a 'yyyy-mm-dd'
+        hora: horario.hora
+    }));
+    
+    setFormStep(3); // Avanza al formulario de detalles
+}
 
       function openNew() { setEditing(null); setForm({ ...emptyForm, alumnoIds: [alumnosActivos[0]?.id || ""], precio: perfil.precios.individual, cancha: canchasDisponibles[0] || "" }); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
       function openEdit(c) { setEditing(c); setForm({ ...emptyForm, ...c, recurrente: false }); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
@@ -490,59 +531,75 @@ useEffect(() => {
           <Card title={editing ? "Editar clase" : "Nueva clase"} right={!showForm && <button id="nueva-clase-btn" onClick={openNew} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
             {showForm ? (
               <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
-                <div className="md:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {(form.alumnoIds || [""]).map((alumnoId, index) => (
+    {/* --- PASO 1: SELECCIONAR ALUMNO --- */}
+    {(formStep === 1) && (
+        <div className="md:col-span-6">
+            <label className="text-sm text-slate-600 font-semibold">¿Para quién es la clase?</label>
+            <select value={form.alumnoIds[0]} onChange={(e) => handleAlumnoChange(0, e.target.value)} className="w-full mt-1 border rounded-lg px-3 py-2" required>
+                <option value="">Seleccionar un alumno...</option>
+                {alumnosActivos.map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
+            </select>
+            <p className="text-xs text-slate-500 mt-2">Elige un alumno para continuar.</p>
+        </div>
+    )}
+
+    {/* --- PASO 2: ELEGIR HORARIO FIJO (si existe) --- */}
+    {(formStep === 2 && alumnoMap.get(form.alumnoIds[0])) && (
+        <div className="md:col-span-6">
+            <p className="text-sm text-slate-700 mb-2">
+                <span className="font-bold">{getNombreCompleto(alumnoMap.get(form.alumnoIds[0]))}</span> tiene horarios fijos guardados.
+            </p>
+            <p className="text-sm font-semibold text-slate-600">¿Quieres agendar una clase en uno de sus horarios habituales?</p>
+            
+            <div className="flex flex-wrap gap-2 my-3">
+                {(alumnoMap.get(form.alumnoIds[0]).horarios || []).map(horario => (
+                    <button type="button" key={`${horario.dia}-${horario.hora}`} onClick={() => handleScheduleSelect(horario)} className="px-3 py-2 text-sm rounded-lg border bg-sky-50 text-sky-800 hover:bg-sky-100">
+                        {horario.dia} {horario.hora}
+                    </button>
+                ))}
+            </div>
+
+            <div className="border-t pt-3 mt-3">
+                <button type="button" onClick={() => setFormStep(3)} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-100">
+                    O agendar una clase personalizada en otro horario
+                </button>
+            </div>
+        </div>
+    )}
+
+    {/* --- PASO 3: DETALLES COMPLETOS DE LA CLASE --- */}
+    {(formStep === 3) && (
+        <>
+            <div className="md:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(form.alumnoIds || [""]).map((alumnoId, index) => (
                     <div key={index}>
-                      <label className="text-sm text-slate-600">Alumno {index + 1}</label>
-                      <select value={alumnoId} onChange={(e) => handleAlumnoChange(index, e.target.value)} className="w-full border rounded-lg px-3 py-2" required>
+                    <label className="text-sm text-slate-600">Alumno {index + 1}</label>
+                    <select value={alumnoId} onChange={(e) => handleAlumnoChange(index, e.target.value)} className="w-full border rounded-lg px-3 py-2" required>
                         <option value="">Seleccionar...</option>
                         {alumnosActivos.filter(a => !form.alumnoIds.includes(a.id) || a.id === alumnoId).map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
-                      </select>
+                    </select>
                     </div>
-                  ))}
-                </div>
-                <div className="md:col-span-2"><label className="text-sm text-slate-600">Ubicación / Cancha</label><select name="cancha" value={form.cancha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{canchasDisponibles.map(c => <option key={c}>{c}</option>)}</select></div>
-                <div><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
-                <div><label className="text-sm text-slate-600">Hora</label><input type="time" name="hora" value={form.hora} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
-                <div><label className="text-sm text-slate-600">Tipo de Clase</label><select name="tipo" value={form.tipo} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}</select></div>
-                {/* INICIO: Bloque para seleccionar grupo */}
-{form.tipo === 'Escuelita' && (
-  <div className="md:col-span-6">
-    <label className="text-sm text-slate-600">Seleccionar Grupo (opcional)</label>
-    <select
-      className="w-full border rounded-lg px-3 py-2 mt-1"
-      // Usamos un valor vacío para que el placeholder sea la opción por defecto
-      value=""
-      onChange={(e) => {
-        const idGrupo = e.target.value;
-        // Si el usuario vuelve a la opción "Seleccionar...", no hacemos nada
-        if (!idGrupo) {
-            // Opcional: limpiar la selección de alumnos si se deselecciona el grupo
-            setForm(prev => ({ ...prev, alumnoIds: [""] }));
-            return;
-        };
+                ))}
+            </div>
+            <div className="md:col-span-2"><label className="text-sm text-slate-600">Ubicación / Cancha</label><select name="cancha" value={form.cancha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{canchasDisponibles.map(c => <option key={c}>{c}</option>)}</select></div>
+            <div><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
+            <div><label className="text-sm text-slate-600">Hora</label><input type="time" name="hora" value={form.hora} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
+            <div><label className="text-sm text-slate-600">Tipo de Clase</label><select name="tipo" value={form.tipo} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}</select></div>
+            <div><label className="text-sm text-slate-600">Precio</label><input type="number" name="precio" value={esMensual ? "0" : form.precio} onChange={handleFormChange} className={`w-full border rounded-lg px-3 py-2 ${esMensual ? 'bg-slate-100' : ''}`} placeholder="0" disabled={esMensual} /></div>
+            <div className="md:col-span-2"><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}</select></div>
+            <div className="md:col-span-6"><label className="text-sm text-slate-600">Notas</label><textarea name="notas" value={form.notas} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" rows={2} placeholder="Comentarios sobre la clase" /></div>
+            {!editing && <div className="md:col-span-6 flex items-center gap-2"><input type="checkbox" name="recurrente" id="recurrente" checked={form.recurrente} onChange={handleFormChange} /><label htmlFor="recurrente" className="text-sm text-slate-600 mr-2">Repetir semanalmente por</label>{form.recurrente && <select name="mesesRecurrencia" value={form.mesesRecurrencia} onChange={handleFormChange} className="border rounded-lg px-3 py-2">{MESES_RECURRENCIA.map(m => <option key={m} value={m}>{m} mes{m > 1 ? 'es' : ''}</option>)}</select>}</div>}
+        </>
+    )}
 
-        const grupoSeleccionado = grupos.find(g => g.id === idGrupo);
-
-        if (grupoSeleccionado) {
-          // ¡Aquí está la magia!
-          // Rellena automáticamente los IDs de los alumnos con los del grupo
-          setForm(prev => ({ ...prev, alumnoIds: grupoSeleccionado.alumnoIds }));
-        }
-      }}
-    >
-      <option value="">Cargar alumnos desde un grupo...</option>
-      {grupos.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-    </select>
-  </div>
-)}
-{/* FIN: Bloque para seleccionar grupo */}
-                <div><label className="text-sm text-slate-600">Precio</label><input type="number" name="precio" value={esMensual ? "0" : form.precio} onChange={handleFormChange} className={`w-full border rounded-lg px-3 py-2 ${esMensual ? 'bg-slate-100' : ''}`} placeholder="0" disabled={esMensual} /></div>
-                <div className="md:col-span-2"><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}</select></div>
-                <div className="md:col-span-6"><label className="text-sm text-slate-600">Notas</label><textarea name="notas" value={form.notas} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" rows={2} placeholder="Comentarios sobre la clase" /></div>
-                {!editing && <div className="md:col-span-6 flex items-center gap-2"><input type="checkbox" name="recurrente" id="recurrente" checked={form.recurrente} onChange={handleFormChange} /><label htmlFor="recurrente" className="text-sm text-slate-600 mr-2">Repetir semanalmente por</label>{form.recurrente && <select name="mesesRecurrencia" value={form.mesesRecurrencia} onChange={handleFormChange} className="border rounded-lg px-3 py-2">{MESES_RECURRENCIA.map(m => <option key={m} value={m}>{m} mes{m > 1 ? 'es' : ''}</option>)}</select>}</div>}
-                <div className="md:col-span-6 flex gap-2 justify-end"><button type="button" onClick={cancel} className="px-3 py-2 rounded-lg border">Cancelar</button><button className="px-3 py-2 rounded-lg bg-emerald-600 text-white">Guardar</button></div>
-              </form>
+    {/* --- BOTONES DE ACCIÓN --- */}
+    <div className="md:col-span-6 flex gap-2 justify-end">
+        {/* El botón de cancelar ahora también resetea el paso del formulario */}
+        <button type="button" onClick={() => { cancel(); setFormStep(1); }} className="px-3 py-2 rounded-lg border">Cancelar</button>
+        {/* El botón de guardar solo aparece en el último paso */}
+        {formStep === 3 && <button className="px-3 py-2 rounded-lg bg-emerald-600 text-white">Guardar</button>}
+    </div>
+</form>
             ) : ( <p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p> )}
           </Card>
           <Card title="Calendario Semanal" right={<div className="flex items-center gap-2"><button onClick={() => changeWeek(-1)} className="px-3 py-1.5 text-sm rounded-lg border">‹ Ant</button><button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg border">Hoy</button><button onClick={() => changeWeek(1)} className="px-3 py-1.5 text-sm rounded-lg border">Sig ›</button></div>}><CalendarioSemanal week={weekDates} clases={clasesDeLaSemana} onEdit={openEdit} horarioLaboral={perfil.horarioLaboral} /></Card>
