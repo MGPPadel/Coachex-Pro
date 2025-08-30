@@ -1556,7 +1556,7 @@ useEffect(() => {
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
             {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} />}
             {current === "alumnos" && <Alumnos alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} />}
-            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPayMixto={claseCrud.onPayMixto} />}
+            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPayMixto={claseCrud.onPayMixto} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
             {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
             {current === "reportes" && <Reportes pagos={state.pagos} gastos={state.gastos} alumnos={state.alumnos} clases={state.clases} />}
