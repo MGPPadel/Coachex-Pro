@@ -385,6 +385,7 @@
     }
     
     function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPayMixto }) {
+        console.log("User en Clases:", user);
       const [showForm, setShowForm] = useState(false);
       const [editing, setEditing] = useState(null);
       const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
@@ -1427,6 +1428,7 @@ useEffect(() => {
     }
     
     function MainApp({ user, onLogout }) {
+        console.log("User en MainApp:", user);
       const [current, setCurrent] = useState("dashboard");
       const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
       const [loading, setLoading] = useState(true);
