@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Coachex-Pro – Gestión de Profesores</title>
-  <link rel="icon" href="data:,">
-
   
   <script src="https://cdn.tailwindcss.com"></script>
   
@@ -38,6 +36,8 @@
       100% { transform: rotate(360deg); }
     }
   </style>
+
+  <link rel="icon" href="data:,">
 </head>
 <body>
   
@@ -432,6 +432,23 @@ useEffect(() => {
   
   return () => unsub(); // Limpia la suscripción al salir
 }, [user]);
+
+
+      // === Navegación entre Dashboard ↔ Clases ===
+      function goToNewClass() {
+        setClaseParaEditar(null);
+        setCurrent("clases");
+        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {}
+      }
+
+      function goToEditClass(clase) {
+        setClaseParaEditar(clase || null);
+        setCurrent("clases");
+        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {}
+      }
+
+
+
       const [filtroAlumno, setFiltroAlumno] = useState(""); // Guarda el ID del alumno 
       const [filtroEstado, setFiltroEstado] = useState(""); // Guarda el estado de la clase
       const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
@@ -1492,24 +1509,6 @@ useEffect(() => {
             setLoading(false);
         });
         unsubscribes.push(profileUnsubscribe);
-
-
-      // === Navegación entre Dashboard ↔ Clases ===
-      function goToNewClass() {
-        // limpiar edición y llevar al tab "clases"
-        setClaseParaEditar(null);
-        setCurrent("clases");
-        // opcional: scrollear arriba para ver el formulario
-        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {}
-      }
-
-      function goToEditClass(clase) {
-        // guardar la clase a editar y llevar al tab "clases"
-        setClaseParaEditar(clase || null);
-        setCurrent("clases");
-        // opcional: scrollear arriba para ver el formulario
-        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {}
-      }
 
         return () => unsubscribes.forEach(unsub => unsub());
       }, [user]);
