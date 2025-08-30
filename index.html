@@ -1291,8 +1291,8 @@
         delete: (id) => setDeletingInfo({ id, type: 'gasto', collection: 'gastos' }),
       };
       const perfilCrud = { 
-        update: (p) => db.collection('users').doc(user.uid).collection('profile').doc('main').update(p).then(() => setToast("Perfil actualizado"))
-      };
+  update: (p) => db.collection('users').doc(user.uid).collection('profile').doc('main').set(p, { merge: true }).then(() => setToast("Perfil actualizado"))
+};
       
       const confirmDelete = async () => {
         const { id, type, collection } = deletingInfo;
