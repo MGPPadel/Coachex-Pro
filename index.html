@@ -45,15 +45,14 @@
   <script type="text/babel">
     // --- INICIO DEL CÓDIGO DE LA APLICACIÓN ---
 
-    const { useEffect, useMemo, useState, createContext, useContext } = React;
+    const { useEffect, useMemo, useState } = React;
 
     /**
-     * Gestión de Pádel – MVP en React (Canvas) - v24 con Gestión de Contraseña
+     * Gestión de Pádel – MVP en React (Canvas) - v25 (Final con correcciones)
      *
      * Cambios aplicados:
-     * - (AUTH) Se añade la funcionalidad de "Restablecer Contraseña" en la pantalla de Login.
-     * - (PROFILE) Se muestra el email del usuario en Perfil.
-     * - (PROFILE) Se añade un botón para solicitar el restablecimiento de contraseña desde el Perfil.
+     * - (FIX) Reestructuración final del código para solucionar ReferenceError.
+     * Todas las constantes y componentes se definen ahora antes de ser invocados.
      */
 
     // ------------------------------ Configuración de Firebase ------------------------------
@@ -71,1016 +70,11 @@
     const auth = firebase.auth();
     const db = firebase.firestore();
     
-    const logoCircularBase64 = "data:image/png;base64,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tWrVePXVV/nss8/YuHEjMjMzmThxIl5//XUWLFiAadOmYciQIUhLS0NqaipCQkLw4MEDnD59mnXr1uGyyy5Dr169sHjxYixatAjPPfccS5cuRXJyMmJjYxETE4PExETExMQgLi4OQUFBCAwMxNSpU/HHH3/w5JNPcu/ePfzyl7/Eo48+ivz8fLzzzjtIT09HXl4eXnzxRSxatAh/+tOfOHbsGOx2O0JDQxEREYF79+7h1q1b+OGHHxgaGoLDw/u4ffs21q5diwceeICUlBSMHz8eXbt25d///newWq148MEHuWvXLuzdu5clS5bg3//+N2bOnImxsbHEx8czbtw4JCQk4MKFC7hz5w58Ph/sdjveeecd/v3vf2Pbtm0sWLCA0aNHc9ppp2HdunU4ODjg3LlzCAgIQFhYGIYOHYrhw4dDJpOhqKgImZmZTJ48mSeeeILNmzcjJSUFWVlZnDx5kujoaKxevRqTJ0/GysoKrly5wkknnYTnnnuOlStX4oUXXmDNmjWYPn06vvvuu7766iuqqqooKCiAy+WCu7t75Obm4tGjR6iqquKtt97iX//6V7788kusX78eGzdu5IcffmDjxo1Ys2YNnn32WZYtW4anT5/iyJEjmDRpEnbt2sUbb7zBuXPn8OabbzJ06FDs3r2bgQMHYubMmVixYgXWrl2LjIwMnDp1invvvZcRI0YwduxYPPfcc9x9990AHD9+nMDAQPzwhz/EtGnTcOjQIaSlpfH6668zZ84cBAUF4b333mPhwoV4//33+fLLL9Hb24u77rqLX/3qV3z99dfY2Nhg27ZtWLFiBfn5+SxYsICxY8eybds2XH311axdu5all13G3Llzeeqpp9i/fz/ee+89hg8fjq1btzJkyBC++OILRo8ezenTp/npp59YtWoVli9fzhtvvMH06dM5derUN4C1tbW54IILmDZtGiZOnMiYMWOYMGHCm5aWloqnnnoKExMTjB07Fr/5zW+45ppruOGGG5g2bRpGRkZIS0vD559/ztixYxkxYgRjxoxh3LhxTJo0CQkJCZibm8P4+DjGxsZw9+5dxMbGsGzZMpw8eRKHDx+GzWbDT3/6U3p1683ChQs5d+4cpk+fzksvvQRbt25l1KhRnHnmmSxcuJDVq1dz8803M3z4cAYPHgwA//nPfxg6dCj2799vdnZ2/PXXX8yePZsDBw5w0003YXR0FGvXrmXTpk0MHDiQW2+9lUWLFvHkk0+ybNmyr2WzZs2K2NhYjBgxAm+//TalpaXMnDmTefPmoaurC3V1dcycOZP33nuPJ598kpdffpnJkydz3nnnYWBgwBtvvMH3339vdnZ23HLLLcjNzeXuu+/m+eefZ86cOZimKfz85z/n/PPPV72nTp2KkSNH4qabbuL666/noosuYvDgwUycOBHz58+v+h/84Ad888033H///axdu5ann36aVatWsWjRIu666y7GjBljbm5ufvvb3/LVV1/x8ssvc/nllzNp0iSee+45Ro0axZQpU1ixYgX33XcfM2bM4D//+Q8PP/wwH3zwAb169cKDDz7Ipk2bmDFjBlatWsXSpUuZPXs2zzzzDH//+9959tlnWbFiBfr6+vjss8+YPHnyG97a2tp8+umnXH/99Vx00UU89dRT/O///s+oUaMAlJSU4Mknn+Thhx/m5ptvZvny5fzsZz/D5ZdfzpNPPsngwYPx8MMP4+zsjDvuuIN//etf/OpXv+LHH3/kzjvvZNeuXbzwwh7cddddfP3117z++utUVVWxbNky7rzzTtasWcN///tfxo0bx+LFi7nmmuu46KKLmDBhAu666y6WLFnCPffcw5lnnslZZ53FggUL+N///s/555/PH/7wB6ZNm8a4ceN44403mDVrFu677z4AYmNjsX37djZt2sRbb71FSkqK9555n2uuuQYrVqygpaWF22+/nQsuuIBPP/0UkydP5sYbbwSgsLDQ66/97//+DwAfffQRTz75JLfddhvPPfccAwYMIDU1lZtvvhmAkJAQRkZG+Pvf/y61P/7xD958801+8IMf4OzsjJtuuomKigo+/vjjm97r6+vTzMwMv//97zl9+jQPPvggzz77LHl5eSxdupQVK1bg4MGD9Pb2snfvXgIDAzk3N1fq//6/Wf6/p6dH8fHxL5eWlr6WJG3atOnUqVPL169ff5j//fff/73d3d3/tNNOO317e3uSJKlpmqZpXFxcfDjn/5v85z+fTUlKSkr4f+utt/5VSqn9ftQy/Q/9o2l8fHz4+vqipaUFlZWV6N+/PxkZGbzxxhvExcWxcuVKLFy4EB07duTNN9/Em2++CUBAQEAvr/3iiy9y+vRpRo0axdSpU/n6668ZOXIk//3vfzl8+DAvvPACW7duxdSpU1m6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/f9fX1/n5ubmHw5eXl5wcnKy6e/s7AwHBwf09fWxsbHx2z//5s2b/y1J+ve///3f8vnz529evHhxfHx8rP/bt2/fys/Pz9/f/1uS/j83Nzf7eDjn/38O+f+a/N9//fXXb2VlZSX/L0lSr9frdVX/P/Wf//zn1w1Jkj/U/9ekv6+rq+v29vby8vLy5v9N+v+dnp7+6evrq15fX5/6x/S/3N3d7efr/1f/+8b/L0n6/036/8vLy0tLS0vz/9f//729vev/af4/nJyc/Ovr6/P/j+m/1cXFBd///vevW7du/X/l//9fXFyMvr6+b/P/a/7/lStX/vW///u//2v+f+v/q39KSkpKSkpq/+f+/ftZ+/f0/y+Vv7+pqcnX1dXl5eXlbVNTk//r/z/y/0v94+zs7P+7vb19q/+/+sc0/n93d/dXnZ2dn7X//0v/b2pqqv4f2//X//8n/X/t/y//X729vZ9l/Z+V/n/1/3/L+n/r/5L+31Qq/W9+/vnnn/+b//81f+X/P/f+v1f//9X/b63//2/r/186/3/t/3/l/6v/f63//7a+v/X/P5Wqqv7/f6/+v63//6/+v63//2v//18q/+96f2v/v+X/r/7/a/+/pff/5c//k//v//j/+P6/J0iSfpL/vyT9/+v/f6X/v+b//yX/v7X+/19K6v9v6f1v6f1//P4v5f+/pff/lf//lf+/pf//lf//lf//lf/v7//6f8v/v1/9/xf/v+n/r+n//+f8/1/8/y/+/pf/fpb+/pf//5f+/y/+/pf//+f//xf+/8n//5v+/lf//+P7//1dK/3/V8r/v/X8r/v/r/V/+/1f+/5f+/4v+/tf//Wfr/2/9/lf//+v//lf//pP+/8v//+n+f8v//+v/fpP+fP//88/+7ubn5q87Ozj9L/3+T/v/l5eXla//n//9/29vbn2X9n5X+/2v/f0n/v2r/f6X//7n//2/y/+/y//+l+v+X6v+/pP/fpP+/+f9/2/+/Sv//Uv1/pf//Uv3/V/1/Vf+/+v/fpf/fpf+/Uv//1P//Vf//kv5/Jb9/+f8P/X8S/n+l//9c//9b8v+X7v+/pf+/pf+/pP+/Sv+/+v//kv7/5f+/pff/pf+/pf+/pfe/pf/fpfe/Sv+/8v//+n//0v//Uv7/kv5/Jb///b+l//9b+//X/v+7+v9/lf7/V/v/r/T/V6X//7v+/y/+f6/+f1/9/3f1//+6+v9f6f6/5f+/8v/f6f//7n//6//f9X//+f/f/n//+v+/2/+f5/k/7+k//+k//+k//+k//+k//9v/n+f/v9f+/9v/n9f/f+/4v/f+v/v+r/v9v/n+f//9b/f1f//7v+/6v+/7v+/+v+/7P+/2/+f7P+/6v+/0v3f5v+/3/+/8v3f5Pu//f4/w/9v+v9//v+f+v9/k/5/JP3/SP7/JP3/SP7/JP3/SP7/JP3/SP7/JP3/SP7/JP3/SP7/k/7/JP3/SP7/kv7/JP3/SP7/JP3/SP7/JP3/SP7/k/5/kv5/kv5/kv5/kv5/kv5/kv5/SP7/SP7/SP7/SP7/JP3/JP3/SP7/JP3/k/5/kv5/JP3/k/5/kv5/kv5/kv5/kv5/SP7/k/5/kv5/k/5/kv5/kv5/JP3/SP7/SP7/JP3/k/5/kv5/kv5/JP3/JP3/JP3/k/5/kv5/SP7/k/5/kv5/JP3/kv5/kv5/JP3/SP7/SP7/JP3/k/5/kv5/kv5/JP3/SP7/k/5/kv5/JP3/kv5/kv5/kv5/k/5/SP7/SP7/SP7/SP7/kv5/JP3/JP3/JP3/k/5/kv5/SP7/k/5/kv5/k/5/kv5/kv5/JP3/SP7/SP7/JP3/k/5/kv5/kv5/JP3/JP3/JP3/k/5/kv5/k/5/SP7/k/5/kv5/kv5/kv5/kv5/JP3/SP7/SP7/JP3/SP7/k/5/kv5/kv5/JP3/k/5/kv5/k/5/k/5/k/5/SP7/SP7/SP7/SP7/kv5/kv5/JP3/JP3/JP3/k/5/kv5/SP7/k/5/k/5/kv5/kv5/JP3/SP7/SP7/JP3/SP7/k/5/kv5/kv5/JP3/k/5/k/5/kv5/kv5/k/5/k/5/k/5/kv5/SP7/k/5/SP7/k/5/kv5/kv5/JP3/JP3/JP3/SP7/SP7/SP7/SP7/SP7/k/5/kv5/JP3/kv5/kv5/kv5/kv5/JP3/k/5/k/5/k/5/k/5/SP7/kv5/k/5/SP7/SP7/SP7/SP7/k/5/k/5/k/5/SP7/SP7/JP3/JP3/SP7/SP7/SP7/SP7/k/5/k/5/JP3/kv5/k/5/JP3/k/5/kv5/kv5/SP7/SP7/SP7/k/5/k/5/kv5/JP3/JP3/k/5/kv5/SP7/kv5/k/5/k/5/SP7/SP7/k/5/JP3/JP3/SP7/SP7/k/5/kv5/kv5/kv5/k/5/SP7/k/5/SP7/SP7/SP7/kv5/SP7/k/5/JP3/SP7/k/5/kv5/kv5/kv5/k/5/k/5/kv5/k/5/k/5/SP7/SP7/k/5/kv5/k/5/kv5/SP7/JP3/SP7/SP7/JP3/SP7/k/5/k/5/k/5/k/5/JP3/kv5/kv5/kv5/SP7/k/5/kv5/k/5/k/5/SP7/k/5/kv5/k/5/kv5/k/5/k/5/kv5/k/5/k/5/kv5/kv5/kv5/SP7/SP7/k/5/SP7/JP3/JP3/JP3/JP3/JP3/SP7/k/5/k/5/k/5/kv5/k/5/k/5/kv5/k/5/k/5/kv5/k/5/kv5/k/5/SP7/k/5/k/5/JP3/k/5/k/5/JP3/k/5/k/5/JP3/JP3/JP3/JP3/JP3/SP7/SP7/SP7/SP7/k/5/5/k/5/k/5/k/5/kv5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/JP3/JP3/JP3/JP3/JP3/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/k/5/kv5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/JP3/JP3/JP3/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/k/5/k/5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/JP3/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/k/5/JP3/k/5/JP3/JP3/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/k/5/k/5/k/5/kv5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/JP3/JP3/JP3/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/kv5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/JP3/JP3/k/5/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/JP3/JP3/JP3/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/-1cAAAAASUVORK5CYII=";
+    // ------------------------------ Constantes, Utilidades y Logos ------------------------------
+    const logoCircularBase64 = "data:image/png;base64,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";
     const logoCoachexBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAakAAAAhCAYAAADf3/kYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAHBhaW50Lm5ldCA0LjEuNWRHWFIAABNqSURBVHhe7Z1tExtHFsZ/7iTbcBu3A0iAJEACyE0AERAgkECAAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAIElE/zQd4m16k027kBCwA5gB7AD2AHsALYTWP0N2mF5P/vX5n0d2A7sALYDW997D2A7sF2w/T2fB8AOYTsw/fXlYwdhB7ADWE2r7bJm5f348x3YDrCagD2w3l5kO7AD2AHsAI4DWy5tD2AHsANs8w/sQhL/j32P+9eM24TtwDbQeD9kYDewXfD8Y4f/O+wHdgBbP8f97uEHewBdhD/N+F/9f6/k/Qf8H/sM/6f//vf2P6/P8I+5uL8v//882/w/9X/83P+v0v//0n///z/Z2f+n/j/n//93/n/z//3/3L+fy///2v+n5L+/+//v+z/r///n//1/1f9f2v+/1n//0n7//n//0n7//n/n7b/nxv/35b/v+P/n7b/n/f/j/b/b///P97v//29//8f+v5f///z//3/j///n//v//3/b///t/3+Yv///f//+b+P///f//+b+v/3///+/9v9//z+X/v9v/v+X/v8v/f9v/v8n/v8n/f9P+v/f/P/P+v/P+v/f/P/f+v9/8/9f+v9/9f8/9f+/+v+f/v9P/v/f/P/P+v9v/n/b/v+X/v+v+f+/9f//2v//6v//6v//6v//6v//6v9/8/+/Wf//2v//6v//6v9/9f+f/P/P+v/P+v/P+v/f/P/f+v/P+v/f/P9v/n+b/v8n/f9v/v8n/f9P+v9v/n+b/v82/f9v/v+b/v8v/f9v/n+T/n8yP/9k=";
     
-    // ------------------------------ Constantes y Utilidades ------------------------------
-    const initialState = { 
-      alumnos: [], 
-      clases: [], 
-      pagos: [], 
-      gastos: [],
-      perfil: {
-        nombre: "Profe",
-        apellido: "Pádel",
-        telefono: "",
-        precios: { individual: "5000", dupla: "4000", trio: "3500", cuarteto: "3000", escuelita: "2500" },
-        preciosMensuales: { "1xSemana": "18000", "2xSemana": "32000", "3xSemana": "45000", libre: "55000" },
-        metodoCobro: "porClase",
-        canchas: "Club A - Cancha 1\nClub B - Cancha 2"
-      }
-    };
-    
-    const DIAS_SEMANA_NOMBRES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-    const MESES_NOMBRES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-    const DEPORTES = ["Pádel", "Tenis"];
-    const ESTADOS_ALUMNO = [{value: "activo", label: "Activo"}, {value: "espera", label: "Lista de espera"}];
-    const ESTADOS_CLASE = ["Programada", "Realizada", "Cancelada", "Ausente"];
-    const TIPOS_CLASE_MAP = { Individual: 1, Dupla: 2, Trio: 3, Cuarteto: 4, Escuelita: 1 };
-    const TIPOS_CLASE = Object.keys(TIPOS_CLASE_MAP);
-    const TIPOS_CLASE_NOMBRES = { Individual: "Individual", Dupla: "Clase para 2", Trio: "Clase para 3", Cuarteto: "Clase para 4", Escuelita: "Escuelita" };
-    const METODOS_PAGO = ["Efectivo", "Transferencia", "Pendiente"];
-    const CATEGORIAS_GASTO = ["Alquiler", "Equipamiento", "Servicios", "Varios"];
-    const PLANES_PAGO = [{value: "porClase", label: "Por Clase"}, {value: "mensual", label: "Mensual"}];
-    const FRECUENCIAS_MENSUALES = [{value: "1xSemana", label: "1 vez por semana"}, {value: "2xSemana", label: "2 veces por semana"}, {value: "3xSemana", label: "3 veces por semana"}, {value: "libre", label: "Libre"}];
-    const MESES_RECURRENCIA = [1, 2, 3, 4, 5, 6, 9, 12];
-    
-    // --- Utilidades ---
-    const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const toDigits = (s = "") => String(s).replace(/[^0-9]/g, "");
-    const waLink = (telefono = "", nombre = "") => {
-      const digits = toDigits(telefono);
-      if (!digits) return null;
-      const msg = encodeURIComponent(`Hola ${nombre || ""}!`);
-      return `https://wa.me/${digits}?text=${msg}`;
-    };
-    const getWeekStartDate = (date) => {
-      const d = new Date(date);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      d.setHours(0, 0, 0, 0);
-      return new Date(d.setDate(diff));
-    };
-    const addDays = (date, days) => {
-      const result = new Date(date);
-      result.setDate(result.getDate() + days);
-      return result;
-    };
-    const formatDate = (date, format = 'yyyy-mm-dd') => {
-      if (!date) return '';
-      const d = new Date(date);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      if (format === 'dd/mm') return `${day}/${month}`;
-      return `${year}-${month}-${day}`;
-    };
-
-    // ------------------------------ UI Básicos ------------------------------
-    function Card({ title, right, children }) { return (<section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4"><div className="flex items-center justify-between mb-3"><h3 className="text-base font-semibold text-slate-800">{title}</h3>{right}</div>{children}</section>); }
-    function Toast({ msg, onClose }) { useEffect(() => { if (!msg) return; const t = setTimeout(onClose, 2500); return () => clearTimeout(t); }, [msg, onClose]); if (!msg) return null; return (<div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-xl z-50">{msg}</div>); }
-    function Modal({ isOpen, title, children, onConfirm, onCancel, confirmText = "Confirmar" }) { if (!isOpen) return null; return (<div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md"><h3 className="text-lg font-semibold mb-4">{title}</h3><div className="text-slate-600 mb-6">{children}</div><div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg border">Cancelar</button><button onClick={onConfirm} className={`px-4 py-2 rounded-lg text-white ${confirmText === "Confirmar" ? "bg-red-600" : "bg-emerald-600"}`}>{confirmText}</button></div></div></div>); }
-    function Topbar({ current, setCurrent, onLogout }) { 
-      const tabs = [ { id: "dashboard", label: "Dashboard" }, { id: "alumnos", label: "Alumnos" }, { id: "clases", label: "Clases" }, { id: "pagos", label: "Pagos" }, { id: "gastos", label: "Gastos" }, { id: "reportes", label: "Reportes" }, { id: "perfil", label: "Perfil" } ]; 
-      return (
-        <header className="w-full bg-slate-900 text-white">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img src={logoCircularBase64} alt="Logo Circular" className="w-10 h-10 rounded-full"/>
-              <div>
-                <img src={logoCoachexBase64} alt="Coachex-Pro Logo" style={{ height: '24px', filter: 'brightness(0) invert(1)' }}/>
-                <p className="text-xs opacity-80 -mt-0.5">Gestión de Profesores</p>
-              </div>
-            </div>
-            <nav className="hidden md:flex items-center gap-2">
-              {tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-1.5 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"}`}>{t.label}</button>))}
-              <button onClick={onLogout} className="px-3 py-1.5 rounded-xl text-sm transition bg-red-600 hover:bg-red-700 text-white ml-4">Cerrar Sesión</button>
-            </nav>
-          </div>
-          <div className="md:hidden px-3 pb-3 grid grid-cols-3 sm:grid-cols-5 gap-2">{tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-2 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "bg-slate-800 text-white"}`}>{t.label}</button>))}</div>
-          <div className="md:hidden px-3 pb-3"><button onClick={onLogout} className="w-full px-3 py-2 rounded-xl text-sm transition bg-red-600 hover:bg-red-700 text-white mt-2">Cerrar Sesión</button></div>
-        </header>
-      );
-    }
-    
-    function ClasesPorTamanoMes({ clases }) {
-        const resumen = useMemo(() => {
-            const ahora = new Date();
-            const mesActual = ahora.getMonth();
-            const anioActual = ahora.getFullYear();
-            
-            const clasesDelMes = clases.filter(c => {
-                const fechaClase = new Date(c.fecha);
-                return fechaClase.getMonth() === mesActual && fechaClase.getFullYear() === anioActual;
-            });
-
-            return TIPOS_CLASE.reduce((acc, tipo) => {
-                acc[tipo] = clasesDelMes.filter(c => c.tipo === tipo).length;
-                return acc;
-            }, {});
-        }, [clases]);
-
-        return (
-            <Card title="Clases por cantidad de alumnos">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-center">
-                    {TIPOS_CLASE.map(tipo => (
-                        <div key={tipo} className="bg-slate-50 p-2 rounded-lg flex flex-col justify-between h-full">
-                            <p className="text-xs text-slate-600 h-8 flex items-center justify-center">{TIPOS_CLASE_NOMBRES[tipo]}</p>
-                            <p className="text-xl font-bold">{resumen[tipo] || 0}</p>
-                        </div>
-                    ))}
-                </div>
-            </Card>
-        );
-    }
-    
-    function Dashboard({ state, goToNewClass }) {
-        const { clases, pagos, gastos, alumnos, perfil } = state;
-        const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, `${a.apellido || ''} ${a.nombre || ''}`.trim()])), [alumnos]);
-
-        const hoy = formatDate(new Date());
-        const semanaInicio = formatDate(getWeekStartDate(new Date()));
-
-        const clasesHoy = useMemo(() => {
-            return clases
-                .filter(c => c.fecha === hoy)
-                .map(c => ({...c, nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')}))
-                .sort((a, b) => a.hora.localeCompare(b.hora));
-        }, [clases, hoy, alumnoMap]);
-        
-        const balanceSemana = useMemo(() => {
-            const ingresos = pagos
-                .filter(p => p.fecha >= semanaInicio && p.metodo !== 'Pendiente')
-                .reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
-            const egresos = gastos
-                .filter(g => g.fecha >= semanaInicio)
-                .reduce((acc, g) => acc + parseFloat(g.monto || 0), 0);
-            return ingresos - egresos;
-        }, [pagos, gastos, semanaInicio]);
-        
-        const pagosPendientes = useMemo(() => {
-            let pendientes = 0;
-            const alumnosMensuales = alumnos.filter(a => a.plan === 'mensual' && a.estado === 'activo');
-            const pagosMensualesMesActual = pagos.filter(p => p.concepto?.startsWith("Cuota Mensual") && new Date(p.fecha).getMonth() === new Date().getMonth());
-
-            alumnosMensuales.forEach(alumno => {
-                const cuota = parseFloat(perfil.preciosMensuales[alumno.frecuencia] || 0);
-                const totalPagado = pagosMensualesMesActual.filter(p => p.alumnoId === alumno.id).reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
-                if (cuota > totalPagado) {
-                    pendientes++;
-                }
-            });
-            return pendientes;
-        }, [pagos, alumnos, perfil]);
-        
-        return (
-            <div className="grid gap-4">
-                <div className="grid md:grid-cols-3 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-xl"><p className="text-sm text-blue-800">Clases de Hoy</p><p className="text-2xl font-bold text-blue-900">{clasesHoy.length}</p></div>
-                    <div className="bg-orange-50 p-4 rounded-xl"><p className="text-sm text-orange-800">Pagos Mensuales Pendientes</p><p className="text-2xl font-bold text-orange-900">{pagosPendientes}</p></div>
-                    <div className="bg-emerald-50 p-4 rounded-xl"><p className="text-sm text-emerald-800">Balance de la Semana</p><p className={`text-2xl font-bold ${balanceSemana >= 0 ? 'text-emerald-900' : 'text-red-900'}`}>${balanceSemana.toFixed(2)}</p></div>
-                </div>
-                <div className="grid md:grid-cols-2 gap-4">
-                    <Card title="Nueva clase" right={<button onClick={goToNewClass} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
-                        <p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p>
-                    </Card>
-                    <ClasesPorTamanoMes clases={clases} />
-                </div>
-                <Card title="Agenda del Día">
-                    {clasesHoy.length === 0 ? (
-                        <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
-                    ) : (
-                        <ul className="space-y-2">
-                            {clasesHoy.map(c => (
-                                <li key={c.id} className="p-2 border-b flex justify-between items-center">
-                                    <div>
-                                        <p className="font-semibold">{c.hora} - {c.nombresAlumnos}</p>
-                                        <p className="text-xs text-slate-500">{c.tipo} en {c.cancha || 'N/A'}</p>
-                                    </div>
-                                    <span className={`px-2 py-0.5 rounded-full text-xs ${c.estado === 'Programada' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>{c.estado}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </Card>
-            </div>
-        );
-    }
-
-    function AlumnoForm({ initialData, onSubmit, onCancel }) {
-      const [form, setForm] = useState(initialData);
-      const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, [name]: value })); };
-      const addHorario = () => setForm(f => ({ ...f, horarios: [...(f.horarios || []), { dia: "Lunes", hora: "18:00" }] }));
-      const delHorario = (idx) => setForm(f => ({ ...f, horarios: f.horarios.filter((_, i) => i !== idx) }));
-      const setHorario = (idx, key, val) => setForm(f => ({ ...f, horarios: f.horarios.map((h, i) => i === idx ? { ...h, [key]: val } : h) }));
-      function handleSubmit(e) { e.preventDefault(); if (!form.nombre.trim()) return alert("Ingresá un nombre"); onSubmit(form); }
-      return (
-        <form onSubmit={handleSubmit} className="grid md:grid-cols-6 gap-3">
-          <div className="md:col-span-3"><label className="text-sm text-slate-600">Nombre</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Sofía" required /></div>
-          <div className="md:col-span-3"><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Pérez" /></div>
-          <div className="md:col-span-3"><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: 549381..." /></div>
-          <div className="md:col-span-3"><label className="text-sm text-slate-600">Contacto Padre/Madre (Escuelita)</label><input name="contactoPadre" value={form.contactoPadre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Nombre y teléfono" /></div>
-          <div><label className="text-sm text-slate-600">Deporte</label><select name="deporte" value={form.deporte} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{DEPORTES.map(d => <option key={d}>{d}</option>)}</select></div>
-          <div><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_ALUMNO.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}</select></div>
-          <div className="md:col-span-3"><label className="text-sm text-slate-600">Plan de Pago</label><select name="plan" value={form.plan} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{PLANES_PAGO.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
-          {form.plan === 'mensual' && (<div className="md:col-span-3"><label className="text-sm text-slate-600">Frecuencia</label><select name="frecuencia" value={form.frecuencia} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{FRECUENCIAS_MENSUALES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}</select></div>)}
-          <div className="md:col-span-6"><label className="text-sm text-slate-600">Horarios fijos</label><div className="grid gap-2">{(form.horarios || []).map((h, idx) => (<div key={idx} className="flex gap-2 items-center flex-wrap"><select value={h.dia} onChange={(e) => setHorario(idx, 'dia', e.target.value)} className="border rounded-lg px-3 py-2">{DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}</select><input type="time" value={h.hora} onChange={(e) => setHorario(idx, 'hora', e.target.value)} className="border rounded-lg px-3 py-2" /><button type="button" onClick={() => delHorario(idx)} className="px-2 py-2 rounded-lg border text-red-600 hover:bg-red-50">−</button></div>))}<button type="button" onClick={addHorario} className="self-start px-3 py-1.5 rounded-lg border w-auto">+ Agregar horario</button></div></div>
-          <div className="md:col-span-6"><label className="text-sm text-slate-600">Notas / Descripción</label><textarea name="notas" value={form.notas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={3} placeholder="Detalle particular del alumno" /></div>
-          <div className="md:col-span-6 flex gap-2 justify-end"><button type="button" onClick={onCancel} className="px-3 py-2 rounded-lg border">Cancelar</button><button type="submit" className="px-3 py-2 rounded-lg bg-emerald-600 text-white">Guardar</button></div>
-        </form>
-      );
-    }
-    
-    function Alumnos({ alumnos, onCreate, onUpdate, onDelete }) {
-      const [q, setQ] = useState("");
-      const [showForm, setShowForm] = useState(false);
-      const [editing, setEditing] = useState(null);
-      const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", deporte: "Pádel", estado: "activo", plan: "porClase", frecuencia: "1xSemana", notas: "", horarios: [] };
-      
-      const getNombreCompleto = (a) => `${a.apellido || ''} ${a.nombre || ''}`.trim();
-      
-      const sortedAlumnos = useMemo(() => {
-        return [...alumnos].sort((a, b) => getNombreCompleto(a).localeCompare(getNombreCompleto(b)));
-      }, [alumnos]);
-
-      const filtered = useMemo(() => { 
-        const s = q.trim().toLowerCase(); 
-        if (!s) return sortedAlumnos; 
-        return sortedAlumnos.filter((a) => [getNombreCompleto(a), a.telefono, a.deporte, a.estado].some((x) => (x || "").toLowerCase().includes(s))); 
-      }, [sortedAlumnos, q]);
-
-      function openNew() { setEditing(null); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
-      function openEdit(a) { setEditing(a); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
-      function cancel() { setShowForm(false); setEditing(null); }
-      function submit(formData) { if (editing) { onUpdate({ ...formData, id: editing.id }); } else { onCreate(formData); } cancel(); }
-      
-      return (
-        <div className="grid gap-4">
-          <Card title={editing ? "Editar alumno" : "Nuevo alumno"} right={!showForm && <button onClick={openNew} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nuevo</button>}>
-            {showForm ? (<AlumnoForm initialData={editing ? { ...emptyForm, ...editing } : emptyForm} onSubmit={submit} onCancel={cancel} />) : (<p className="text-sm text-slate-500">Hacé clic en <b>+ Nuevo</b> para crear un alumno, o en el lápiz para editar.</p>)}
-          </Card>
-          <Card title="Listado de alumnos" right={<input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar" className="border rounded-xl px-3 py-1.5 text-sm" />}>
-            <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Nombre Completo</th><th className="p-2">Teléfono</th><th className="p-2">Plan de Pago</th><th className="p-2">Estado</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>{filtered.length === 0 && (<tr><td colSpan={5} className="text-center py-6 text-slate-400">No hay alumnos</td></tr>)}{filtered.map((a) => (<tr key={a.id} className="border-t"><td className="p-2 font-semibold">{getNombreCompleto(a)}</td><td className="p-2"><div className="flex items-center gap-2"><span>{a.telefono || "-"}</span>{a.telefono && (<a href={waLink(a.telefono, a.nombre)} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-0.5 text-xs rounded-full border text-green-700 bg-green-50 hover:bg-green-100">WhatsApp</a>)}</div></td><td className="p-2">{a.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</td><td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${a.estado === 'espera' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{a.estado === 'espera' ? 'Espera' : 'Activo'}</span></td><td className="p-2 text-right"><div className="inline-flex gap-2"><button onClick={() => openEdit(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button><button type="button" onClick={() => onDelete(a.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button></div></td></tr>))}</tbody></table></div>
-          </Card>
-        </div>
-      );
-    }
-    
-    function CalendarioSemanal({ week, clases, onEdit }) {
-      const getStatusColor = (status) => {
-        switch (status) { case "Realizada": return "bg-green-200 border-green-400"; case "Cancelada": return "bg-red-200 border-red-400"; case "Ausente": return "bg-yellow-200 border-yellow-400"; default: return "bg-blue-200 border-blue-400"; }
-      };
-      const clasesPorDiaHora = useMemo(() => { const map = {}; clases.forEach(clase => { const key = `${clase.fecha}_${clase.hora}`; if (!map[key]) map[key] = []; map[key].push(clase); }); return map; }, [clases]);
-      return (
-        <div className="grid grid-cols-[auto_repeat(7,1fr)] gap-px bg-slate-200 border border-slate-200">
-          <div className="bg-white p-2"></div>
-          {week.map(day => (<div key={day} className="bg-white p-2 text-center font-semibold text-sm"><div>{DIAS_SEMANA_NOMBRES[new Date(day).getDay() === 0 ? 6 : new Date(day).getDay() - 1]}</div><div className="text-xs text-slate-500">{formatDate(new Date(day), 'dd/mm')}</div></div>))}
-          {HORAS.map(hora => (<React.Fragment key={hora}><div className="bg-white text-center text-xs p-2">{hora}</div>{week.map(day => (<div key={`${day}-${hora}`} className="bg-slate-50 min-h-[60px] p-1">{(clasesPorDiaHora[`${day}_${hora}`] || []).map(clase => (<div key={clase.id} onClick={() => onEdit(clase)} className={`text-xs p-1 rounded border cursor-pointer mb-1 ${getStatusColor(clase.estado)}`}>{clase.nombresAlumnos}<div className="text-[10px] opacity-70">{clase.cancha}</div></div>))}</div>))}</React.Fragment>))}
-        </div>
-      );
-    }
-    
-    function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPayMixto }) {
-      const [showForm, setShowForm] = useState(false);
-      const [editing, setEditing] = useState(null);
-      const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
-      const [form, setForm] = useState(emptyForm);
-      const [currentDate, setCurrentDate] = useState(new Date());
-
-      const weekStartDate = getWeekStartDate(currentDate);
-      const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
-      const alumnosActivos = useMemo(() => alumnos.filter(a => a.estado === 'activo'), [alumnos]);
-      const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
-      
-      const getNombreCompleto = (a) => a ? `${a.apellido || ''} ${a.nombre || ''}`.trim() : '??';
-
-      const pagosPorClase = useMemo(() => {
-        const map = new Map();
-        pagos.forEach(p => {
-          if (!map.has(p.claseId)) map.set(p.claseId, []);
-          map.get(p.claseId).push(p);
-        });
-        return map;
-      }, [pagos]);
-
-      const clasesConDatos = useMemo(() => clases.map(c => ({ 
-        ...c, 
-        nombresAlumnos: (c.alumnoIds || []).map(id => getNombreCompleto(alumnoMap.get(id))).filter(Boolean).join(', '), 
-        pagos: pagosPorClase.get(c.id) || [] 
-      })), [clases, alumnoMap, pagosPorClase]);
-
-      const clasesDeLaSemana = useMemo(() => clasesConDatos.filter(c => weekDates.includes(c.fecha)), [clasesConDatos, weekDates]);
-      const canchasDisponibles = useMemo(() => (perfil.canchas || '').split('\n').filter(c => c.trim() !== ''), [perfil.canchas]);
-      
-      function handleFormChange(e) {
-        const { name, value, type, checked } = e.target;
-        const val = type === 'checkbox' ? checked : value;
-        setForm(prev => {
-          const newState = { ...prev, [name]: val };
-          if (name === "tipo") {
-            newState.precio = perfil.precios[val.toLowerCase()] || "";
-            const numAlumnos = TIPOS_CLASE_MAP[val] || 1;
-            newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
-          }
-          return newState;
-        });
-      }
-      
-      function handleAlumnoChange(index, newId) {
-        setForm(prev => {
-            const newAlumnoIds = prev.alumnoIds.map((id, i) => i === index ? newId : id);
-            const primerAlumno = alumnoMap.get(newAlumnoIds[0]);
-            const esPlanMensual = primerAlumno?.plan === 'mensual';
-            
-            const nuevoPrecio = esPlanMensual ? "0" : (perfil.precios[prev.tipo.toLowerCase()] || "");
-            
-            return {
-                ...prev,
-                alumnoIds: newAlumnoIds,
-                precio: nuevoPrecio
-            };
-        });
-      }
-
-      function openNew() { setEditing(null); setForm({ ...emptyForm, alumnoIds: [alumnosActivos[0]?.id || ""], precio: perfil.precios.individual, cancha: canchasDisponibles[0] || "" }); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
-      function openEdit(c) { setEditing(c); setForm({ ...emptyForm, ...c, recurrente: false }); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
-      function cancel() { setShowForm(false); setEditing(null); setForm(emptyForm); }
-      function submit(e) { e.preventDefault(); const validAlumnos = form.alumnoIds.filter(id => id); if (validAlumnos.length === 0) return alert("Seleccioná al menos un alumno"); const finalForm = {...form, alumnoIds: validAlumnos}; if (editing) { onUpdate({ ...finalForm, id: editing.id }); } else { onCreate(finalForm); } cancel(); }
-      const changeWeek = (offset) => setCurrentDate(prev => addDays(prev, offset * 7));
-      function handleStatusChange(clase, newStatus) {
-        onUpdate({ ...clase, estado: newStatus, pagos: clase.pagos }); // Pass pagos to avoid losing it on update
-      }
-      
-      const primerAlumnoId = form.alumnoIds[0];
-      const esMensual = alumnoMap.get(primerAlumnoId)?.plan === 'mensual';
-      
-      return (
-        <div className="grid gap-4">
-          <Card title={editing ? "Editar clase" : "Nueva clase"} right={!showForm && <button onClick={openNew} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
-            {showForm ? (
-              <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
-                <div className="md:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {(form.alumnoIds || [""]).map((alumnoId, index) => (
-                    <div key={index}>
-                      <label className="text-sm text-slate-600">Alumno {index + 1}</label>
-                      <select value={alumnoId} onChange={(e) => handleAlumnoChange(index, e.target.value)} className="w-full border rounded-lg px-3 py-2" required>
-                        <option value="">Seleccionar...</option>
-                        {alumnosActivos.filter(a => !form.alumnoIds.includes(a.id) || a.id === alumnoId).map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
-                      </select>
-                    </div>
-                  ))}
-                </div>
-                <div className="md:col-span-2"><label className="text-sm text-slate-600">Ubicación / Cancha</label><select name="cancha" value={form.cancha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{canchasDisponibles.map(c => <option key={c}>{c}</option>)}</select></div>
-                <div><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
-                <div><label className="text-sm text-slate-600">Hora</label><input type="time" name="hora" value={form.hora} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
-                <div><label className="text-sm text-slate-600">Tipo de Clase</label><select name="tipo" value={form.tipo} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}</select></div>
-                <div><label className="text-sm text-slate-600">Precio</label><input type="number" name="precio" value={esMensual ? "Plan Mensual" : form.precio} onChange={handleFormChange} className={`w-full border rounded-lg px-3 py-2 ${esMensual ? 'bg-slate-100' : ''}`} placeholder="0" disabled={esMensual} /></div>
-                <div className="md:col-span-2"><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}</select></div>
-                <div className="md:col-span-6"><label className="text-sm text-slate-600">Notas</label><textarea name="notas" value={form.notas} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" rows={2} placeholder="Comentarios sobre la clase" /></div>
-                {!editing && <div className="md:col-span-6 flex items-center gap-2"><input type="checkbox" name="recurrente" id="recurrente" checked={form.recurrente} onChange={handleFormChange} /><label htmlFor="recurrente" className="text-sm text-slate-600 mr-2">Repetir semanalmente por</label>{form.recurrente && <select name="mesesRecurrencia" value={form.mesesRecurrencia} onChange={handleFormChange} className="border rounded-lg px-3 py-2">{MESES_RECURRENCIA.map(m => <option key={m} value={m}>{m} mes{m > 1 ? 'es' : ''}</option>)}</select>}</div>}
-                <div className="md:col-span-6 flex gap-2 justify-end"><button type="button" onClick={cancel} className="px-3 py-2 rounded-lg border">Cancelar</button><button className="px-3 py-2 rounded-lg bg-emerald-600 text-white">Guardar</button></div>
-              </form>
-            ) : ( <p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p> )}
-          </Card>
-          <Card title="Calendario Semanal" right={<div className="flex items-center gap-2"><button onClick={() => changeWeek(-1)} className="px-3 py-1.5 text-sm rounded-lg border">‹ Ant</button><button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg border">Hoy</button><button onClick={() => changeWeek(1)} className="px-3 py-1.5 text-sm rounded-lg border">Sig ›</button></div>}><CalendarioSemanal week={weekDates} clases={clasesDeLaSemana} onEdit={openEdit} /></Card>
-          <Card title="Listado de clases">
-            <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Fecha</th><th className="p-2">Alumnos</th><th className="p-2">Ubicación</th><th className="p-2">Estado</th><th className="p-2">Precio</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>{clasesConDatos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).length === 0 && (<tr><td colSpan={6} className="text-center py-6 text-slate-400">No hay clases programadas</td></tr>)}{clasesConDatos.map((c) => (<tr key={c.id} className="border-t"><td className="p-2">{c.fecha} {c.hora}</td><td className="p-2">{c.nombresAlumnos}</td><td className="p-2">{c.cancha}</td><td className="p-2"><select value={c.estado} onChange={(e) => handleStatusChange(c, e.target.value)} className="w-full border rounded-lg px-2 py-1 bg-white">{ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}</select></td><td className="p-2 flex items-center gap-2">{c.precio ? `$${c.precio}` : '-'}{c.pagos.length > 0 && <span className={`w-2 h-2 rounded-full ${c.pagos.some(p => p.metodo === 'Pendiente') ? 'bg-orange-400' : 'bg-green-500'}`} title={`Pago Registrado`}></span>}</td><td className="p-2 text-right"><div className="inline-flex gap-2">{c.estado === 'Realizada' && c.pagos.length === 0 && <button onClick={() => onPayMixto(c)} className="px-2 py-1 text-xs rounded-lg border bg-emerald-50 text-emerald-700 hover:bg-emerald-100">💳 Pagar</button>}<button onClick={() => openEdit(c)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button><button type="button" onClick={() => onDelete(c.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button></div></td></tr>))}</tbody></table></div>
-          </Card>
-        </div>
-      );
-    }
-    
-    function Pagos({ pagos, alumnos, perfil, onPayMensual, clases }) {
-        const [vista, setVista] = useState(perfil.metodoCobro === 'mensual' ? 'mensual' : 'historial');
-        useEffect(() => {
-            setVista(perfil.metodoCobro === 'mensual' ? 'mensual' : 'historial');
-        }, [perfil.metodoCobro]);
-        return (
-            <div className="grid gap-4">
-                <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
-                    <button onClick={() => setVista('historial')} className={`w-full text-center px-3 py-1.5 text-sm rounded-lg ${vista === 'historial' ? 'bg-white shadow' : ''}`}>Historial de Pagos</button>
-                    <button onClick={() => setVista('mensual')} className={`w-full text-center px-3 py-1.5 text-sm rounded-lg ${vista === 'mensual' ? 'bg-white shadow' : ''}`}>Control Clases Mensuales</button>
-                    <button onClick={() => setVista('deudas')} className={`w-full text-center px-3 py-1.5 text-sm rounded-lg ${vista === 'deudas' ? 'bg-white shadow' : ''}`}>Control de Deudas</button>
-                </div>
-                {vista === 'historial' && <HistorialPagos pagos={pagos} alumnos={alumnos} clases={clases} />}
-                {vista === 'mensual' && <ControlMensual pagos={pagos} alumnos={alumnos} perfil={perfil} onPay={onPayMensual} />}
-                {vista === 'deudas' && <ControlDeudas pagos={pagos} alumnos={alumnos} clases={clases} perfil={perfil} />}
-            </div>
-        );
-    }
-
-    function HistorialPagos({ pagos, alumnos, clases }) {
-      const [periodo, setPeriodo] = useState("mes");
-      const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-      const [metodo, setMetodo] = useState("Todos");
-      const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, `${a.apellido || ''} ${a.nombre || ''}`.trim()])), [alumnos]);
-      const claseMap = useMemo(() => new Map(clases.map(c => [c.id, c])), [clases]);
-
-      const pagosConDatos = useMemo(() => {
-          const pagosAgrupados = {}; // por claseId
-          pagos.forEach(p => {
-              if (p.claseId) {
-                  if (!pagosAgrupados[p.claseId]) pagosAgrupados[p.claseId] = [];
-                  pagosAgrupados[p.claseId].push(p);
-              }
-          });
-          
-          const pagosMostrados = [];
-          const clasesProcesadas = new Set();
-
-          pagos.forEach(p => {
-              if (p.claseId && !clasesProcesadas.has(p.claseId)) {
-                  const pagosDeClase = pagosAgrupados[p.claseId];
-                  const metodos = new Set(pagosDeClase.map(pg => pg.metodo));
-                  const montoTotal = pagosDeClase.reduce((sum, pg) => sum + parseFloat(pg.monto || 0), 0);
-                  const metodoFinal = metodos.size > 1 ? 'Mixto' : (metodos.values().next().value || 'N/A');
-                  const clase = claseMap.get(p.claseId);
-                  
-                  pagosMostrados.push({
-                      ...p,
-                      id: p.claseId,
-                      monto: montoTotal,
-                      metodo: metodoFinal,
-                      concepto: clase ? `Clase ${clase.tipo}` : (alumnoMap.get(p.alumnoId) || '??')
-                  });
-                  clasesProcesadas.add(p.claseId);
-              } else if (!p.claseId) {
-                  pagosMostrados.push({
-                      ...p,
-                      nombreAlumno: alumnoMap.get(p.alumnoId) || '??'
-                  });
-              }
-          });
-          return pagosMostrados;
-
-      }, [pagos, alumnoMap, claseMap]);
-      
-      const pagosFiltrados = useMemo(() => {
-        const ahora = new Date();
-        const hoy = formatDate(ahora);
-        const semanaInicio = formatDate(getWeekStartDate(ahora));
-        const anioActual = ahora.getFullYear();
-
-        return pagosConDatos
-          .filter(p => {
-            if (periodo === 'dia' && p.fecha !== hoy) return false;
-            if (periodo === 'semana' && p.fecha < semanaInicio) return false;
-            if (periodo === 'año' && new Date(p.fecha).getFullYear() !== anioActual) return false;
-            if (periodo === 'mes') {
-              const fechaPago = new Date(p.fecha);
-              if (fechaPago.getMonth() !== selectedMonth || fechaPago.getFullYear() !== anioActual) { return false; }
-            }
-            if (metodo !== 'Todos' && p.metodo !== metodo) return false;
-            return true;
-          })
-          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-      }, [pagosConDatos, periodo, selectedMonth, metodo]);
-      
-      const totales = useMemo(() => {
-        return pagos.filter(p => pagosFiltrados.some(pf => pf.id === (p.claseId || p.id))).reduce((acc, p) => {
-          if (p.metodo !== 'Pendiente') {
-            const monto = parseFloat(p.monto || 0) || 0;
-            acc.total += monto;
-            if (p.metodo === 'Efectivo') acc.efectivo += monto;
-            if (p.metodo === 'Transferencia') acc.transferencia += monto;
-          }
-          return acc;
-        }, { total: 0, efectivo: 0, transferencia: 0 });
-      }, [pagosFiltrados, pagos]);
-
-      const PeriodoButton = ({ value, current, setter, children }) => (<button onClick={() => setter(value)} className={`px-3 py-1.5 text-sm rounded-lg ${current === value ? 'bg-slate-900 text-white' : 'bg-white border'}`}>{children}</button>);
-      return (
-        <Card title="Control de Pagos">
-            <div className="grid gap-4 mb-4">
-              <div className="flex flex-wrap items-center gap-2"><PeriodoButton value="dia" current={periodo} setter={setPeriodo}>Hoy</PeriodoButton><PeriodoButton value="semana" current={periodo} setter={setPeriodo}>Semana</PeriodoButton><PeriodoButton value="año" current={periodo} setter={setPeriodo}>Año</PeriodoButton></div>
-              <div className="flex flex-wrap items-center gap-2">{MESES_NOMBRES.map((mes, index) => (<button key={mes} onClick={() => { setPeriodo('mes'); setSelectedMonth(index); }} className={`px-3 py-1.5 text-sm rounded-lg ${periodo === 'mes' && selectedMonth === index ? 'bg-slate-900 text-white' : 'bg-white border'}`}>{mes}</button>))}</div>
-              <div className="flex flex-wrap items-center gap-2"><PeriodoButton value="Todos" current={metodo} setter={setMetodo}>Todos</PeriodoButton><PeriodoButton value="Efectivo" current={metodo} setter={setMetodo}>Efectivo</PeriodoButton><PeriodoButton value="Transferencia" current={metodo} setter={setMetodo}>Transferencia</PeriodoButton><PeriodoButton value="Pendiente" current={metodo} setter={setMetodo}>Pendiente</PeriodoButton><PeriodoButton value="Mixto" current={metodo} setter={setMetodo}>Mixto</PeriodoButton></div>
-            </div>
-            <div className="grid md:grid-cols-3 gap-4 mb-4">
-              <div className="bg-emerald-50 p-4 rounded-xl"><p className="text-sm text-emerald-800">Total Ingresado</p><p className="text-2xl font-bold text-emerald-900">${totales.total.toFixed(2)}</p></div>
-              <div className="bg-sky-50 p-4 rounded-xl"><p className="text-sm text-sky-800">Total en Efectivo</p><p className="text-2xl font-bold text-sky-900">${totales.efectivo.toFixed(2)}</p></div>
-              <div className="bg-indigo-50 p-4 rounded-xl"><p className="text-sm text-indigo-800">Total por Transferencia</p><p className="text-2xl font-bold text-indigo-900">${totales.transferencia.toFixed(2)}</p></div>
-            </div>
-            <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Fecha</th><th className="p-2">Concepto</th><th className="p-2">Monto</th><th className="p-2">Método</th></tr></thead><tbody>{pagosFiltrados.length === 0 && (<tr><td colSpan={4} className="text-center py-6 text-slate-400">No hay pagos que coincidan con los filtros</td></tr>)}{pagosFiltrados.map(p => (<tr key={p.id} className="border-t"><td className="p-2">{p.fecha}</td><td className="p-2">{p.concepto || p.nombreAlumno}</td><td className="p-2">${parseFloat(p.monto || 0).toFixed(2)}</td><td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${p.metodo === 'Pendiente' ? 'bg-orange-100 text-orange-800' : p.metodo === 'Mixto' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>{p.metodo}</span></td></tr>))}</tbody></table></div>
-        </Card>
-      );
-    }
-    
-    function ControlMensual({ pagos, alumnos, perfil, onPay }) {
-        const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-        const alumnosMensuales = useMemo(() => alumnos.filter(a => a.plan === 'mensual' && a.estado === 'activo'), [alumnos]);
-        const statusMensual = useMemo(() => {
-            const anioActual = new Date().getFullYear();
-            const pagosDelMes = pagos.filter(p => {
-                const fechaPago = new Date(p.fecha);
-                return p.concepto?.startsWith("Cuota Mensual") && fechaPago.getMonth() === selectedMonth && fechaPago.getFullYear() === anioActual;
-            });
-
-            return alumnosMensuales.map(alumno => {
-                const cuota = parseFloat(perfil.preciosMensuales[alumno.frecuencia] || 0);
-                const pagosAlumno = pagosDelMes.filter(p => p.alumnoId === alumno.id);
-                const totalPagado = pagosAlumno.reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
-                
-                let estado = 'Pendiente';
-                if (totalPagado >= cuota) {
-                    estado = 'Pagado';
-                } else if (totalPagado > 0) {
-                    estado = 'Parcial';
-                }
-
-                return {
-                    ...alumno,
-                    cuota,
-                    totalPagado,
-                    estado
-                };
-            });
-        }, [alumnosMensuales, pagos, selectedMonth, perfil.preciosMensuales]);
-
-        const getStatusColor = (status) => {
-            if (status === 'Pagado') return 'bg-green-100 text-green-800';
-            if (status === 'Parcial') return 'bg-yellow-100 text-yellow-800';
-            return 'bg-red-100 text-red-800';
-        };
-        return (
-            <Card title="Control de Cuotas Mensuales">
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                    {MESES_NOMBRES.map((mes, index) => (
-                        <button key={mes} onClick={() => setSelectedMonth(index)} className={`px-3 py-1.5 text-sm rounded-lg ${selectedMonth === index ? 'bg-slate-900 text-white' : 'bg-white border'}`}>{mes}</button>
-                    ))}
-                </div>
-                <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Alumno</th><th className="p-2">Plan</th><th className="p-2">Monto Cuota</th><th className="p-2">Monto Pagado</th><th className="p-2">Estado</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>
-                    {statusMensual.length === 0 && (<tr><td colSpan={6} className="text-center py-6 text-slate-400">No hay alumnos con plan mensual</td></tr>)}
-                    {statusMensual.map(a => (
-                        <tr key={a.id} className="border-t">
-                            <td className="p-2">{`${a.apellido || ''} ${a.nombre || ''}`.trim()}</td>
-                            <td className="p-2">{FRECUENCIAS_MENSUALES.find(f => f.value === a.frecuencia)?.label}</td>
-                            <td className="p-2">${a.cuota.toFixed(2)}</td>
-                            <td className="p-2">${a.totalPagado.toFixed(2)}</td>
-                            <td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(a.estado)}`}>{a.estado}</span></td>
-                            <td className="p-2 text-right">
-                                {a.estado !== 'Pagado' && <button onClick={() => onPay(a, selectedMonth)} className="px-2 py-1 text-xs rounded-lg border bg-emerald-500 text-white">Registrar Pago</button>}
-                            </td>
-                        </tr>
-                    ))}
-                </tbody></table></div>
-            </Card>
-        );
-    }
-    
-    function ControlDeudas({ pagos, alumnos, clases, perfil }) {
-        const getNombreCompleto = (a) => a ? `${a.apellido || ''} ${a.nombre || ''}`.trim() : '??';
-        
-        const deudas = useMemo(() => {
-            const deudores = [];
-            const hoy = new Date();
-            const mesActual = hoy.getMonth();
-            const anioActual = hoy.getFullYear();
-
-            const alumnosMensuales = alumnos.filter(a => a.plan === 'mensual' && a.estado === 'activo');
-            const pagosMensuales = pagos.filter(p => p.concepto?.startsWith("Cuota Mensual"));
-
-            alumnosMensuales.forEach(alumno => {
-                const cuota = parseFloat(perfil.preciosMensuales[alumno.frecuencia] || 0);
-                const pagosDelMes = pagosMensuales.filter(p => {
-                    const fechaPago = new Date(p.fecha);
-                    return p.alumnoId === alumno.id && fechaPago.getMonth() === mesActual && fechaPago.getFullYear() === anioActual;
-                });
-                const totalPagado = pagosDelMes.reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
-                const deuda = cuota - totalPagado;
-                if (deuda > 0) {
-                    deudores.push({ id: alumno.id, nombre: getNombreCompleto(alumno), tipo: 'Cuota Mensual', monto: deuda });
-                }
-            });
-
-            const pagosPorClaseMap = new Map();
-            pagos.filter(p => p.claseId).forEach(p => {
-                if(!pagosPorClaseMap.has(p.claseId)) pagosPorClaseMap.set(p.claseId, 0);
-                pagosPorClaseMap.set(p.claseId, pagosPorClaseMap.get(p.claseId) + parseFloat(p.monto || 0));
-            });
-            const clasesRealizadas = clases.filter(c => c.estado === 'Realizada' && new Date(c.fecha) <= hoy);
-            
-            clasesRealizadas.forEach(clase => {
-                const totalPagado = pagosPorClaseMap.get(clase.id) || 0;
-                const precioClase = parseFloat(clase.precio || 0);
-
-                if (totalPagado < precioClase) {
-                    clase.alumnoIds.forEach(alumnoId => {
-                        const alumno = alumnos.find(a => a.id === alumnoId);
-                        if (alumno && alumno.plan === 'porClase') {
-                            const monto = (precioClase - totalPagado) / clase.alumnoIds.length;
-                            deudores.push({ id: `${clase.id}-${alumno.id}`, nombre: getNombreCompleto(alumno), tipo: `Clase ${clase.fecha}`, monto });
-                        }
-                    });
-                }
-            });
-            
-            const deudasAgrupadas = deudores.reduce((acc, deuda) => {
-                if(!acc[deuda.nombre]) {
-                    acc[deuda.nombre] = { total: 0, detalles: [] };
-                }
-                acc[deuda.nombre].total += deuda.monto;
-                acc[deuda.nombre].detalles.push({ tipo: deuda.tipo, monto: deuda.monto });
-                return acc;
-            }, {});
-            
-            return Object.entries(deudasAgrupadas).map(([nombre, data]) => ({ nombre, ...data }));
-
-        }, [pagos, alumnos, clases, perfil]);
-        
-        return (
-            <Card title="Control de Deudas Pendientes">
-                 <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Alumno</th><th className="p-2">Detalle de Deuda</th><th className="p-2">Total Adeudado</th></tr></thead><tbody>
-                    {deudas.length === 0 && (<tr><td colSpan={3} className="text-center py-6 text-slate-400">No hay deudas pendientes</td></tr>)}
-                    {deudas.map(deuda => (
-                        <tr key={deuda.nombre} className="border-t">
-                            <td className="p-2 font-semibold">{deuda.nombre}</td>
-                            <td className="p-2">
-                                {deuda.detalles.map((d, i) => (
-                                    <div key={i}>{d.tipo}: ${d.monto.toFixed(2)}</div>
-                                ))}
-                            </td>
-                            <td className="p-2 font-semibold text-red-600">${deuda.total.toFixed(2)}</td>
-                        </tr>
-                    ))}
-                </tbody></table></div>
-            </Card>
-        );
-    }
-
-    function Gastos({ gastos, onCreate, onUpdate, onDelete }) {
-      const [showForm, setShowForm] = useState(false);
-      const [editing, setEditing] = useState(null);
-      const emptyForm = { fecha: formatDate(new Date()), concepto: "", monto: "", categoria: "Varios" };
-      const [form, setForm] = useState(emptyForm);
-      const [periodo, setPeriodo] = useState("mes");
-      const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, [name]: value })); };
-
-      const gastosFiltrados = useMemo(() => {
-        const ahora = new Date();
-        const hoy = formatDate(ahora);
-        const semanaInicio = formatDate(getWeekStartDate(ahora));
-        const mesInicio = formatDate(new Date(ahora.getFullYear(), ahora.getMonth(), 1));
-        const anioInicio = formatDate(new Date(ahora.getFullYear(), 0, 1));
-
-        return gastos
-          .filter(g => {
-            if (periodo === 'dia' && g.fecha !== hoy) return false;
-            if (periodo === 'semana' && g.fecha < semanaInicio) return false;
-            if (periodo === 'mes' && g.fecha < mesInicio) return false;
-            if (periodo === 'año' && g.fecha < anioInicio) return false;
-            return true;
-          })
-          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-      }, [gastos, periodo]);
-      
-      const totalGastos = useMemo(() => gastosFiltrados.reduce((acc, g) => acc + (parseFloat(g.monto || 0) || 0), 0), [gastosFiltrados]);
-
-      function openNew() { setEditing(null); setForm(emptyForm); setShowForm(true); }
-      function openEdit(g) { setEditing(g); setForm(g); setShowForm(true); }
-      function cancel() { setShowForm(false); setEditing(null); setForm(emptyForm); }
-      function submit(e) { e.preventDefault(); if (!form.concepto.trim() || !form.monto) return alert("Completá concepto y monto"); if (editing) { onUpdate({ ...form, id: editing.id }); } else { onCreate(form); } cancel(); }
-
-      const PeriodoButton = ({ value, current, setter, children }) => (<button onClick={() => setter(value)} className={`px-3 py-1.5 text-sm rounded-lg ${current === value ? 'bg-slate-900 text-white' : 'bg-white border'}`}>{children}</button>);
-      return (
-        <div className="grid gap-4">
-          <Card title={editing ? "Editar gasto" : "Nuevo gasto"} right={!showForm && <button onClick={openNew} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nuevo</button>}>
-            {showForm ? (
-              <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
-                <div className="md:col-span-2"><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" required /></div>
-                <div className="md:col-span-4"><label className="text-sm text-slate-600">Concepto</label><input name="concepto" value={form.concepto} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Compra de pelotas" required /></div>
-                <div><label className="text-sm text-slate-600">Monto</label><input type="number" name="monto" value={form.monto} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: 10000" required /></div>
-                <div><label className="text-sm text-slate-600">Categoría</label><select name="categoria" value={form.categoria} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{CATEGORIAS_GASTO.map(c => <option key={c}>{c}</option>)}</select></div>
-                <div className="md:col-span-6 flex gap-2 justify-end"><button type="button" onClick={cancel} className="px-3 py-2 rounded-lg border">Cancelar</button><button className="px-3 py-2 rounded-lg bg-emerald-600 text-white">Guardar</button></div>
-              </form>
-            ) : (<p className="text-sm text-slate-500">Hacé clic en <b>+ Nuevo</b> para registrar un gasto.</p>)}
-          </Card>
-          
-          <Card title="Control de Gastos">
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <PeriodoButton value="dia" current={periodo} setter={setPeriodo}>Hoy</PeriodoButton>
-              <PeriodoButton value="semana" current={periodo} setter={setPeriodo}>Semana</PeriodoButton>
-              <PeriodoButton value="mes" current={periodo} setter={setPeriodo}>Mes</PeriodoButton>
-              <PeriodoButton value="año" current={periodo} setter={setPeriodo}>Año</PeriodoButton>
-            </div>
-            <div className="bg-red-50 p-4 rounded-xl mb-4"><p className="text-sm text-red-800">Total de Gastos</p><p className="text-2xl font-bold text-red-900">${totalGastos.toFixed(2)}</p></div>
-            <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Fecha</th><th className="p-2">Concepto</th><th className="p-2">Monto</th><th className="p-2">Categoría</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>{gastosFiltrados.length === 0 && (<tr><td colSpan={5} className="text-center py-6 text-slate-400">No hay gastos en este período</td></tr>)}{gastosFiltrados.map(g => (<tr key={g.id} className="border-t"><td className="p-2">{g.fecha}</td><td className="p-2">{g.concepto}</td><td className="p-2">${g.monto}</td><td className="p-2">{g.categoria}</td><td className="p-2 text-right"><div className="inline-flex gap-2"><button onClick={() => openEdit(g)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button><button type="button" onClick={() => onDelete(g.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button></div></td></tr>))}</tbody></table></div>
-          </Card>
-        </div>
-      );
-    }
-    
-    function GraficoBarras({ data }) {
-      const maxValue = useMemo(() => {
-        const values = data.map(d => d.value);
-        return Math.max(...values, 1);
-      }, [data]);
-      return (
-        <div className="bg-slate-50 rounded-xl p-4 h-64 flex justify-around items-end gap-4">
-          {data.map(item => (
-            <div key={item.label} className="flex-1 flex flex-col items-center gap-2">
-              <div className="text-sm font-semibold text-slate-700">${item.value.toFixed(2)}</div>
-              <div
-                className={`w-full rounded-t-lg ${item.color}`}
-                style={{ height: `${(item.value / maxValue) * 80}%` }}
-                title={`${item.label}: $${item.value.toFixed(2)}`}
-              ></div>
-              <div className="text-xs font-medium text-slate-600">{item.label}</div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    
-    function Reportes({ pagos, gastos, alumnos, clases }) {
-      const [periodo, setPeriodo] = useState("mes");
-      const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, `${a.apellido || ''} ${a.nombre || ''}`.trim()])), [alumnos]);
-      const [pagosFiltrados, gastosFiltrados] = useMemo(() => {
-        const ahora = new Date();
-        const hoy = formatDate(ahora);
-        const semanaInicio = formatDate(getWeekStartDate(ahora));
-        const mesInicio = formatDate(new Date(ahora.getFullYear(), ahora.getMonth(), 1));
-        const anioInicio = formatDate(new Date(ahora.getFullYear(), 0, 1));
-
-        const filterByPeriod = (item) => {
-          if (periodo === 'dia' && item.fecha !== hoy) return false;
-          if (periodo === 'semana' && item.fecha < semanaInicio) return false;
-          if (periodo === 'mes' && item.fecha < mesInicio) return false;
-          if (periodo === 'año' && item.fecha < anioInicio) return false;
-          return true;
-        };
-
-        return [pagos.filter(filterByPeriod), gastos.filter(filterByPeriod)];
-      }, [pagos, gastos, periodo]);
-      
-      const totales = useMemo(() => {
-        const totalIngresos = pagosFiltrados
-          .filter(p => p.metodo !== 'Pendiente')
-          .reduce((acc, p) => acc + (parseFloat(p.monto) || 0), 0);
-        
-        const totalGastos = gastosFiltrados
-          .reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0);
-
-        return {
-          ingresos: totalIngresos,
-          gastos: totalGastos,
-          balance: totalIngresos - totalGastos,
-        };
-      }, [pagosFiltrados, gastosFiltrados]);
-      
-      const dataGrafico = [
-        { label: 'Ingresos', value: totales.ingresos, color: 'bg-emerald-400' },
-        { label: 'Gastos', value: totales.gastos, color: 'bg-red-400' },
-      ];
-      
-      const handleExport = () => {
-        if (!window.jspdf || !window.jspdf.jsPDF) {
-            alert("Error: La librería jsPDF no está cargada.");
-            return;
-        }
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        const pageTitle = `Reporte Financiero - Período: ${periodo.charAt(0).toUpperCase() + periodo.slice(1)}`;
-        const generatedDate = `Generado el: ${new Date().toLocaleDateString()}`;
-
-        doc.setFontSize(18);
-        doc.text(pageTitle, 14, 22);
-        doc.setFontSize(11);
-        doc.setTextColor(100);
-        doc.text(generatedDate, 14, 29);
-
-        doc.setFontSize(12);
-        doc.text("Resumen del Período", 14, 45);
-        const summaryText = `Total Ingresos: $${totales.ingresos.toFixed(2)}\nTotal Gastos: $${totales.gastos.toFixed(2)}\nBalance Neto: $${totales.balance.toFixed(2)}`;
-        doc.text(summaryText, 14, 52);
-        
-        const tableColumn = ["Fecha", "Tipo", "Concepto", "Monto", "Metodo/Categoria"];
-        const tableRows = [];
-        
-        pagosFiltrados.forEach(pago => {
-            const alumnoNombre = alumnoMap.get(pago.alumnoId) || "N/A";
-            const concepto = pago.concepto || `Clase ${alumnoNombre}`;
-            const pagoData = [
-                pago.fecha,
-                "Ingreso",
-                concepto,
-                `$${parseFloat(pago.monto).toFixed(2)}`,
-                pago.metodo
-            ];
-            tableRows.push(pagoData);
-        });
-        
-        gastosFiltrados.forEach(gasto => {
-            const gastoData = [
-                gasto.fecha,
-                "Gasto",
-                gasto.concepto,
-                `$${parseFloat(gasto.monto).toFixed(2)}`,
-                gasto.categoria
-            ];
-            tableRows.push(gastoData);
-        });
-        
-        doc.autoTable({
-            head: [tableColumn],
-            body: tableRows,
-            startY: 70,
-        });
-        
-        doc.save(`reporte_${periodo}_${formatDate(new Date())}.pdf`);
-      };
-
-      const PeriodoButton = ({ value, current, setter, children }) => (<button onClick={() => setter(value)} className={`px-3 py-1.5 text-sm rounded-lg ${current === value ? 'bg-slate-900 text-white' : 'bg-white border'}`}>{children}</button>);
-      return (
-        <div className="grid gap-4">
-          <Card title="Reporte Financiero">
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <PeriodoButton value="dia" current={periodo} setter={setPeriodo}>Hoy</PeriodoButton>
-              <PeriodoButton value="semana" current={periodo} setter={setPeriodo}>Semana</PeriodoButton>
-              <PeriodoButton value="mes" current={periodo} setter={setPeriodo}>Mes</PeriodoButton>
-              <PeriodoButton value="año" current={periodo} setter={setPeriodo}>Año</PeriodoButton>
-              <button onClick={handleExport} className="px-3 py-1.5 text-sm rounded-lg bg-emerald-600 text-white ml-auto">Exportar a PDF</button>
-            </div>
-            
-            <div className="grid md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-emerald-50 p-4 rounded-xl"><p className="text-sm text-emerald-800">Total Ingresos</p><p className="text-2xl font-bold text-emerald-900">${totales.ingresos.toFixed(2)}</p></div>
-              <div className="bg-red-50 p-4 rounded-xl"><p className="text-sm text-red-800">Total Gastos</p><p className="text-2xl font-bold text-red-900">${totales.gastos.toFixed(2)}</p></div>
-              <div className="bg-blue-50 p-4 rounded-xl"><p className="text-sm text-blue-800">Balance Neto</p><p className={`text-2xl font-bold ${totales.balance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${totales.balance.toFixed(2)}</p></div>
-            </div>
-
-            <div className="mb-6"><ClasesPorTamanoMes clases={clases} /></div>
-            
-            <div className="mb-6">
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Resumen Gráfico</h4>
-                <GraficoBarras data={dataGrafico} />
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Desglose de Ingresos</h4>
-                <div className="overflow-x-auto border rounded-xl"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Fecha</th><th className="p-2">Monto</th><th className="p-2">Método</th></tr></thead><tbody>{pagosFiltrados.length === 0 && (<tr><td colSpan={3} className="text-center py-4 text-slate-400">Sin ingresos</td></tr>)}{pagosFiltrados.map(p => (<tr key={p.id} className="border-t"><td className="p-2">{p.fecha}</td><td className="p-2">${parseFloat(p.monto || 0).toFixed(2)}</td><td className="p-2">{p.metodo}</td></tr>))}</tbody></table></div>
-              </div>
-              <div>
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Desglose de Gastos</h4>
-                <div className="overflow-x-auto border rounded-xl"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Fecha</th><th className="p-2">Concepto</th><th className="p-2">Monto</th></tr></thead><tbody>{gastosFiltrados.length === 0 && (<tr><td colSpan={3} className="text-center py-4 text-slate-400">Sin gastos</td></tr>)}{gastosFiltrados.map(g => (<tr key={g.id} className="border-t"><td className="p-2">{g.fecha}</td><td className="p-2">{g.concepto}</td><td className="p-2">${parseFloat(g.monto || 0).toFixed(2)}</td></tr>))}</tbody></table></div>
-              </div>
-            </div>
-          </Card>
-        </div>
-      );
-    }
-    
-    function Perfil({ perfil, onUpdate, user, setToast }) {
-      const [form, setForm] = useState(perfil);
-      
-      useEffect(() => {
-        setForm(perfil);
-      }, [perfil]);
-
-      const handleChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, [name]: value }));
-      };
-
-      const handlePrecioChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, precios: { ...prev.precios, [name]: value } }));
-      };
-      const handlePrecioMensualChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value } }));
-      };
-      const handleSubmit = (e) => {
-        e.preventDefault();
-        onUpdate(form);
-      };
-
-      const handlePasswordReset = () => {
-        if(user && user.email) {
-            auth.sendPasswordResetEmail(user.email)
-                .then(() => {
-                    setToast("Email para restablecer contraseña enviado.");
-                })
-                .catch((error) => {
-                    setToast(`Error: ${error.message}`);
-                });
-        }
-      };
-
-      return (
-        <form onSubmit={handleSubmit}>
-          <Card title="Perfil y Configuración">
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
-                <div className="grid gap-3">
-                  <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                </div>
-              </div>
-              <div>
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Cuenta</h4>
-                <div className="grid gap-3">
-                  <div>
-                    <label className="text-sm text-slate-600">Email de la cuenta</label>
-                    <p className="w-full bg-slate-100 rounded-lg px-3 py-2 text-slate-700">{user?.email}</p>
-                  </div>
-                  <div>
-                    <button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">
-                      Restablecer Contraseña
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-             <div className="mt-6 border-t pt-6">
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Precios por Clase</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-sm text-slate-600">Individual</label><input type="number" name="individual" value={form.precios.individual} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Dupla</label><input type="number" name="dupla" value={form.precios.dupla} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Trío</label><input type="number" name="trio" value={form.precios.trio} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Cuarteto</label><input type="number" name="cuarteto" value={form.precios.cuarteto} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div className="col-span-2"><label className="text-sm text-slate-600">Escuelita</label><input type="number" name="escuelita" value={form.precios.escuelita} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                </div>
-            </div>
-            <div className="mt-6 border-t pt-6">
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Precios Mensuales</h4>
-                <div className="grid md:grid-cols-2 gap-3">
-                    {FRECUENCIAS_MENSUALES.map(f => (
-                        <div key={f.value}><label className="text-sm text-slate-600">{f.label}</label><input type="number" name={f.value} value={form.preciosMensuales[f.value]} onChange={handlePrecioMensualChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                    ))}
-                </div>
-            </div>
-            <div className="mt-6 border-t pt-6">
-              <h4 className="text-md font-semibold text-slate-700 mb-2">Modalidad de Cobro Principal</h4>
-              <select name="metodoCobro" value={form.metodoCobro} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">
-                <option value="porClase">Por Clase</option>
-                <option value="mensual">Mensual</option>
-              </select>
-            </div>
-            <div className="mt-6 border-t pt-6">
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Canchas / Ubicaciones</h4>
-                <textarea name="canchas" value={form.canchas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={4} placeholder="Una ubicación por línea..."></textarea>
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button type="submit" className="px-4 py-2 rounded-lg bg-emerald-600 text-white">Guardar Cambios</button>
-            </div>
-          </Card>
-        </form>
-      );
-    }
-
-    function PagoMixtoModal({ isOpen, clase, onCancel, onSave }) {
-      const [form, setForm] = useState({ efectivo: "", transferencia: "" });
-      useEffect(() => { 
-        if (clase) { 
-          setForm({ efectivo: clase.precio || "", transferencia: "" }); 
-        }
-      }, [clase]);
-      
-      if (!isOpen || !clase) return null;
-
-      const handleSave = () => { 
-        if (!form.efectivo && !form.transferencia) return alert("Ingresá al menos un monto.");
-        onSave(form); 
-      };
-
-      return (
-        <Modal isOpen={isOpen} title={`Registrar Pago: ${clase.nombresAlumnos}`} onCancel={onCancel} onConfirm={handleSave} confirmText="Guardar Pago">
-          <div className="grid gap-4">
-            <p>Clase del {clase.fecha} a las {clase.hora}. Precio total: ${clase.precio}</p>
-            <div><label className="text-sm text-slate-600">Monto en Efectivo</label><input type="number" value={form.efectivo} onChange={(e) => setForm({...form, efectivo: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
-            <div><label className="text-sm text-slate-600">Monto por Transferencia</label><input type="number" value={form.transferencia} onChange={(e) => setForm({...form, transferencia: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
-          </div>
-        </Modal>
-      );
-    }
-    
-    function PagoMensualModal({ isOpen, alumno, mes, onCancel, onSave }) {
-      const [form, setForm] = useState({ monto: "", metodo: "Efectivo" });
-      useEffect(() => {
-        if (alumno) {
-          const restante = alumno.cuota - alumno.totalPagado;
-          setForm({ monto: restante > 0 ? restante.toFixed(2) : "", metodo: "Efectivo" });
-        }
-      }, [alumno]);
-      if (!isOpen || !alumno) return null;
-
-      const handleSave = () => { onSave({ ...form, monto: form.monto || "0" }); };
-      return (
-        <Modal isOpen={isOpen} title={`Pago Cuota: ${alumno.nombre}`} onCancel={onCancel} onConfirm={handleSave} confirmText="Guardar Pago">
-          <div className="grid gap-4">
-            <p>Cuota de {MESES_NOMBRES[mes]} por ${alumno.cuota.toFixed(2)}. Pagado: ${alumno.totalPagado.toFixed(2)}.</p>
-            <div><label className="text-sm text-slate-600">Monto a Pagar</label><input type="number" value={form.monto} onChange={(e) => setForm({...form, monto: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
-            <div><label className="text-sm text-slate-600">Método de Pago</label><select value={form.metodo} onChange={(e) => setForm({...form, metodo: e.target.value})} className="w-full border rounded-lg px-3 py-2">{METODOS_PAGO.filter(m => m !== 'Pendiente').map(m => <option key={m}>{m}</option>)}</select></div>
-          </div>
-        </Modal>
-      );
-    }
-    
-    // ------------------------------ LOGIN SCREEN (con reseteo) ------------------------------
+    // ------------------------------ LOGIN SCREEN ------------------------------
     function LoginScreen() {
         const [email, setEmail] = useState('');
         const [password, setPassword] = useState('');
@@ -1187,7 +181,7 @@
                                 <h2 className="text-2xl font-bold text-center text-slate-800 mb-6">Restablecer Contraseña</h2>
                                 <form onSubmit={handlePasswordReset} className="space-y-4">
                                     <div>
-                                        <label className="text-sm font-medium text-slate-600">Email</label>
+                                        <label className="text-sm font-medium text-slate-600">Email de tu cuenta</label>
                                         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full mt-1 border rounded-lg px-3 py-2" required />
                                     </div>
                                     {error && <p className="text-sm text-red-600">{error}</p>}
@@ -1201,7 +195,6 @@
                                 </div>
                             </div>
                         )}
-
                     </div>
                 </div>
             </div>
@@ -1306,7 +299,7 @@
         }
       };
       const gastoCrud = { 
-        create: (g) => getCollection('gastos').add(g).then(() => setToast("Gasto creado")),
+        create: (g) => { const data = {...g}; delete data.id; getCollection('gastos').add(data).then(() => setToast("Gasto creado")) },
         update: ({id, ...data}) => getCollection('gastos').doc(id).update(data).then(() => setToast("Gasto actualizado")),
         delete: (id) => setDeletingInfo({ id, type: 'gasto', collection: 'gastos' }),
       };
@@ -1377,6 +370,159 @@
         }
 
         return <MainApp user={user} onLogout={() => auth.signOut()} />;
+    }
+
+    function Perfil({ perfil, onUpdate, user, setToast }) {
+      const [form, setForm] = useState(perfil);
+      
+      useEffect(() => {
+        if(perfil) setForm(perfil);
+      }, [perfil]);
+
+      const handleChange = (e) => {
+        const { name, value } = e.target;
+        setForm(prev => ({ ...prev, [name]: value }));
+      };
+
+      const handlePrecioChange = (e) => {
+        const { name, value } = e.target;
+        setForm(prev => ({ ...prev, precios: { ...prev.precios, [name]: value } }));
+      };
+      const handlePrecioMensualChange = (e) => {
+        const { name, value } = e.target;
+        setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value } }));
+      };
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        onUpdate(form);
+      };
+
+      const handlePasswordReset = () => {
+        if(user && user.email) {
+            auth.sendPasswordResetEmail(user.email)
+                .then(() => {
+                    setToast("Email para restablecer contraseña enviado.");
+                })
+                .catch((error) => {
+                    setToast(`Error: ${error.message}`);
+                });
+        }
+      };
+
+      if (!form || !form.precios || !form.preciosMensuales) {
+        return <div className="min-h-screen flex items-center justify-center"><div className="loader"></div></div>;
+      }
+
+      return (
+        <form onSubmit={handleSubmit}>
+          <Card title="Perfil y Configuración">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
+                <div className="grid gap-3">
+                  <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre || ''} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido || ''} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono || ''} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-md font-semibold text-slate-700 mb-2">Cuenta</h4>
+                <div className="grid gap-3">
+                  <div>
+                    <label className="text-sm text-slate-600">Email de la cuenta</label>
+                    <p className="w-full bg-slate-100 rounded-lg px-3 py-2 text-slate-700">{user?.email}</p>
+                  </div>
+                  <div>
+                    <button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">
+                      Restablecer Contraseña
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+             <div className="mt-6 border-t pt-6">
+                <h4 className="text-md font-semibold text-slate-700 mb-2">Precios por Clase</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-sm text-slate-600">Individual</label><input type="number" name="individual" value={form.precios.individual} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div><label className="text-sm text-slate-600">Dupla</label><input type="number" name="dupla" value={form.precios.dupla} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div><label className="text-sm text-slate-600">Trío</label><input type="number" name="trio" value={form.precios.trio} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div><label className="text-sm text-slate-600">Cuarteto</label><input type="number" name="cuarteto" value={form.precios.cuarteto} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div className="col-span-2"><label className="text-sm text-slate-600">Escuelita</label><input type="number" name="escuelita" value={form.precios.escuelita} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                </div>
+            </div>
+            <div className="mt-6 border-t pt-6">
+                <h4 className="text-md font-semibold text-slate-700 mb-2">Precios Mensuales</h4>
+                <div className="grid md:grid-cols-2 gap-3">
+                    {FRECUENCIAS_MENSUALES.map(f => (
+                        <div key={f.value}><label className="text-sm text-slate-600">{f.label}</label><input type="number" name={f.value} value={form.preciosMensuales[f.value]} onChange={handlePrecioMensualChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                    ))}
+                </div>
+            </div>
+            <div className="mt-6 border-t pt-6">
+              <h4 className="text-md font-semibold text-slate-700 mb-2">Modalidad de Cobro Principal</h4>
+              <select name="metodoCobro" value={form.metodoCobro} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">
+                <option value="porClase">Por Clase</option>
+                <option value="mensual">Mensual</option>
+              </select>
+            </div>
+            <div className="mt-6 border-t pt-6">
+                <h4 className="text-md font-semibold text-slate-700 mb-2">Canchas / Ubicaciones</h4>
+                <textarea name="canchas" value={form.canchas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={4} placeholder="Una ubicación por línea..."></textarea>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button type="submit" className="px-4 py-2 rounded-lg bg-emerald-600 text-white">Guardar Cambios</button>
+            </div>
+          </Card>
+        </form>
+      );
+    }
+
+    function PagoMixtoModal({ isOpen, clase, onCancel, onSave }) {
+      const [form, setForm] = useState({ efectivo: "", transferencia: "" });
+      useEffect(() => { 
+        if (clase) { 
+          setForm({ efectivo: clase.precio || "", transferencia: "" }); 
+        }
+      }, [clase]);
+      
+      if (!isOpen || !clase) return null;
+
+      const handleSave = () => { 
+        if (!form.efectivo && !form.transferencia) return alert("Ingresá al menos un monto.");
+        onSave(form); 
+      };
+
+      return (
+        <Modal isOpen={isOpen} title={`Registrar Pago: ${clase.nombresAlumnos}`} onCancel={onCancel} onConfirm={handleSave} confirmText="Guardar Pago">
+          <div className="grid gap-4">
+            <p>Clase del {clase.fecha} a las {clase.hora}. Precio total: ${clase.precio}</p>
+            <div><label className="text-sm text-slate-600">Monto en Efectivo</label><input type="number" value={form.efectivo} onChange={(e) => setForm({...form, efectivo: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
+            <div><label className="text-sm text-slate-600">Monto por Transferencia</label><input type="number" value={form.transferencia} onChange={(e) => setForm({...form, transferencia: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
+          </div>
+        </Modal>
+      );
+    }
+    
+    function PagoMensualModal({ isOpen, alumno, mes, onCancel, onSave }) {
+      const [form, setForm] = useState({ monto: "", metodo: "Efectivo" });
+      useEffect(() => {
+        if (alumno) {
+          const restante = alumno.cuota - alumno.totalPagado;
+          setForm({ monto: restante > 0 ? restante.toFixed(2) : "", metodo: "Efectivo" });
+        }
+      }, [alumno]);
+      if (!isOpen || !alumno) return null;
+
+      const handleSave = () => { onSave({ ...form, monto: form.monto || "0" }); };
+      return (
+        <Modal isOpen={isOpen} title={`Pago Cuota: ${alumno.nombre}`} onCancel={onCancel} onConfirm={handleSave} confirmText="Guardar Pago">
+          <div className="grid gap-4">
+            <p>Cuota de {MESES_NOMBRES[mes]} por ${alumno.cuota.toFixed(2)}. Pagado: ${alumno.totalPagado.toFixed(2)}.</p>
+            <div><label className="text-sm text-slate-600">Monto a Pagar</label><input type="number" value={form.monto} onChange={(e) => setForm({...form, monto: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
+            <div><label className="text-sm text-slate-600">Método de Pago</label><select value={form.metodo} onChange={(e) => setForm({...form, metodo: e.target.value})} className="w-full border rounded-lg px-3 py-2">{METODOS_PAGO.filter(m => m !== 'Pendiente').map(m => <option key={m}>{m}</option>)}</select></div>
+          </div>
+        </Modal>
+      );
     }
     
     ReactDOM.render(<AppGPadel />, document.getElementById('root'));
