@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" href="data:,">
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Coachex-Pro – Gestión de Profesores</title>
@@ -36,8 +38,6 @@
       100% { transform: rotate(360deg); }
     }
   </style>
-
-  <link rel="icon" href="data:,">
 </head>
 <body>
   
@@ -432,23 +432,6 @@ useEffect(() => {
   
   return () => unsub(); // Limpia la suscripción al salir
 }, [user]);
-
-
-      // === Navegación entre Dashboard ↔ Clases ===
-      function goToNewClass() {
-        setClaseParaEditar(null);
-        setCurrent("clases");
-        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {}
-      }
-
-      function goToEditClass(clase) {
-        setClaseParaEditar(clase || null);
-        setCurrent("clases");
-        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {}
-      }
-
-
-
       const [filtroAlumno, setFiltroAlumno] = useState(""); // Guarda el ID del alumno 
       const [filtroEstado, setFiltroEstado] = useState(""); // Guarda el estado de la clase
       const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
@@ -1511,7 +1494,20 @@ useEffect(() => {
         unsubscribes.push(profileUnsubscribe);
 
         return () => unsubscribes.forEach(unsub => unsub());
-      }, [user]);
+      
+      // === Navegación entre Dashboard ↔ Clases ===
+      function goToNewClass() {
+        try { setClaseParaEditar(null); } catch(e) {}
+        try { setCurrent("clases"); } catch(e) {}
+        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {}
+      }
+
+      function goToEditClass(clase) {
+        try { setClaseParaEditar(clase || null); } catch(e) {}
+        try { setCurrent("clases"); } catch(e) {}
+        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {}
+      }
+}, [user]);
 
       const getCollection = (collectionName) => db.collection('users').doc(user.uid).collection(collectionName);
 
