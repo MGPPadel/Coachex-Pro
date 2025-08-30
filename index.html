@@ -390,7 +390,10 @@
       const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
       const [form, setForm] = useState(emptyForm);
       const [currentDate, setCurrentDate] = useState(new Date());
-
+      const [filtroAlumno, setFiltroAlumno] = useState(""); // Guarda el ID del alumno 
+      const [filtroEstado, setFiltroEstado] = useState(""); // Guarda el estado de la clase
+      const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
+      const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
       const weekStartDate = getWeekStartDate(currentDate);
       const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
       const alumnosActivos = useMemo(() => alumnos.filter(a => a.estado === 'activo'), [alumnos]);
@@ -412,6 +415,17 @@
         nombresAlumnos: (c.alumnoIds || []).map(id => getNombreCompleto(alumnoMap.get(id))).filter(Boolean).join(', '), 
         pagos: pagosPorClase.get(c.id) || [] 
       })), [clases, alumnoMap, pagosPorClase]);
+      const clasesFiltradas = useMemo(() => {
+  return clasesConDatos.filter(c => {
+    // Aquí va toda la lógica de filtrado que escribimos antes
+    const pasaFiltroAlumno = !filtroAlumno || c.alumnoIds.includes(filtroAlumno);
+    const pasaFiltroEstado = !filtroEstado || c.estado === filtroEstado;
+    const pasaFiltroFechaDesde = !filtroFechaDesde || c.fecha >= filtroFechaDesde;
+    const pasaFiltroFechaHasta = !filtroFechaHasta || c.fecha <= filtroFechaHasta;
+
+    return pasaFiltroAlumno && pasaFiltroEstado && pasaFiltroFechaDesde && pasaFiltroFechaHasta;
+  }).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+}, [clasesConDatos, filtroAlumno, filtroEstado, filtroFechaDesde, filtroFechaHasta]); // Dependencias: la lista preparada y los filtros
 
       const clasesDeLaSemana = useMemo(() => clasesConDatos.filter(c => weekDates.includes(c.fecha)), [clasesConDatos, weekDates]);
       const canchasDisponibles = useMemo(() => (perfil.canchas || '').split('\n').filter(c => c.trim() !== ''), [perfil.canchas]);
@@ -488,7 +502,50 @@
           </Card>
           <Card title="Calendario Semanal" right={<div className="flex items-center gap-2"><button onClick={() => changeWeek(-1)} className="px-3 py-1.5 text-sm rounded-lg border">‹ Ant</button><button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg border">Hoy</button><button onClick={() => changeWeek(1)} className="px-3 py-1.5 text-sm rounded-lg border">Sig ›</button></div>}><CalendarioSemanal week={weekDates} clases={clasesDeLaSemana} onEdit={openEdit} horarioLaboral={perfil.horarioLaboral} /></Card>
           <Card title="Listado de clases">
-            <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Fecha</th><th className="p-2">Alumnos</th><th className="p-2">Ubicación</th><th className="p-2">Estado</th><th className="p-2">Precio</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>{clasesConDatos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).length === 0 && (<tr><td colSpan={6} className="text-center py-6 text-slate-400">No hay clases programadas</td></tr>)}{clasesConDatos.map((c) => (<tr key={c.id} className="border-t"><td className="p-2">{c.fecha} {c.hora}</td><td className="p-2">{c.nombresAlumnos}</td><td className="p-2">{c.cancha}</td><td className="p-2"><select value={c.estado} onChange={(e) => handleStatusChange(c, e.target.value)} className="w-full border rounded-lg px-2 py-1 bg-white">{ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}</select></td><td className="p-2 flex items-center gap-2">{c.precio ? `$${c.precio}` : '-'}{c.pagos.length > 0 && <span className={`w-2 h-2 rounded-full ${c.pagos.some(p => p.metodo === 'Pendiente') ? 'bg-orange-400' : 'bg-green-500'}`} title={`Pago Registrado`}></span>}</td><td className="p-2 text-right"><div className="inline-flex gap-2">{c.estado === 'Realizada' && c.pagos.length === 0 && <button onClick={() => onPayMixto(c)} className="px-2 py-1 text-xs rounded-lg border bg-emerald-50 text-emerald-700 hover:bg-emerald-100">💳 Pagar</button>}<button onClick={() => openEdit(c)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button><button type="button" onClick={() => onDelete(c.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button></div></td></tr>))}</tbody></table></div>
+          <div className="grid md:grid-cols-4 gap-3 mb-4 p-2 border rounded-lg">
+    <select value={filtroAlumno} onChange={(e) => setFiltroAlumno(e.target.value)}>
+      <option value="">Todos los Alumnos</option>
+      {alumnos.map(a => <option key={a.id} value={a.id}>{`${a.nombre} ${a.apellido}`}</option>)}
+    </select>
+    <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
+      <option value="">Todos los Estados</option>
+      {ESTADOS_CLASE.map(e => <option key={e} value={e}>{e}</option>)}
+    </select>
+    <input type="date" value={filtroFechaDesde} onChange={(e) => setFiltroFechaDesde(e.target.value)} />
+    <input type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} />
+  </div>
+<tbody>
+  {clasesFiltradas.length === 0 && (
+    <tr>
+      <td colSpan={6} className="text-center py-6 text-slate-400">
+        No hay clases que coincidan con los filtros
+      </td>
+    </tr>
+  )}
+  {clasesFiltradas.map((c) => (
+    <tr key={c.id} className="border-t">
+      <td className="p-2">{c.fecha} {c.hora}</td>
+      <td className="p-2">{c.nombresAlumnos}</td>
+      <td className="p-2">{c.cancha}</td>
+      <td className="p-2">
+        <select value={c.estado} onChange={(e) => handleStatusChange(c, e.target.value)} className="w-full border rounded-lg px-2 py-1 bg-white">
+          {ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}
+        </select>
+      </td>
+      <td className="p-2 flex items-center gap-2">
+        {c.precio ? `$${c.precio}` : '-'}
+        {c.pagos.length > 0 && <span className={`w-2 h-2 rounded-full ${c.pagos.some(p => p.metodo === 'Pendiente') ? 'bg-orange-400' : 'bg-green-500'}`} title={`Pago Registrado`}></span>}
+      </td>
+      <td className="p-2 text-right">
+        <div className="inline-flex gap-2">
+          {c.estado === 'Realizada' && c.pagos.length === 0 && <button onClick={() => onPayMixto(c)} className="px-2 py-1 text-xs rounded-lg border bg-emerald-50 text-emerald-700 hover:bg-emerald-100">💳 Pagar</button>}
+          <button onClick={() => openEdit(c)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button>
+          <button type="button" onClick={() => onDelete(c.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button>
+        </div>
+      </td>
+    </tr>
+  ))}
+</tbody>
           </Card>
         </div>
       );
