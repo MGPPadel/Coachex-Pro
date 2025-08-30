@@ -287,10 +287,10 @@
 
     function AlumnoForm({ initialData, onSubmit, onCancel }) {
       const [form, setForm] = useState(initialData);
-      const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ..prev, [name]: value })); };
-      const addHorario = () => setForm(f => ({ ...f, horarios: [...(f.horarios || []), { dia: "Lunes", hora: "18:00" }] }));
-      const delHorario = (idx) => setForm(f => ({ ...f, horarios: f.horarios.filter((_, i) => i !== idx) }));
-      const setHorario = (idx, key, val) => setForm(f => ({ ...f, horarios: f.horarios.map((h, i) => i === idx ? { ...h, [key]: val } : h) }));
+      const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ....prev, [name]: value })); };
+      const addHorario = () => setForm(f => ({ ....f, horarios: [...(f.horarios || []), { dia: "Lunes", hora: "18:00" }] }));
+      const delHorario = (idx) => setForm(f => ({ ....f, horarios: f.horarios.filter((_, i) => i !== idx) }));
+      const setHorario = (idx, key, val) => setForm(f => ({ ....f, horarios: f.horarios.map((h, i) => i === idx ? { ...h, [key]: val } : h) }));
       function handleSubmit(e) { epreventDefault(); if (!form.nombre.trim()) return alert("Ingresá un nombre"); onSubmit(form); }
       return (
         <form onSubmit={handleSubmit} className="grid md:grid-cols-6 gap-3">
@@ -447,7 +447,7 @@ useEffect(() => {
         const { name, value, type, checked } = e.target;
         const val = type === 'checkbox' ? checked : value;
         setForm(prev => {
-          const newState = { ..prev, [name]: val };
+          const newState = { ...prev, [name]: val };
           if (name === "tipo") {
             newState.precio = perfil.precios[val.toLowerCase()] || "";
             const numAlumnos = TIPOS_CLASE_MAP[val] || 1;
@@ -466,7 +466,7 @@ useEffect(() => {
             const nuevoPrecio = esPlanMensual ? "0" : (perfil.precios[prev.tipo.toLowerCase()] || "");
             
             return {
-                ..prev,
+                ...prev,
                 alumnoIds: newAlumnoIds,
                 precio: nuevoPrecio
             };
@@ -476,7 +476,7 @@ useEffect(() => {
       function openNew() { setEditing(null); setForm({ ...emptyForm, alumnoIds: [alumnosActivos[0]?.id || ""], precio: perfil.precios.individual, cancha: canchasDisponibles[0] || "" }); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
       function openEdit(c) { setEditing(c); setForm({ ...emptyForm, ...c, recurrente: false }); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
       function cancel() { setShowForm(false); setEditing(null); setForm(emptyForm); }
-      function submit(e) { epreventDefault(); const validAlumnos = form.alumnoIds.filter(id => id); if (validAlumnos.length === 0) return alert("Seleccioná al menos un alumno"); const finalForm = {...form, alumnoIds: validAlumnos}; if (editing) { onUpdate({ ...finalForm, id: editing.id }); } else { onCreate(finalForm); } cancel(); }
+      function submit(e) { epreventDefault(); const validAlumnos = form.alumnoIds.filter(id => id); if (validAlumnos.length === 0) return alert("Seleccioná al menos un alumno"); const finalForm = {....form, alumnoIds: validAlumnos}; if (editing) { onUpdate({ ...finalForm, id: editing.id }); } else { onCreate(finalForm); } cancel(); }
       const changeWeek = (offset) => setCurrentDate(prev => addDays(prev, offset * 7));
       function handleStatusChange(clase, newStatus) {
         onUpdate({ ...clase, estado: newStatus, pagos: clase.pagos });
@@ -518,7 +518,7 @@ useEffect(() => {
         // Si el usuario vuelve a la opción "Seleccionar...", no hacemos nada
         if (!idGrupo) {
             // Opcional: limpiar la selección de alumnos si se deselecciona el grupo
-            setForm(prev => ({ ..prev, alumnoIds: [""] }));
+            setForm(prev => ({ ....prev, alumnoIds: [""] }));
             return;
         };
 
@@ -527,7 +527,7 @@ useEffect(() => {
         if (grupoSeleccionado) {
           // ¡Aquí está la magia!
           // Rellena automáticamente los IDs de los alumnos con los del grupo
-          setForm(prev => ({ ..prev, alumnoIds: grupoSeleccionado.alumnoIds }));
+          setForm(prev => ({ ....prev, alumnoIds: grupoSeleccionado.alumnoIds }));
         }
       }}
     >
@@ -977,7 +977,7 @@ useEffect(() => {
       const emptyForm = { fecha: formatDate(new Date()), concepto: "", monto: "", categoria: "Varios" };
       const [form, setForm] = useState(emptyForm);
       const [periodo, setPeriodo] = useState("mes");
-      const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ..prev, [name]: value })); };
+      const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ....prev, [name]: value })); };
 
       const gastosFiltrados = useMemo(() => {
         const ahora = new Date();
@@ -1002,7 +1002,7 @@ useEffect(() => {
       function openNew() { setEditing(null); setForm(emptyForm); setShowForm(true); }
       function openEdit(g) { setEditing(g); setForm(g); setShowForm(true); }
       function cancel() { setShowForm(false); setEditing(null); setForm(emptyForm); }
-      function submit(e) { epreventDefault(); if (!form.concepto.trim() || !form.monto) return alert("Completá concepto y monto"); if (editing) { onUpdate({ ...form, id: editing.id }); } else { onCreate(form); } cancel(); }
+      function submit(e) { epreventDefault(); if (!form.concepto.trim() || !form.monto) return alert("Completá concepto y monto"); if (editing) { onUpdate({ ....form, id: editing.id }); } else { onCreate(form); } cancel(); }
 
       const PeriodoButton = ({ value, current, setter, children }) => (<button onClick={() => setter(value)} className={`px-3 py-1.5 text-sm rounded-lg ${current === value ? 'bg-slate-900 text-white' : 'bg-white border'}`}>{children}</button>);
       return (
@@ -1143,38 +1143,37 @@ useEffect(() => {
       
       useEffect(() => {
         const defaultPerfil = initialState.perfil;
-        setForm({
-            ..defaultPerfil,
+        setForm({ ...defaultPerfil,
             ...perfil,
-            datosBancarios: { ..defaultPerfil.datosBancarios, ...(perfil.datosBancarios || {}) },
+            datosBancarios: { ...defaultPerfil.datosBancarios, ...(perfil.datosBancarios || {}) },
             horarioLaboral: perfil.horarioLaboral || defaultPerfil.horarioLaboral,
         });
       }, [perfil]);
 
       const handleChange = (e) => {
         const { name, value } = e.target;
-        setForm(prev => ({ ..prev, [name]: value }));
+        setForm(prev => ({ ....prev, [name]: value }));
       };
 
       const handlePrecioChange = (e) => {
         const { name, value } = e.target;
-        setForm(prev => ({ ..prev, precios: { ..prev.precios, [name]: value } }));
+        setForm(prev => ({ ....prev, precios: { ...prev.precios, [name]: value } }));
       };
       const handlePrecioMensualChange = (e) => {
         const { name, value } = e.target;
-        setForm(prev => ({ ..prev, preciosMensuales: { ..prev.preciosMensuales, [name]: value } }));
+        setForm(prev => ({ ....prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value } }));
       };
         
       const handleDatosBancariosChange = (e) => {
         const { name, value } = e.target;
-        setForm(prev => ({ ..prev, datosBancarios: { ..prev.datosBancarios, [name]: value } }));
+        setForm(prev => ({ ....prev, datosBancarios: { ...prev.datosBancarios, [name]: value } }));
       };
 
       const handleHorarioChange = (index, campo, valor) => {
         setForm(prev => {
-            const nuevoHorario = [..prev.horarioLaboral];
+            const nuevoHorario = [...prev.horarioLaboral];
             nuevoHorario[index] = { ...nuevoHorario[index], [campo]: valor };
-            return { ..prev, horarioLaboral: nuevoHorario };
+            return { ...prev, horarioLaboral: nuevoHorario };
         });
       };
         
@@ -1305,8 +1304,8 @@ useEffect(() => {
         <Modal isOpen={isOpen} title={`Registrar Pago: ${clase.nombresAlumnos}`} onCancel={onCancel} onConfirm={handleSave} confirmText="Guardar Pago">
           <div className="grid gap-4">
             <p>Clase del {clase.fecha} a las {clase.hora}. Precio total: ${clase.precio}</p>
-            <div><label className="text-sm text-slate-600">Monto en Efectivo</label><input type="number" value={form.efectivo} onChange={(e) => setForm({...form, efectivo: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
-            <div><label className="text-sm text-slate-600">Monto por Transferencia</label><input type="number" value={form.transferencia} onChange={(e) => setForm({...form, transferencia: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
+            <div><label className="text-sm text-slate-600">Monto en Efectivo</label><input type="number" value={form.efectivo} onChange={(e) => setForm({....form, efectivo: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
+            <div><label className="text-sm text-slate-600">Monto por Transferencia</label><input type="number" value={form.transferencia} onChange={(e) => setForm({....form, transferencia: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
           </div>
         </Modal>
       );
@@ -1321,13 +1320,13 @@ useEffect(() => {
         }
       }, [alumno]);
       if (!isOpen || !alumno) return null;
-      const handleSave = () => { onSave({ ...form, monto: form.monto || "0" }); };
+      const handleSave = () => { onSave({ ....form, monto: form.monto || "0" }); };
       return (
         <Modal isOpen={isOpen} title={`Pago Cuota: ${alumno.nombre}`} onCancel={onCancel} onConfirm={handleSave} confirmText="Guardar Pago">
           <div className="grid gap-4">
             <p>Cuota de {MESES_NOMBRES[mes]} por ${alumno.cuota.toFixed(2)}. Pagado: ${alumno.totalPagado.toFixed(2)}.</p>
-            <div><label className="text-sm text-slate-600">Monto a Pagar</label><input type="number" value={form.monto} onChange={(e) => setForm({...form, monto: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
-            <div><label className="text-sm text-slate-600">Método de Pago</label><select value={form.metodo} onChange={(e) => setForm({...form, metodo: e.target.value})} className="w-full border rounded-lg px-3 py-2">{METODOS_PAGO.filter(m => m !== 'Pendiente').map(m => <option key={m}>{m}</option>)}</select></div>
+            <div><label className="text-sm text-slate-600">Monto a Pagar</label><input type="number" value={form.monto} onChange={(e) => setForm({....form, monto: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
+            <div><label className="text-sm text-slate-600">Método de Pago</label><select value={form.metodo} onChange={(e) => setForm({....form, metodo: e.target.value})} className="w-full border rounded-lg px-3 py-2">{METODOS_PAGO.filter(m => m !== 'Pendiente').map(m => <option key={m}>{m}</option>)}</select></div>
           </div>
         </Modal>
       );
