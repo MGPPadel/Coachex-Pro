@@ -391,6 +391,8 @@
       const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
       const [form, setForm] = useState(emptyForm);
       const [formStep, setFormStep] = useState(1); // 1: Seleccionar alumno, 2: Elegir horario, 3: Rellenar detalles
+      const [alumnoSearchQuery, setAlumnoSearchQuery] = useState("");
+      const [isAlumnosListOpen, setIsAlumnosListOpen] = useState(false);
       const [currentDate, setCurrentDate] = useState(new Date());
       const [grupos, setGrupos] = useState([]);
       // Carga los grupos y escucha cambios en tiempo real
@@ -412,6 +414,14 @@ useEffect(() => {
       const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
       const alumnosActivos = useMemo(() => alumnos.filter(a => a.estado === 'activo'), [alumnos]);
       const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
+      const alumnosFiltrados = useMemo(() => {
+    if (!alumnoSearchQuery) {
+        return alumnosActivos; // Si no hay búsqueda, muestra todos
+    }
+    return alumnosActivos.filter(alumno =>
+        getNombreCompleto(alumno).toLowerCase().includes(alumnoSearchQuery.toLowerCase())
+    );
+}, [alumnoSearchQuery, alumnosActivos]);
       
       const getNombreCompleto = (a) => a ? `${a.apellido || ''} ${a.nombre || ''}`.trim() : '??';
 
@@ -445,19 +455,26 @@ useEffect(() => {
       const canchasDisponibles = useMemo(() => (perfil.canchas || '').split('\n').filter(c => c.trim() !== ''), [perfil.canchas]);
       
       function handleFormChange(e) {
-        const { name, value, type, checked } = e.target;
-        const val = type === 'checkbox' ? checked : value;
-        setForm(prev => {
-          const newState = { ...prev, [name]: val };
-          if (name === "tipo") {
-            newState.precio = perfil.precios[val.toLowerCase()] || "";
+    const { name, value, type, checked } = e.target;
+    const val = type === 'checkbox' ? checked : value;
+    setForm(prev => {
+        const newState = { ...prev, [name]: val };
+
+        if (name === "tipo") {
+            // --- LÓGICA CORREGIDA ---
+            const primerAlumno = alumnoMap.get(prev.alumnoIds[0]);
+            const esPlanMensual = primerAlumno?.plan === 'mensual';
+
+            // Ahora, al cambiar el tipo de clase, también respeta si el alumno es mensual
+            newState.precio = esPlanMensual ? "0" : (perfil.precios[val.toLowerCase()] || "");
+            // --- FIN DE LA CORRECCIÓN ---
+
             const numAlumnos = TIPOS_CLASE_MAP[val] || 1;
             newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
-          }
-          return newState;
-        });
-      }
-      
+        }
+        return newState;
+    });
+}
       function handleAlumnoChange(index, newId) {
     // Primero, actualizamos el formulario como antes para guardar el alumno seleccionado
     setForm(prev => {
@@ -485,6 +502,11 @@ useEffect(() => {
             setFormStep(3); // Si no tiene, vamos directo al paso 3: "Rellenar detalles"
         }
     }
+}
+function handleSelectAlumno(alumno) {
+    setAlumnoSearchQuery(getNombreCompleto(alumno)); // Pone el nombre completo en el buscador
+    setIsAlumnosListOpen(false); // Cierra la lista de resultados
+    handleAlumnoChange(0, alumno.id); // Llama a la función que ya teníamos para que se ejecute la lógica de los pasos
 }
 const getNextDateForDay = (dayName) => {
     const dayIndex = DIAS_SEMANA_NOMBRES.indexOf(dayName);
@@ -531,18 +553,43 @@ function handleScheduleSelect(horario) {
           <Card title={editing ? "Editar clase" : "Nueva clase"} right={!showForm && <button id="nueva-clase-btn" onClick={openNew} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
             {showForm ? (
               <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
-    {/* --- PASO 1: SELECCIONAR ALUMNO --- */}
-    {(formStep === 1) && (
-        <div className="md:col-span-6">
-            <label className="text-sm text-slate-600 font-semibold">¿Para quién es la clase?</label>
-            <select value={form.alumnoIds[0]} onChange={(e) => handleAlumnoChange(0, e.target.value)} className="w-full mt-1 border rounded-lg px-3 py-2" required>
-                <option value="">Seleccionar un alumno...</option>
-                {alumnosActivos.map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
-            </select>
-            <p className="text-xs text-slate-500 mt-2">Elige un alumno para continuar.</p>
-        </div>
-    )}
-
+    {/* --- PASO 1: SELECCIONAR ALUMNO (VERSIÓN CON BUSCADOR) --- */}
+{(formStep === 1) && (
+    <div className="md:col-span-6 relative">
+        <label className="text-sm text-slate-600 font-semibold">Selecciona Alumno/a</label>
+        <input
+            type="text"
+            value={alumnoSearchQuery}
+            onChange={(e) => {
+                setAlumnoSearchQuery(e.target.value);
+                setIsAlumnosListOpen(true);
+            }}
+            onFocus={() => setIsAlumnosListOpen(true)}
+            onBlur={() => setTimeout(() => setIsAlumnosListOpen(false), 200)} // Pequeño delay para permitir el clic
+            placeholder="Escribe para buscar..."
+            className="w-full mt-1 border rounded-lg px-3 py-2"
+        />
+        
+        {/* Lista de resultados que aparece al escribir */}
+        {isAlumnosListOpen && (
+            <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
+                {alumnosFiltrados.length > 0 ? (
+                    alumnosFiltrados.map(alumno => (
+                        <li 
+                            key={alumno.id} 
+                            onClick={() => handleSelectAlumno(alumno)}
+                            className="px-3 py-2 hover:bg-slate-100 cursor-pointer"
+                        >
+                            {getNombreCompleto(alumno)}
+                        </li>
+                    ))
+                ) : (
+                    <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>
+                )}
+            </ul>
+        )}
+    </div>
+)}
     {/* --- PASO 2: ELEGIR HORARIO FIJO (si existe) --- */}
     {(formStep === 2 && alumnoMap.get(form.alumnoIds[0])) && (
         <div className="md:col-span-6">
