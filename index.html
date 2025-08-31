@@ -213,7 +213,7 @@
         );
     }
     
-    function Dashboard({ state, goToNewClass }) {
+    function Dashboard({ state, goToNewClass, goToEditClass }) {
         const { clases, pagos, gastos, alumnos, perfil } = state;
         const [currentDate, setCurrentDate] = useState(new Date());
         const [mostrarSoloHorarioLaboral, setMostrarSoloHorarioLaboral] = useState(false); // <-- AGREGA ESTA LÍNEA
@@ -2010,6 +2010,10 @@ const handleImportData = (event) => {
     reader.readAsText(file);
 };
 
+const goToEditClass = (clase) => {
+          setClaseParaEditar(clase);
+          setCurrent("clases");
+      };
       if (loading) {
         return <div className="min-h-screen flex items-center justify-center"><div className="loader"></div></div>;
       }
@@ -2018,7 +2022,7 @@ const handleImportData = (event) => {
         <div className="min-h-screen bg-slate-50 font-sans">
           <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} />
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
-            {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} />}
+            {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
             {current === "alumnos" && <Alumnos alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment} />}
             {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
