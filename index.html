@@ -311,13 +311,13 @@
             </select>
         </div>
         <div className="flex items-end">
-            <button 
-                type="button" 
-                onClick={onRegisterMonthlyPayment} 
-                className="w-full px-3 py-2 text-sm rounded-lg bg-sky-600 text-white hover:bg-sky-700"
-            >
-                Registrar Pago de Abono
-            </button>
+        <button 
+    type="button" 
+    onClick={() => onRegisterMonthlyPayment(form)} // Ahora le pasa los datos del formulario (el alumno)
+    className="w-full px-3 py-2 text-sm rounded-lg bg-sky-600 text-white hover:bg-sky-700"
+>
+    Registrar Pago de Abono
+</button>
         </div>
     </div>
 )}
