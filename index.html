@@ -594,14 +594,26 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
       }
 
       const getNextDateForDay = (dayName) => {
-        const dayIndex = DIAS_SEMANA_NOMBRES.indexOf(dayName);
-        if (dayIndex === -1) return new Date();
-        const today = new Date();
-        const resultDate = new Date(today.getTime());
-        const daysUntilTarget = (dayIndex - today.getDay() + 7) % 7;
-        resultDate.setDate(today.getDate() + (daysUntilTarget === 0 ? 7 : daysUntilTarget));
-        return resultDate;
-      };
+    const today = new Date();
+    const todayDayIndex = today.getDay(); // El índice de JS donde Domingo=0, Lunes=1, etc.
+
+    // Nuestro array tiene Lunes=0, Martes=1, etc. Necesitamos convertirlo al de JS.
+    const targetDayIndex = (DIAS_SEMANA_NOMBRES.indexOf(dayName) + 1) % 7;
+
+    // Calculamos la diferencia de días.
+    let dayDifference = targetDayIndex - todayDayIndex;
+
+    // Si la diferencia es negativa o cero, significa que el día ya pasó esta semana
+    // o es hoy, así que le sumamos 7 para que agende para la semana siguiente.
+    if (dayDifference <= 0) {
+        dayDifference += 7;
+    }
+
+    const resultDate = new Date(today.getTime());
+    resultDate.setDate(today.getDate() + dayDifference);
+    
+    return resultDate;
+};
 
       function handleScheduleSelect(horario) {
         const proximaFecha = getNextDateForDay(horario.dia);
@@ -1351,6 +1363,12 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
     function Perfil({ perfil, onUpdate, user, setToast, onExport, onImport }) {
       const { useRef } = React; // Asegúrate de tener useRef disponible
       const [form, setForm] = useState(perfil);
+      const [plantillas, setPlantillas] = useState([]);
+      const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
+      const [mensajePersonalizado, setMensajePersonalizado] = useState("");
+      const [destinatarios, setDestinatarios] = useState([]);
+      const [busquedaAlumno, setBusquedaAlumno] = useState("");
+      const [listaBusquedaAbierta, setListaBusquedaAbierta] = useState(false);
       const fileInputRef = useRef(null); // <-- AGREGA ESTA LÍNEA
 
       
@@ -1363,6 +1381,21 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
             horarioLaboral: perfil.horarioLaboral || defaultPerfil.horarioLaboral,
         });
       }, [perfil]);
+      useEffect(() => {
+    if (!user) return; // Nos aseguramos de que el usuario esté cargado
+
+    // Creamos una conexión a la colección 'plantillas' del usuario
+    const plantillasCollection = db.collection('users').doc(user.uid).collection('plantillas');
+
+    // Nos suscribimos para recibir los datos en tiempo real
+    const unsubscribe = plantillasCollection.onSnapshot(snapshot => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setPlantillas(data); // Guardamos las plantillas en el estado que ya creamos
+    });
+
+    // Limpiamos la conexión cuando el componente no está en pantalla
+    return () => unsubscribe();
+}, [user]); // Este efecto se ejecuta solo cuando el usuario cambia
 
       const handleChange = (e) => {
         const { name, value } = e.target;
@@ -1522,11 +1555,73 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
                          </div>
                     </div>
               </Card>
-              
-              <Card title="Políticas de Cancelación">
-                  <textarea name="politicasCancelacion" value={form.politicasCancelacion} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={6} placeholder="Escribe aquí tus reglas sobre cancelaciones, recupero de clases, etc." ></textarea>
-              </Card>
+              <Card title="Centro de Comunicaciones">
+    <div className="grid gap-4">
+        {/* Sección 1: Selector de Plantilla y Editor */}
+        <div>
+            <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
+<select 
+    className="w-full mt-1 border rounded-lg px-3 py-2"
+    // Usamos el ID de la plantilla seleccionada para controlar el select
+    value={plantillaSeleccionada ? plantillaSeleccionada.id : ""}
+    onChange={(e) => {
+        const idPlantilla = e.target.value;
+        const plantillaElegida = plantillas.find(p => p.id === idPlantilla);
+        
+        if (plantillaElegida) {
+            setPlantillaSeleccionada(plantillaElegida);
+            setMensajePersonalizado(plantillaElegida.texto); // Actualiza el cuadro de texto
+        } else {
+            // Si eligen "Seleccionar plantilla...", se limpia todo
+            setPlantillaSeleccionada(null);
+            setMensajePersonalizado("");
+        }
+    }}
+>
+    <option value="">Seleccionar plantilla...</option>
+    {plantillas.map(p => (
+        <option key={p.id} value={p.id}>{p.titulo}</option>
+    ))}
+</select>
+            <textarea
+                value={mensajePersonalizado}
+                onChange={(e) => setMensajePersonalizado(e.target.value)}
+                className="w-full mt-2 border rounded-lg px-3 py-2"
+                rows={5}
+                placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar."
+            />
+        </div>
 
+        {/* Sección 2: Selector de Alumnos con Buscador */}
+        <div className="relative">
+            <label className="text-sm font-medium text-slate-600">2. Selecciona los destinatarios</label>
+            <input
+                type="text"
+                value={busquedaAlumno}
+                onChange={(e) => setBusquedaAlumno(e.target.value)}
+                placeholder="Escribe para buscar alumnos..."
+                className="w-full mt-1 border rounded-lg px-3 py-2"
+            />
+            {/* Aquí irá la lista de resultados de la búsqueda */}
+            
+            <div className="mt-2">
+                <p className="text-xs font-semibold text-slate-500">Destinatarios ({destinatarios.length}):</p>
+                <div className="flex flex-wrap gap-2 mt-1">
+                    {/* Aquí se mostrarán las etiquetas de los alumnos seleccionados */}
+                </div>
+            </div>
+        </div>
+
+        {/* Sección 3: Envío de Mensajes */}
+        <div>
+            <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
+            <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2">
+                {/* Aquí aparecerán los botones para enviar por WhatsApp */}
+                <p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>
+            </div>
+        </div>
+    </div>
+</Card>
               <div className="mt-6 flex justify-end">
                 <button type="submit" className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold">Guardar Todos los Cambios</button>
               </div>
@@ -1757,11 +1852,14 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
         return (
             <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4">
                 <div className="w-full max-w-sm mx-auto">
-                    <div className="flex flex-col items-center mb-6">
-                        <img src={logoCircularBase64} alt="Logo Circular" className="w-20 h-20 rounded-full mb-4"/>
-                        <img src={logoCoachexBase64} alt="Coachex-Pro Logo" style={{ height: '32px' }}/>
-                        <p className="text-slate-600 mt-1">Gestión de Profesores</p>
-                    </div>
+                    <div className="flex flex-col items-center mb-8"> {/* Aumentamos un poco el margen inferior */}
+    <img 
+      src="coachexpro logos N.png" // <-- EL NOMBRE DE TU NUEVO ARCHIVO
+      alt="Coachex-Pro Logo" 
+      className="w-64" // Ajusta el ancho aquí si es necesario
+    />
+    <p className="text-slate-500 text-lg mt-2">Gestión de Profesores</p>
+</div>
                     
                     <div className="bg-white rounded-2xl shadow-lg p-8">
                         {view === 'login' && (
