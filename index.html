@@ -286,7 +286,7 @@
         );
     }
 
-    function AlumnoForm({ initialData, onSubmit, onCancel, onRegisterMonthlyPayment }) {
+    function AlumnoForm({ initialData, onSubmit, onCancel, onRegisterMonthlyPayment, studentBeingEdited }) {
       const [form, setForm] = useState(initialData);
       const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, [name]: value })); };
       const addHorario = () => setForm(f => ({ ...f, horarios: [...(f.horarios || []), { dia: "Lunes", hora: "18:00" }] }));
@@ -313,7 +313,7 @@
         <div className="flex items-end">
         <button 
     type="button" 
-    onClick={() => onRegisterMonthlyPayment(form)} // Ahora le pasa los datos del formulario (el alumno)
+    onClick={() => onRegisterMonthlyPayment(studentBeingEdited)}
     className="w-full px-3 py-2 text-sm rounded-lg bg-sky-600 text-white hover:bg-sky-700"
 >
     Registrar Pago de Abono
@@ -354,7 +354,7 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
       <Card title={editing ? "Editar alumno" : "Nuevo alumno"} right={!showForm && <button onClick={openNew} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nuevo</button>}>
         {showForm ? (
             // --- 👇 2. AQUÍ LA PASAMOS AL FORMULARIO 👇 ---
-            <AlumnoForm initialData={editing ? { ...emptyForm, ...editing } : emptyForm} onSubmit={submit} onCancel={cancel} onRegisterMonthlyPayment={onRegisterMonthlyPayment} />
+            <AlumnoForm initialData={editing ? { ...emptyForm, ...editing } : emptyForm} onSubmit={submit} onCancel={cancel} onRegisterMonthlyPayment={onRegisterMonthlyPayment} studentBeingEdited={editing} />
         ) : (
             <p className="text-sm text-slate-500">Hacé clic en <b>+ Nuevo</b> para crear un alumno, o en el lápiz para editar.</p>
         )}
