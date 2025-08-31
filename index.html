@@ -1415,7 +1415,23 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   const handleQuitarDestinatario = (alumnoId) => {
     setDestinatarios(destinatarios.filter(d => d.id !== alumnoId));
   };
-  
+  const handleSendMessage = (destinatario) => {
+    if (!mensajePersonalizado.trim()) {
+        alert("El mensaje no puede estar vacío.");
+        return;
+    }
+
+    // Reemplaza la variable {nombre_alumno} por el nombre real
+    const mensajeFinal = mensajePersonalizado.replace(/{nombre_alumno}/g, destinatario.nombre || '');
+    
+    // Genera y abre el enlace de WhatsApp
+    const link = waLink(destinatario.telefono, mensajeFinal);
+    if (link) {
+        window.open(link, '_blank');
+    } else {
+        alert(`No se pudo generar el enlace para ${getNombreCompleto(destinatario)} porque no tiene un número de teléfono válido.`);
+    }
+};
   // --- OTRAS FUNCIONES DEL PERFIL (NO CAMBIAN) ---
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -1545,12 +1561,27 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
                         )}
                     </div>
                 </div>
-                <div>
-                    <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
-                    <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2">
-                        <p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>
-                    </div>
-                </div>
+                {/* Sección 3: Envío de Mensajes */}
+<div>
+    <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
+    <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2 max-h-48 overflow-y-auto">
+        {destinatarios.length > 0 ? (
+            destinatarios.map(destinatario => (
+                <button 
+                    key={destinatario.id}
+                    type="button"
+                    onClick={() => handleSendMessage(destinatario)}
+                    className="w-full flex justify-between items-center text-left px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+                >
+                    <span>Enviar a: <strong>{getNombreCompleto(destinatario)}</strong></span>
+                    <span role="img" aria-label="send">💬</span>
+                </button>
+            ))
+        ) : (
+            <p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>
+        )}
+    </div>
+</div>
             </div>
         </Card>
         
