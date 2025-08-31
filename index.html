@@ -1671,14 +1671,15 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
         const esMensual = alumno.plan === 'mensual';
         initialState[alumno.id] = {
           monto: esMensual ? "0" : precioPorAlumno.toFixed(2),
-          metodo: esMensual ? "Transferencia" : "Pendiente" // Puedes poner el método por defecto que prefieras
+          metodo: esMensual ? "Transferencia" : "Pendiente",
+          // Puedes poner el método por defecto que prefieras,
+          mixtoEfectivo: "0",
+          mixtoTransferencia: "0"
         };
       });
       setPagos(initialState);
-    }
-          mixtoEfectivo: "0",
-          mixtoTransferencia: "0"
-        }, [clase, alumnos]);
+  }
+}, [clase, alumnos]);
 
   if (!isOpen || !clase) return null;
 
