@@ -383,7 +383,7 @@ const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekSta
       );
     }
     
-function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment , clases, pagos}) { // <-- 1. AQUÍ ACEPTAMOS LA NUEVA FUNCIÓN
+function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment , clases, pagos, onRegistrarClase}) { // <-- 1. AQUÍ ACEPTAMOS LA NUEVA FUNCIÓN
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -584,7 +584,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   );
 }
     
-    function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar }) {
+    function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar , nuevoAlumnoId}) {
       const [showForm, setShowForm] = useState(false);
       const [editing, setEditing] = useState(null);
       const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
@@ -613,6 +613,14 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
             setClaseParaEditar(null);
         }
       }, [claseParaEditar]);
+      useEffect(() => {
+        if (nuevoAlumnoId) {
+          setShowForm(true);
+          setForm(prev => ({ ...prev, alumnoIds: [nuevoAlumnoId], estado: prev.estado || 'realizada' }));
+          setFormStep(2);
+        }
+      }, [nuevoAlumnoId]);
+
 
       const alumnosActivos = useMemo(() => alumnos.filter(a => a.estado === 'activo'), [alumnos]);
       const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
@@ -2056,6 +2064,8 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
       const [payingCuota, setPayingCuota] = useState({alumno: null, mes: null});
       const [goToClassForm, setGoToClassForm] = useState(false);
       const [claseParaEditar, setClaseParaEditar] = useState(null);
+      const [nuevoAlumnoId, setNuevoAlumnoId] = useState(null);
+      const openRegistrarClaseForAlumno = (alumnoId) => { setCurrent("clases"); setNuevoAlumnoId(alumnoId); };
       const [registrandoAbono, setRegistrandoAbono] = useState(null); // Guarda el alumno para el modal
 
       useEffect(() => {
@@ -2263,7 +2273,7 @@ const goToEditClass = (clase) => {
           <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} perfil={state.perfil} onChangeModo={(m)=> db.collection('users').doc(user.uid).collection('profile').doc('main').set({ modoTrabajo: m }, { merge: true })} />
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
             {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
-            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment} />}
+            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno} />}
             {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
