@@ -313,11 +313,14 @@
         <div className="flex items-end">
         <button 
     type="button" 
-    onClick={() => onRegisterMonthlyPayment(studentBeingEdited)}
-    className="w-full px-3 py-2 text-sm rounded-lg bg-sky-600 text-white hover:bg-sky-700"
+    onClick={() => onRegisterMonthlyPayment(studentBeingEdited)} 
+    disabled={!studentBeingEdited} // Se deshabilita si es un nuevo alumno
+    className={`w-full px-3 py-2 text-sm rounded-lg text-white ${!studentBeingEdited ? 'bg-slate-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-700'}`}
 >
     Registrar Pago de Abono
 </button>
+{/* Y el mensaje de ayuda */}
+{!studentBeingEdited && <p className="text-xs text-slate-500 col-span-2 mt-1">Guarda el alumno para registrar su primer pago.</p>}
         </div>
     </div>
 )}
@@ -347,7 +350,31 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
   function openNew() { setEditing(null); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
   function openEdit(a) { setEditing(a); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
   function cancel() { setShowForm(false); setEditing(null); }
-  function submit(formData) { if (editing) { onUpdate({ ...formData, id: editing.id }); } else { onCreate(formData); } cancel(); }
+  async function submit(formData) {
+    if (editing) {
+        // El modo EDICIÓN sigue funcionando como antes
+        onUpdate({ ...formData, id: editing.id });
+        cancel();
+    } else {
+        // --- LÓGICA NUEVA PARA CREAR UN ALUMNO ---
+        if (formData.plan === 'mensual') {
+            // Si el plan es mensual, guardamos al alumno y LUEGO abrimos el modal de pago.
+            try {
+                // 'onCreate' ahora debe devolver el nuevo alumno con su ID
+                const nuevoAlumno = await onCreate(formData); 
+                cancel(); // Cierra el formulario de creación de alumno
+                onRegisterMonthlyPayment(nuevoAlumno); // Abre el modal de pago para el alumno recién creado
+            } catch (error) {
+                console.error("Error al guardar el alumno:", error);
+                alert("Hubo un error al guardar el alumno.");
+            }
+        } else {
+            // Si el plan es 'Por Clase', simplemente lo crea y cierra el formulario
+            onCreate(formData);
+            cancel();
+        }
+    }
+}
   
   return (
     <div className="grid gap-4">
@@ -1754,7 +1781,11 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
       const getCollection = (collectionName) => db.collection('users').doc(user.uid).collection(collectionName);
 
       const alumnoCrud = {
-        create: (data) => getCollection('alumnos').add(data).then(() => setToast("Alumno creado")),
+        create: async (data) => {
+    const docRef = await getCollection('alumnos').add(data);
+    setToast("Alumno creado");
+    return { ...data, id: docRef.id }; // Devuelve el alumno con su nuevo ID
+},
         update: ({id, ...data}) => getCollection('alumnos').doc(id).update(data).then(() => setToast("Alumno actualizado")),
         delete: (id) => setDeletingInfo({ id, type: 'alumno', collection: 'alumnos' }),
       };
