@@ -1622,6 +1622,7 @@
       const [payingClase, setPayingClase] = useState(null);
       const [payingCuota, setPayingCuota] = useState({alumno: null, mes: null});
       const [goToClassForm, setGoToClassForm] = useState(false);
+      const [claseParaEditar, setClaseParaEditar] = useState(null);
 
       useEffect(() => {
         if (!user) return;
