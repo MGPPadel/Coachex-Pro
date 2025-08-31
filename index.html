@@ -1370,6 +1370,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
       const [busquedaAlumno, setBusquedaAlumno] = useState("");
       const [listaBusquedaAbierta, setListaBusquedaAbierta] = useState(false);
       const fileInputRef = useRef(null); // <-- AGREGA ESTA LÍNEA
+      console.log("Plantillas cargadas:", plantillas); // <-- AGREGA ESTA LÍNEA
 
       
       useEffect(() => {
