@@ -123,477 +123,173 @@
     const MESES_RECURRENCIA = [1, 2, 3, 4, 5, 6, 9, 12];
     const HORAS = Array.from({ length: 16 }, (_, i) => `${String(i + 7).padStart(2, '0')}:00`); // De 07:00 a 22:00
     
-// --- Utilidades ---
-const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-const toDigits = (s = "") => String(s).replace(/[^0-9]/g, "");
-const waLink = (telefono = "", nombre = "") => {
-  const digits = toDigits(telefono);
-  if (!digits) return null;
-  const msg = encodeURIComponent(`Hola ${nombre || ""}!`);
-  return `https://wa.me/${digits}?text=${msg}`;
-};
-const getWeekStartDate = (date) => {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setHours(0, 0, 0, 0);
-  return new Date(d.setDate(diff));
-};
-const addDays = (date, days) => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-};
-const formatDate = (date, format = 'yyyy-mm-dd') => {
-  if (!date) return '';
-  const d = new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  if (format === 'dd/mm') return `${day}/${month}`;
-  return `${year}-${month}-${day}`;
-};
+    // --- Utilidades ---
+    const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const toDigits = (s = "") => String(s).replace(/[^0-9]/g, "");
+    const waLink = (telefono = "", nombre = "") => {
+      const digits = toDigits(telefono);
+      if (!digits) return null;
+      const msg = encodeURIComponent(`Hola ${nombre || ""}!`);
+      return `https://wa.me/${digits}?text=${msg}`;
+    };
+    const getWeekStartDate = (date) => {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      d.setHours(0, 0, 0, 0);
+      return new Date(d.setDate(diff));
+    };
+    const addDays = (date, days) => {
+      const result = new Date(date);
+      result.setDate(result.getDate() + days);
+      return result;
+    };
+    const formatDate = (date, format = 'yyyy-mm-dd') => {
+      if (!date) return '';
+      const d = new Date(date);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      if (format === 'dd/mm') return `${day}/${month}`;
+      return `${year}-${month}-${day}`;
+    };
+    const getNombreCompleto = (a) => a ? `${a.apellido || ''} ${a.nombre || ''}`.trim() : 'Alumno eliminado';
 
-const getNombreCompleto = (a) => a ? `${a.apellido || ''} ${a.nombre || ''}`.trim() : 'Alumno eliminado';
-
-// ✅ getDiaNombreES alineado a lunes=0
-function getDiaNombreES(date) {
-  // Date.getDay(): 0=Dom,1=Lun,...  → convertimos a 0=Lun,...,6=Dom
-  const dow = new Date(date).getDay();
-  const idx = (dow + 6) % 7;
-  return DIAS_SEMANA_NOMBRES[idx];
-}
-
-// ✅ Nuevo helper para comparar días por índice (robusto a tildes/mayúsculas)
-function diaNombreAIndice(nombre) {
-  const norm = String(nombre).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-  const map = {
-    lunes: 0, martes: 1, miercoles: 2, jueves: 3,
-    viernes: 4, sabado: 5, domingo: 6
-  };
-  return map[norm];
-}
-
-// (Opcional) Mapa explícito por si querés usarlo en otros lados
-const DIA_A_IDX = {
-  "Lunes": 0, "Martes": 1, "Miércoles": 2, "Jueves": 3,
-  "Viernes": 4, "Sábado": 5, "Domingo": 6
-};
-
-function tipoPorCantidad(n) {
-  if (n <= 1) return "Individual";
-  if (n === 2) return "Dupla";
-  if (n === 3) return "Trio";
-  if (n === 4) return "Cuarteto";
-  return "Escuelita"; // para 5 o más
-}
-// ----------------------- Gestión de slots de clase (duplicar / mover) -----------------------
-
-// Devuelve la clase que ocupa (fecha|hora|deporte) o null
-function getClaseEnSlot(clases, fecha, hora, deporte = "Pádel") {
-  const f = String(fecha).trim();
-  const h = String(hora).trim();
-  const d = String(deporte || "Pádel").trim();
-  return (clases || []).find(
-    c => c.fecha === f && (c.hora || "").trim() === h && (c.deporte || "Pádel").trim() === d
-  ) || null;
-}
-
-// Duplicar una clase a otro slot (por defecto: misma hora, la semana siguiente).
-// options:
-//   - mergeSiExiste (bool, default true): si el slot destino está ocupado, une alumnoIds y recalcula tipo.
-//   - copiarNotas (bool, default true)
-//   - recalcularTipo (bool, default true)
-function duplicarClase(clases, claseId, overrides = {}, options = {}) {
-  const { mergeSiExiste = true, copiarNotas = true, recalcularTipo = true } = options;
-  const original = (clases || []).find(c => c.id === claseId);
-  if (!original) return { clases, error: "clase-no-encontrada" };
-
-  const fechaDestino  = overrides.fecha ? formatDate(overrides.fecha) : formatDate(addDays(new Date(original.fecha), 7));
-  const horaDestino   = overrides.hora     ?? original.hora;
-  const deporteDestino= overrides.deporte  ?? (original.deporte || "Pádel");
-
-  const existente = getClaseEnSlot(clases, fechaDestino, horaDestino, deporteDestino);
-
-  if (existente) {
-    if (!mergeSiExiste) return { clases, error: "slot-ocupado" };
-    const unionIds = Array.from(new Set([...(existente.alumnoIds || []), ...(original.alumnoIds || [])]));
-    const tipoNuevo = recalcularTipo ? tipoPorCantidad(unionIds.length) : (existente.tipo || original.tipo);
-    const actualizada = { ...existente, alumnoIds: unionIds, tipo: tipoNuevo };
-    const out = (clases || []).map(c => c.id === existente.id ? actualizada : c);
-    return { clases: out, actualizada };
-  }
-
-  // crear nueva
-  const alumnoIds = Array.from(new Set(original.alumnoIds || []));
-  const tipoNuevo = recalcularTipo ? tipoPorCantidad(alumnoIds.length) : (original.tipo || tipoPorCantidad(alumnoIds.length));
-  const notas = copiarNotas
-    ? [original.notas, `Duplicada de ${original.fecha} ${original.hora}`].filter(Boolean).join(" · ")
-    : `Duplicada de ${original.fecha} ${original.hora}`;
-
-  const creada = {
-    id: uid(),
-    fecha: fechaDestino,
-    hora: horaDestino,
-    alumnoIds,
-    tipo: tipoNuevo,
-    estado: "Programada",
-    deporte: deporteDestino || "Pádel",
-    cancha: original.cancha || "",
-    notas
-  };
-
-  return { clases: [...(clases || []), creada], creada };
-}
-
-// Mover una clase a otro slot.
-// Si el destino está ocupado y mergeSiExiste=true, une alumnos y elimina la original.
-function moverClase(clases, claseId, overrides = {}, options = {}) {
-  const { mergeSiExiste = true, recalcularTipo = true } = options;
-  const original = (clases || []).find(c => c.id === claseId);
-  if (!original) return { clases, error: "clase-no-encontrada" };
-
-  const fechaDestino  = overrides.fecha ? formatDate(overrides.fecha) : original.fecha;
-  const horaDestino   = overrides.hora    ?? original.hora;
-  const deporteDestino= overrides.deporte ?? (original.deporte || "Pádel");
-
-  const existente = getClaseEnSlot(clases, fechaDestino, horaDestino, deporteDestino);
-
-  if (existente) {
-    if (!mergeSiExiste) return { clases, error: "slot-ocupado" };
-    const unionIds = Array.from(new Set([...(existente.alumnoIds || []), ...(original.alumnoIds || [])]));
-    const tipoNuevo = recalcularTipo ? tipoPorCantidad(unionIds.length) : (existente.tipo || original.tipo);
-    const actualizada = { ...existente, alumnoIds: unionIds, tipo: tipoNuevo };
-    const sinOriginal = (clases || []).filter(c => c.id !== original.id);
-    const out = sinOriginal.map(c => c.id === existente.id ? actualizada : c);
-    return { clases: out, actualizada, eliminadaId: original.id };
-  }
-
-  // mover sin conflicto
-  const movida = { ...original, fecha: fechaDestino, hora: horaDestino, deporte: deporteDestino };
-  const out = (clases || []).map(c => c.id === original.id ? movida : c);
-  return { clases: out, movida };
-}
-
-/**
- * Genera clases para una fecha a partir de horarios fijos de los alumnos.
- * - Agrupa por (hora + deporte)
- * - Evita crear si ya existe una clase en esa fecha/hora
- * - Usa: formatDate, diaNombreAIndice, tipoPorCantidad, uid
- *
- * @param {Date|string} targetDate
- * @param {Array} alumnosArr       // [{ id, estado, deporte, horarios:[{dia:"Lunes", hora:"18:00"}], ... }]
- * @param {Array} clasesExistentes // estado.clases
- * @returns {{ nuevasClases: Array, omitidos: Array }}
- */
-// MERGEA con clases existentes en el mismo slot (fecha|hora|deporte)
-function autoGenerarClasesParaFecha(targetDate, alumnosArr, clasesExistentes) {
-  const fechaISO = formatDate(targetDate);                         // 'yyyy-mm-dd'
-  const idxDiaTarget = (new Date(targetDate).getDay() + 6) % 7;    // 0=Lun..6=Dom
-
-  // Índice de clases existentes por slot "hora|deporte" SOLO para esa fecha
-  const existentesPorSlot = new Map(
-    (clasesExistentes || [])
-      .filter(c => c.fecha === fechaISO)
-      .map(c => {
-        const hora = String(c.hora || '').trim();
-        const deporte = String(c.deporte || 'Pádel').trim();
-        return [`${hora}|${deporte}`, c];
-      })
-  );
-
-  // Grupos por slot con alumnos a incorporar
-  const grupos = new Map(); // key: `${hora}|${deporte}` → { hora, deporte, alumnoIds: [] }
-
-  for (const a of (alumnosArr || [])) {
-    if (!a || a.estado !== 'activo') continue;
-    const deporte = (a.deporte || 'Pádel').trim();
-    const horarios = Array.isArray(a.horarios) ? a.horarios : [];
-
-    for (const h of horarios) {
-      if (!h?.dia || !h?.hora) continue;
-      const idxHorario = diaNombreAIndice(h.dia);
-      if (idxHorario !== idxDiaTarget) continue;
-
-      const hora = String(h.hora).trim();
-      const key = `${hora}|${deporte}`;
-      if (!grupos.has(key)) grupos.set(key, { hora, deporte, alumnoIds: [] });
-      grupos.get(key).alumnoIds.push(a.id);
-    }
-  }
-
-  const nuevasClases = [];
-  const actualizadas = [];
-
-  for (const [, g] of grupos) {
-    const slot = `${g.hora}|${g.deporte}`;
-    const existente = existentesPorSlot.get(slot);
-
-    // Unicos por si vinieron duplicados en horarios
-    const nuevosIds = Array.from(new Set(g.alumnoIds));
-
-    if (existente) {
-      // MERGE: unir alumnos faltantes
-      const unionIds = Array.from(new Set([...(existente.alumnoIds || []), ...nuevosIds]));
-      // ¿Hubo cambios reales?
-      const cambio = unionIds.length !== (existente.alumnoIds || []).length;
-      if (cambio) {
-        const tipo = tipoPorCantidad(unionIds.length);
-        actualizadas.push({
-          ...existente,
-          alumnoIds: unionIds,
-          tipo, // recalcular tipo por cantidad
-          notas: (existente.notas || "").includes("Generada automáticamente")
-            ? existente.notas
-            : (existente.notas || "")
-        });
-      }
-      // si no hay cambio, no hacemos nada (evita writes innecesarios)
-      continue;
-    }
-
-    // No existía clase: crear nueva
-    const tipo = tipoPorCantidad(nuevosIds.length);
-    nuevasClases.push({
-      id: uid(),
-      fecha: fechaISO,            // 'yyyy-mm-dd'
-      hora: g.hora,               // 'HH:mm'
-      alumnoIds: nuevosIds,       // agrupados por slot
-      tipo,
-      estado: "Programada",
-      deporte: g.deporte || "Pádel",
-      cancha: "",
-      notas: "Generada automáticamente por horario fijo"
-    });
-  }
-
-  return { nuevasClases, actualizadas };
-}
-// ---- Helpers de rango/orden para la lista de clases ----
-function rangoFechas(modo = 'semana', baseDate = new Date()) {
-  const base = new Date(baseDate);
-  base.setHours(0,0,0,0);
-
-  if (modo === 'hoy') {
-    const iso = formatDate(base);
-    return { desdeISO: iso, hastaISO: iso };
-  }
-
-  if (modo === 'semana') {
-    const start = getWeekStartDate(base); // Lunes
-    const end   = addDays(start, 6);      // Domingo
-    return { desdeISO: formatDate(start), hastaISO: formatDate(end) };
-  }
-
-  if (modo === 'mes') {
-    const y = base.getFullYear();
-    const m = base.getMonth();
-    const first = new Date(y, m, 1);
-    const last  = new Date(y, m + 1, 0);
-    return { desdeISO: formatDate(first), hastaISO: formatDate(last) };
-  }
-
-  // Próximos 30 días
-  const desde = formatDate(base);
-  const hasta = formatDate(addDays(base, 30));
-  return { desdeISO: desde, hastaISO: hasta };
-}
-
-function filtrarYOrdenarClases(clases, desdeISO, hastaISO) {
-  return (clases || [])
-    .filter(c => c.fecha >= desdeISO && c.fecha <= hastaISO)
-    .sort((a, b) => {
-      if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
-      return (a.hora || '').localeCompare(b.hora || '');
-    });
-}
-
-function agruparPorFecha(clasesOrdenadas) {
-  const grupos = {};
-  for (const c of clasesOrdenadas) {
-    (grupos[c.fecha] ||= []).push(c);
-  }
-  return grupos;
-}
-
-
-// ------------------------------ UI Básicos ------------------------------
-function Card({ title, right, children }) { return (<section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4"><div className="flex items-center justify-between mb-3"><h3 className="text-base font-semibold text-slate-800">{title}</h3>{right}</div>{children}</section>); }
-function Toast({ msg, onClose }) { useEffect(() => { if (!msg) return; const t = setTimeout(onClose, 2500); return () => clearTimeout(t); }, [msg, onClose]); if (!msg) return null; return (<div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-xl z-50">{msg}</div>); }
-function Modal({ isOpen, title, children, onConfirm, onCancel, confirmText = "Confirmar" }) { if (!isOpen) return null; return (<div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md"><h3 className="text-lg font-semibold mb-4">{title}</h3><div className="text-slate-600 mb-6">{children}</div><div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg border">Cancelar</button><button onClick={onConfirm} className={`px-4 py-2 rounded-lg text-white ${confirmText === "Confirmar" ? "bg-red-600" : "bg-emerald-600"}`}>{confirmText}</button></div></div></div>); }
-function Topbar({ current, setCurrent, onLogout }) { 
-  const tabs = [ { id: "dashboard", label: "Dashboard" }, { id: "alumnos", label: "Alumnos" }, { id: "clases", label: "Clases" },{ id: "grupos", label: "Grupos" }, { id: "pagos", label: "Pagos" }, { id: "gastos", label: "Gastos" }, { id: "reportes", label: "Reportes" }, { id: "perfil", label: "Perfil" } ]; 
-  return (
-    <header className="w-full bg-slate-900 text-white">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src="logo flaticon.png" alt="Logo Circular" className="w-10 h-10 rounded-full"/>
-          <div>
-            <img src="logo_coachex N.png" alt="Coachex-Pro Logo" style={{ height: '24px' }}/>
-             <p className="text-xs opacity-80 -mt-0.5">Gestión de Profesores</p>
+    // ------------------------------ UI Básicos ------------------------------
+    function Card({ title, right, children }) { return (<section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4"><div className="flex items-center justify-between mb-3"><h3 className="text-base font-semibold text-slate-800">{title}</h3>{right}</div>{children}</section>); }
+    function Toast({ msg, onClose }) { useEffect(() => { if (!msg) return; const t = setTimeout(onClose, 2500); return () => clearTimeout(t); }, [msg, onClose]); if (!msg) return null; return (<div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-xl z-50">{msg}</div>); }
+    function Modal({ isOpen, title, children, onConfirm, onCancel, confirmText = "Confirmar" }) { if (!isOpen) return null; return (<div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md"><h3 className="text-lg font-semibold mb-4">{title}</h3><div className="text-slate-600 mb-6">{children}</div><div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg border">Cancelar</button><button onClick={onConfirm} className={`px-4 py-2 rounded-lg text-white ${confirmText === "Confirmar" ? "bg-red-600" : "bg-emerald-600"}`}>{confirmText}</button></div></div></div>); }
+    function Topbar({ current, setCurrent, onLogout }) { 
+      const tabs = [ { id: "dashboard", label: "Dashboard" }, { id: "alumnos", label: "Alumnos" }, { id: "clases", label: "Clases" },{ id: "grupos", label: "Grupos" }, { id: "pagos", label: "Pagos" }, { id: "gastos", label: "Gastos" }, { id: "reportes", label: "Reportes" }, { id: "perfil", label: "Perfil" } ]; 
+      return (
+        <header className="w-full bg-slate-900 text-white">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src="logo flaticon.png" alt="Logo Circular" className="w-10 h-10 rounded-full"/>
+              <div>
+                <img src="logo_coachex N.png" alt="Coachex-Pro Logo" style={{ height: '24px' }}/>
+                 <p className="text-xs opacity-80 -mt-0.5">Gestión de Profesores</p>
+              </div>
+            </div>
+            <nav className="hidden md:flex items-center gap-2">
+              {tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-1.5 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"}`}>{t.label}</button>))}
+              <button onClick={onLogout} className="px-3 py-1.5 rounded-xl text-sm transition bg-red-600 hover:bg-red-700 text-white ml-4">Cerrar Sesión</button>
+            </nav>
           </div>
-        </div>
-        <nav className="hidden md:flex items-center gap-2">
-          {tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-1.5 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"}`}>{t.label}</button>))}
-          <button onClick={onLogout} className="px-3 py-1.5 rounded-xl text-sm transition bg-red-600 hover:bg-red-700 text-white ml-4">Cerrar Sesión</button>
-        </nav>
-      </div>
-      <div className="md:hidden px-3 pb-3 grid grid-cols-3 sm:grid-cols-5 gap-2">{tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-2 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "bg-slate-800 text-white"}`}>{t.label}</button>))}</div>
-      <div className="md:hidden px-3 pb-3"><button onClick={onLogout} className="w-full px-3 py-2 rounded-xl text-sm transition bg-red-600 hover:bg-red-700 text-white mt-2">Cerrar Sesión</button></div>
-    </header>
-  );
-}
-
-function ClasesPorTamanoMes({ clases }) {
-  const resumen = useMemo(() => {
-    const ahora = new Date();
-    const mesActual = ahora.getMonth();
-    const anioActual = ahora.getFullYear();
+          <div className="md:hidden px-3 pb-3 grid grid-cols-3 sm:grid-cols-5 gap-2">{tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-2 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "bg-slate-800 text-white"}`}>{t.label}</button>))}</div>
+          <div className="md:hidden px-3 pb-3"><button onClick={onLogout} className="w-full px-3 py-2 rounded-xl text-sm transition bg-red-600 hover:bg-red-700 text-white mt-2">Cerrar Sesión</button></div>
+        </header>
+      );
+    }
     
-    const clasesDelMes = clases.filter(c => {
-      const fechaClase = new Date(c.fecha);
-      return fechaClase.getMonth() === mesActual && fechaClase.getFullYear() === anioActual;
-    });
+    function ClasesPorTamanoMes({ clases }) {
+        const resumen = useMemo(() => {
+            const ahora = new Date();
+            const mesActual = ahora.getMonth();
+            const anioActual = ahora.getFullYear();
+            
+            const clasesDelMes = clases.filter(c => {
+                const fechaClase = new Date(c.fecha);
+                return fechaClase.getMonth() === mesActual && fechaClase.getFullYear() === anioActual;
+            });
 
-    return TIPOS_CLASE.reduce((acc, tipo) => {
-      acc[tipo] = clasesDelMes.filter(c => c.tipo === tipo).length;
-      return acc;
-    }, {});
-  }, [clases]);
+            return TIPOS_CLASE.reduce((acc, tipo) => {
+                acc[tipo] = clasesDelMes.filter(c => c.tipo === tipo).length;
+                return acc;
+            }, {});
+        }, [clases]);
 
-  return (
-    <Card title="Clases por cantidad de alumnos">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-center">
-        {TIPOS_CLASE.map(tipo => (
-          <div key={tipo} className="bg-slate-50 p-2 rounded-lg flex flex-col justify-between h-full">
-            <p className="text-xs text-slate-600 h-8 flex items-center justify-center">{TIPOS_CLASE_NOMBRES[tipo]}</p>
-            <p className="text-xl font-bold">{resumen[tipo] || 0}</p>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-function Dashboard({ state, goToNewClass, goToEditClass }) {
-  const { clases, pagos, gastos, alumnos, perfil } = state;
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [mostrarSoloHorarioLaboral, setMostrarSoloHorarioLaboral] = useState(false);
-  const weekStartDate = getWeekStartDate(currentDate);
-  const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
-  const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
-
-  const hoy = formatDate(new Date());
-  const semanaInicio = formatDate(getWeekStartDate(new Date()));
-
-  const clasesHoy = useMemo(() => {
-    return clases
-      .filter(c => c.fecha === hoy)
-      .map(c => ({
-        ...c,
-        nombresAlumnos: (c.alumnoIds || [])
-          .map(id => alumnoMap.get(id))
-          .filter(Boolean)
-          .map(a => getNombreCompleto(a))
-          .join(', ')
-      }))
-      .sort((a, b) => a.hora.localeCompare(b.hora));
-  }, [clases, hoy, alumnoMap]);
-  
-  const balanceSemana = useMemo(() => {
-    const ingresos = pagos
-      .filter(p => p.fecha >= semanaInicio && p.metodo !== 'Pendiente')
-      .reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
-    const egresos = gastos
-      .filter(g => g.fecha >= semanaInicio)
-      .reduce((acc, g) => acc + parseFloat(g.monto || 0), 0);
-    return ingresos - egresos;
-  }, [pagos, gastos, semanaInicio]);
-  
-  const pagosPendientes = useMemo(() => {
-    let pendientes = 0;
-    const alumnosMensuales = alumnos.filter(a => a.plan === 'mensual' && a.estado === 'activo');
-    const pagosMensualesMesActual = pagos.filter(p => p.concepto?.startsWith("Cuota Mensual") && new Date(p.fecha).getMonth() === new Date().getMonth());
-
-    alumnosMensuales.forEach(alumno => {
-      const cuota = parseFloat(perfil.preciosMensuales[alumno.frecuencia] || 0);
-      const totalPagado = pagosMensualesMesActual.filter(p => p.alumnoId === alumno.id).reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
-      if (cuota > totalPagado) {
-        pendientes++;
-      }
-    });
-    return pendientes;
-  }, [pagos, alumnos, perfil]);
-  // Generar clases de mañana usando los horarios fijos
-function generarManiana() {
-  const manana = addDays(new Date(), 1);
-  const { nuevasClases, omitidos } = autoGenerarClasesParaFecha(
-    manana,
-    alumnos,
-    clases
-  );
-
-  if (nuevasClases.length === 0) {
-    alert(`No se generaron clases para ${formatDate(manana, 'dd/mm')}. ${omitidos.length ? 'Hay horarios ya ocupados.' : ''}`);
-    console.log('Omitidos:', omitidos);
-    return;
-  }
-
-  // 🔗 INTEGRACIÓN:
-  // Si tu App padre expone un método para agregar en lote, usalo:
-  if (typeof window.__coachex_addClases === 'function') {
-    window.__coachex_addClases(nuevasClases);
-  } else if (typeof state?.setState === 'function') {
-    // (opcional) si guardaste setState dentro de state
-    state.setState(s => ({ ...s, clases: [...s.clases, ...nuevasClases] }));
-  } else {
-    // Si no tenés acceso acá, al menos dejalo en consola para copiar
-    console.log('Nuevas clases generadas:', nuevasClases);
-    alert(`Se generaron ${nuevasClases.length} clases. Revisá la consola si no se ven aún.`);
-  }
-}
-  
-  return (
-    <div className="grid gap-4">
-      <div className="grid md:grid-cols-3 gap-4">
-        <div className="bg-blue-50 p-4 rounded-xl"><p className="text-sm text-blue-800">Clases de Hoy</p><p className="text-2xl font-bold text-blue-900">{clasesHoy.length}</p></div>
-        <div className="bg-orange-50 p-4 rounded-xl"><p className="text-sm text-orange-800">Pagos Mensuales Pendientes</p><p className="text-2xl font-bold text-orange-900">{pagosPendientes}</p></div>
-        <div className="bg-emerald-50 p-4 rounded-xl"><p className="text-sm text-emerald-800">Balance de la Semana</p><p className={`text-2xl font-bold ${balanceSemana >= 0 ? 'text-emerald-900' : 'text-red-900'}`}>${balanceSemana.toFixed(2)}</p></div>
-      </div>
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card title="Nueva clase" right={<button onClick={goToNewClass} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
-          <p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p>
-        </Card>
-        <ClasesPorTamanoMes clases={clases} />
-      </div>
-      <Card title="Agenda del Día">
-        {clasesHoy.length === 0 ? (
-          <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
-        ) : (
-          <ul className="space-y-2">
-            {clasesHoy.map(c => (
-              <li key={c.id} className="p-2 border-b flex justify-between items-center">
-                <div>
-                  <p className="font-semibold">{c.hora} - {c.nombresAlumnos}</p>
-                  <p className="text-xs text-slate-500">{c.tipo} en {c.cancha || 'N/A'}</p>
+        return (
+            <Card title="Clases por cantidad de alumnos">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-center">
+                    {TIPOS_CLASE.map(tipo => (
+                        <div key={tipo} className="bg-slate-50 p-2 rounded-lg flex flex-col justify-between h-full">
+                            <p className="text-xs text-slate-600 h-8 flex items-center justify-center">{TIPOS_CLASE_NOMBRES[tipo]}</p>
+                            <p className="text-xl font-bold">{resumen[tipo] || 0}</p>
+                        </div>
+                    ))}
                 </div>
-                <span className={`px-2 py-0.5 rounded-full text-xs ${c.estado === 'Programada' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>{c.estado}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+            </Card>
+        );
+    }
+    
+    function Dashboard({ state, goToNewClass, goToEditClass }) {
+        const { clases, pagos, gastos, alumnos, perfil } = state;
+        const [currentDate, setCurrentDate] = useState(new Date());
+        const [mostrarSoloHorarioLaboral, setMostrarSoloHorarioLaboral] = useState(false); // <-- AGREGA ESTA LÍNEA
+const weekStartDate = getWeekStartDate(currentDate);
+const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
+        const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, `${a.apellido || ''} ${a.nombre || ''}`.trim()])), [alumnos]);
 
-      <Card 
+        const hoy = formatDate(new Date());
+        const semanaInicio = formatDate(getWeekStartDate(new Date()));
+
+        const clasesHoy = useMemo(() => {
+            return clases
+                .filter(c => c.fecha === hoy)
+                .map(c => ({...c, nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')}))
+                .sort((a, b) => a.hora.localeCompare(b.hora));
+        }, [clases, hoy, alumnoMap]);
+        
+        const balanceSemana = useMemo(() => {
+            const ingresos = pagos
+                .filter(p => p.fecha >= semanaInicio && p.metodo !== 'Pendiente')
+                .reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
+            const egresos = gastos
+                .filter(g => g.fecha >= semanaInicio)
+                .reduce((acc, g) => acc + parseFloat(g.monto || 0), 0);
+            return ingresos - egresos;
+        }, [pagos, gastos, semanaInicio]);
+        
+        const pagosPendientes = useMemo(() => {
+            let pendientes = 0;
+            const alumnosMensuales = alumnos.filter(a => a.plan === 'mensual' && a.estado === 'activo');
+            const pagosMensualesMesActual = pagos.filter(p => p.concepto?.startsWith("Cuota Mensual") && new Date(p.fecha).getMonth() === new Date().getMonth());
+
+            alumnosMensuales.forEach(alumno => {
+                const cuota = parseFloat(perfil.preciosMensuales[alumno.frecuencia] || 0);
+                const totalPagado = pagosMensualesMesActual.filter(p => p.alumnoId === alumno.id).reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
+                if (cuota > totalPagado) {
+                    pendientes++;
+                }
+            });
+            return pendientes;
+        }, [pagos, alumnos, perfil]);
+        
+        return (
+            <div className="grid gap-4">
+                <div className="grid md:grid-cols-3 gap-4">
+                    <div className="bg-blue-50 p-4 rounded-xl"><p className="text-sm text-blue-800">Clases de Hoy</p><p className="text-2xl font-bold text-blue-900">{clasesHoy.length}</p></div>
+                    <div className="bg-orange-50 p-4 rounded-xl"><p className="text-sm text-orange-800">Pagos Mensuales Pendientes</p><p className="text-2xl font-bold text-orange-900">{pagosPendientes}</p></div>
+                    <div className="bg-emerald-50 p-4 rounded-xl"><p className="text-sm text-emerald-800">Balance de la Semana</p><p className={`text-2xl font-bold ${balanceSemana >= 0 ? 'text-emerald-900' : 'text-red-900'}`}>${balanceSemana.toFixed(2)}</p></div>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                    <Card title="Nueva clase" right={<button onClick={goToNewClass} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
+                        <p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p>
+                    </Card>
+                    <ClasesPorTamanoMes clases={clases} />
+                </div>
+                <Card title="Agenda del Día">
+                    {clasesHoy.length === 0 ? (
+                        <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
+                    ) : (
+                        <ul className="space-y-2">
+                            {clasesHoy.map(c => (
+                                <li key={c.id} className="p-2 border-b flex justify-between items-center">
+                                    <div>
+                                        <p className="font-semibold">{c.hora} - {c.nombresAlumnos}</p>
+                                        <p className="text-xs text-slate-500">{c.tipo} en {c.cancha || 'N/A'}</p>
+                                    </div>
+                                    <span className={`px-2 py-0.5 rounded-full text-xs ${c.estado === 'Programada' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>{c.estado}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </Card>
+<Card 
   title="Calendario Semanal" 
   right={
     <div className="flex items-center gap-4">
-      <button
-        onClick={generarManiana}
-        className="px-3 py-1.5 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-      >
-        Generar clases de mañana
-      </button>
       <div className="flex items-center gap-2 text-sm">
         <input 
           type="checkbox" 
@@ -611,78 +307,64 @@ function generarManiana() {
     </div>
   }
 >
+  <CalendarioSemanal 
+    week={weekDates} 
+    clases={clases.filter(c => weekDates.includes(c.fecha)).map(c => ({...c, nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id) ? getNombreCompleto(alumnoMap.get(id)) : '').join(', ')}))}
+    onEdit={goToEditClass}
+    horarioLaboral={perfil.horarioLaboral}
+    mostrarSoloHorarioLaboral={mostrarSoloHorarioLaboral}
+  />
+</Card>
+            </div>
+        );
+    }
 
-        <CalendarioSemanal 
-          week={weekDates} 
-          clases={clases.filter(c => weekDates.includes(c.fecha)).map(c => ({...c, nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id) ? getNombreCompleto(alumnoMap.get(id)) : '').join(', ')}))}
-          onEdit={goToEditClass}
-          horarioLaboral={perfil.horarioLaboral}
-          mostrarSoloHorarioLaboral={mostrarSoloHorarioLaboral}
-        />
-      </Card>
-    </div>
-  );
-}
-
-function AlumnoForm({ initialData, onSubmit, onCancel, onRegisterMonthlyPayment, studentBeingEdited }) {
-  const [form, setForm] = useState(initialData);
-  const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, [name]: value })); };
-  const addHorario = () => setForm(f => ({ ...f, horarios: [...(f.horarios || []), { dia: "Lunes", hora: "18:00" }] }));
-  const delHorario = (idx) => setForm(f => ({ ...f, horarios: f.horarios.filter((_, i) => i !== idx) }));
-  const setHorario = (idx, key, val) => setForm(f => ({ ...f, horarios: f.horarios.map((h, i) => i === idx ? { ...h, [key]: val } : h) }));
-  function handleSubmit(e) { e.preventDefault(); if (!form.nombre.trim()) return alert("Ingresá un nombre"); onSubmit(form); }
-  return (
-    <form onSubmit={handleSubmit} className="grid md:grid-cols-6 gap-3">
-      <div className="md:col-span-3"><label className="text-sm text-slate-600">Nombre</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Sofía" required /></div>
-      <div className="md:col-span-3"><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Pérez" /></div>
-      <div className="md:col-span-3"><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: 549381..." /></div>
-      <div className="md:col-span-3"><label className="text-sm text-slate-600">Contacto Padre/Madre (Escuelita)</label><input name="contactoPadre" value={form.contactoPadre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Nombre y teléfono" /></div>
-      <div><label className="text-sm text-slate-600">Deporte</label><select name="deporte" value={form.deporte} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{DEPORTES.map(d => <option key={d}>{d}</option>)}</select></div>
-      <div><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_ALUMNO.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}</select></div>
-      <div className="md:col-span-3"><label className="text-sm text-slate-600">Plan de Pago</label><select name="plan" value={form.plan} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{PLANES_PAGO.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
-      {form.plan === 'mensual' && (
-        <div className="md:col-span-3 grid grid-cols-2 gap-3">
-          <div>
+    function AlumnoForm({ initialData, onSubmit, onCancel, onRegisterMonthlyPayment, studentBeingEdited }) {
+      const [form, setForm] = useState(initialData);
+      const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, [name]: value })); };
+      const addHorario = () => setForm(f => ({ ...f, horarios: [...(f.horarios || []), { dia: "Lunes", hora: "18:00" }] }));
+      const delHorario = (idx) => setForm(f => ({ ...f, horarios: f.horarios.filter((_, i) => i !== idx) }));
+      const setHorario = (idx, key, val) => setForm(f => ({ ...f, horarios: f.horarios.map((h, i) => i === idx ? { ...h, [key]: val } : h) }));
+      function handleSubmit(e) { e.preventDefault(); if (!form.nombre.trim()) return alert("Ingresá un nombre"); onSubmit(form); }
+      return (
+        <form onSubmit={handleSubmit} className="grid md:grid-cols-6 gap-3">
+          <div className="md:col-span-3"><label className="text-sm text-slate-600">Nombre</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Sofía" required /></div>
+          <div className="md:col-span-3"><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Pérez" /></div>
+          <div className="md:col-span-3"><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: 549381..." /></div>
+          <div className="md:col-span-3"><label className="text-sm text-slate-600">Contacto Padre/Madre (Escuelita)</label><input name="contactoPadre" value={form.contactoPadre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Nombre y teléfono" /></div>
+          <div><label className="text-sm text-slate-600">Deporte</label><select name="deporte" value={form.deporte} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{DEPORTES.map(d => <option key={d}>{d}</option>)}</select></div>
+          <div><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_ALUMNO.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}</select></div>
+          <div className="md:col-span-3"><label className="text-sm text-slate-600">Plan de Pago</label><select name="plan" value={form.plan} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{PLANES_PAGO.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
+          {form.plan === 'mensual' && (
+    <div className="md:col-span-3 grid grid-cols-2 gap-3">
+        <div>
             <label className="text-sm text-slate-600">Frecuencia</label>
             <select name="frecuencia" value={form.frecuencia} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">
-              {FRECUENCIAS_MENSUALES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                {FRECUENCIAS_MENSUALES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
             </select>
-          </div>
-          <div className="flex items-end">
-            <button 
-              type="button" 
-              onClick={() => onRegisterMonthlyPayment(studentBeingEdited)} 
-              disabled={!studentBeingEdited}
-              className={`w-full px-3 py-2 text-sm rounded-lg text-white ${!studentBeingEdited ? 'bg-slate-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-700'}`}
-            >
-              Registrar Pago de Abono
-            </button>
-            {!studentBeingEdited && <p className="text-xs text-slate-500 col-span-2 mt-1">Guarda el alumno para registrar su primer pago.</p>}
-          </div>
         </div>
-      )}
-      <div className="md:col-span-6">
-        <label className="text-sm text-slate-600">Horarios fijos</label>
-        <div className="grid gap-2">
-          {(form.horarios || []).map((h, idx) => (
-            <div key={idx} className="flex gap-2 items-center flex-wrap">
-              <select value={h.dia} onChange={(e) => setHorario(idx, 'dia', e.target.value)} className="border rounded-lg px-3 py-2">
-                {DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}
-              </select>
-              <input type="time" value={h.hora} onChange={(e) => setHorario(idx, 'hora', e.target.value)} className="border rounded-lg px-3 py-2" />
-              <button type="button" onClick={() => delHorario(idx)} className="px-2 py-2 rounded-lg border text-red-600 hover:bg-red-50">−</button>
-            </div>
-          ))}
-          <button type="button" onClick={addHorario} className="self-start px-3 py-1.5 rounded-lg border w-auto">+ Agregar horario</button>
+        <div className="flex items-end">
+        <button 
+    type="button" 
+    onClick={() => onRegisterMonthlyPayment(studentBeingEdited)} 
+    disabled={!studentBeingEdited} // Se deshabilita si es un nuevo alumno
+    className={`w-full px-3 py-2 text-sm rounded-lg text-white ${!studentBeingEdited ? 'bg-slate-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-700'}`}
+>
+    Registrar Pago de Abono
+</button>
+{/* Y el mensaje de ayuda */}
+{!studentBeingEdited && <p className="text-xs text-slate-500 col-span-2 mt-1">Guarda el alumno para registrar su primer pago.</p>}
         </div>
-      </div>
-      <div className="md:col-span-6"><label className="text-sm text-slate-600">Notas / Descripción</label><textarea name="notas" value={form.notas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={3} placeholder="Detalle particular del alumno" /></div>
-      <div className="md:col-span-6 flex gap-2 justify-end"><button type="button" onClick={onCancel} className="px-3 py-2 rounded-lg border">Cancelar</button><button type="submit" className="px-3 py-2 rounded-lg bg-emerald-600 text-white">Guardar</button></div>
-    </form>
-  );
-}
-
-function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment }) {
+    </div>
+)}
+          <div className="md:col-span-6"><label className="text-sm text-slate-600">Horarios fijos</label><div className="grid gap-2">{(form.horarios || []).map((h, idx) => (<div key={idx} className="flex gap-2 items-center flex-wrap"><select value={h.dia} onChange={(e) => setHorario(idx, 'dia', e.target.value)} className="border rounded-lg px-3 py-2">{DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}</select><input type="time" value={h.hora} onChange={(e) => setHorario(idx, 'hora', e.target.value)} className="border rounded-lg px-3 py-2" /><button type="button" onClick={() => delHorario(idx)} className="px-2 py-2 rounded-lg border text-red-600 hover:bg-red-50">−</button></div>))}<button type="button" onClick={addHorario} className="self-start px-3 py-1.5 rounded-lg border w-auto">+ Agregar horario</button></div></div>
+          <div className="md:col-span-6"><label className="text-sm text-slate-600">Notas / Descripción</label><textarea name="notas" value={form.notas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={3} placeholder="Detalle particular del alumno" /></div>
+          <div className="md:col-span-6 flex gap-2 justify-end"><button type="button" onClick={onCancel} className="px-3 py-2 rounded-lg border">Cancelar</button><button type="submit" className="px-3 py-2 rounded-lg bg-emerald-600 text-white">Guardar</button></div>
+        </form>
+      );
+    }
+    
+function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment }) { // <-- 1. AQUÍ ACEPTAMOS LA NUEVA FUNCIÓN
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -703,32 +385,38 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
   function cancel() { setShowForm(false); setEditing(null); }
   async function submit(formData) {
     if (editing) {
-      onUpdate({ ...formData, id: editing.id });
-      cancel();
-    } else {
-      if (formData.plan === 'mensual') {
-        try {
-          const nuevoAlumno = await onCreate(formData); 
-          cancel();
-          onRegisterMonthlyPayment(nuevoAlumno);
-        } catch (error) {
-          console.error("Error al guardar el alumno:", error);
-          alert("Hubo un error al guardar el alumno.");
-        }
-      } else {
-        onCreate(formData);
+        // El modo EDICIÓN sigue funcionando como antes
+        onUpdate({ ...formData, id: editing.id });
         cancel();
-      }
+    } else {
+        // --- LÓGICA NUEVA PARA CREAR UN ALUMNO ---
+        if (formData.plan === 'mensual') {
+            // Si el plan es mensual, guardamos al alumno y LUEGO abrimos el modal de pago.
+            try {
+                // 'onCreate' ahora debe devolver el nuevo alumno con su ID
+                const nuevoAlumno = await onCreate(formData); 
+                cancel(); // Cierra el formulario de creación de alumno
+                onRegisterMonthlyPayment(nuevoAlumno); // Abre el modal de pago para el alumno recién creado
+            } catch (error) {
+                console.error("Error al guardar el alumno:", error);
+                alert("Hubo un error al guardar el alumno.");
+            }
+        } else {
+            // Si el plan es 'Por Clase', simplemente lo crea y cierra el formulario
+            onCreate(formData);
+            cancel();
+        }
     }
-  }
+}
   
   return (
     <div className="grid gap-4">
       <Card title={editing ? "Editar alumno" : "Nuevo alumno"} right={!showForm && <button onClick={openNew} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nuevo</button>}>
         {showForm ? (
-          <AlumnoForm initialData={editing ? { ...emptyForm, ...editing } : emptyForm} onSubmit={submit} onCancel={cancel} onRegisterMonthlyPayment={onRegisterMonthlyPayment} studentBeingEdited={editing} />
+            // --- 👇 2. AQUÍ LA PASAMOS AL FORMULARIO 👇 ---
+            <AlumnoForm initialData={editing ? { ...emptyForm, ...editing } : emptyForm} onSubmit={submit} onCancel={cancel} onRegisterMonthlyPayment={onRegisterMonthlyPayment} studentBeingEdited={editing} />
         ) : (
-          <p className="text-sm text-slate-500">Hacé clic en <b>+ Nuevo</b> para crear un alumno, o en el lápiz para editar.</p>
+            <p className="text-sm text-slate-500">Hacé clic en <b>+ Nuevo</b> para crear un alumno, o en el lápiz para editar.</p>
         )}
       </Card>
       <Card title="Listado de alumnos" right={<input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar" className="border rounded-xl px-3 py-1.5 text-sm" />}>
@@ -737,7 +425,7 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
     </div>
   );
 }
-
+    
 function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHorarioLaboral }) {
   const getStatusColor = (status) => {
     switch (status) { case "Realizada": return "bg-green-200 border-green-400"; case "Cancelada": return "bg-red-200 border-red-400"; case "Ausente": return "bg-yellow-200 border-yellow-400"; default: return "bg-blue-200 border-blue-400"; }
@@ -746,39 +434,34 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   
   const esHoraLaboral = (fecha, hora) => {
     if (!horarioLaboral || horarioLaboral.length !== 7) return true;
-    // ✅ índice lunes=0
-    const idx = (new Date(fecha).getDay() + 6) % 7;
-    const diaSemana = horarioLaboral[idx];
-    if (!diaSemana?.activo) return false;
+    const diaIndex = new Date(fecha).getDay();
+    const diaSemana = horarioLaboral[diaIndex === 0 ? 6 : diaIndex - 1];
+    if (!diaSemana.activo) return false;
     return hora >= diaSemana.desde && hora < diaSemana.hasta;
   };
 
-  // --- LÓGICA PARA FILTRAR LAS HORAS ---
+  // --- LÓGICA NUEVA PARA FILTRAR LAS HORAS ---
   const horasParaMostrar = useMemo(() => {
     if (!mostrarSoloHorarioLaboral || !horarioLaboral) {
-      return HORAS; // Vista completa
+      return HORAS; // Vista completa: devuelve todas las horas
     }
     
     const horasActivas = horarioLaboral.filter(d => d.activo).flatMap(d => [d.desde, d.hasta]);
-    if (horasActivas.length === 0) return HORAS;
+    if (horasActivas.length === 0) return HORAS; // Si no hay horario laboral definido, muestra todo
 
     const minHora = horasActivas.reduce((a, b) => a < b ? a : b);
     const maxHora = horasActivas.reduce((a, b) => a > b ? a : b);
 
     return HORAS.filter(h => h >= minHora && h < maxHora);
   }, [mostrarSoloHorarioLaboral, horarioLaboral]);
-  // --- FIN ---
+  // --- FIN DE LA LÓGICA NUEVA ---
 
   return (
     <div className="grid grid-cols-[auto_repeat(7,1fr)] gap-px bg-slate-200 border border-slate-200">
       <div className="bg-white p-2"></div>
-      {week.map(day => (
-        <div key={day} className="bg-white p-2 text-center font-semibold text-sm">
-          <div>{getDiaNombreES(day)}</div>
-          <div className="text-xs text-slate-500">{formatDate(new Date(day), 'dd/mm')}</div>
-        </div>
-      ))}
+      {week.map(day => (<div key={day} className="bg-white p-2 text-center font-semibold text-sm"><div>{DIAS_SEMANA_NOMBRES[new Date(day).getDay() === 0 ? 6 : new Date(day).getDay() - 1]}</div><div className="text-xs text-slate-500">{formatDate(new Date(day), 'dd/mm')}</div></div>))}
       
+      {/* AHORA MAPEAMOS SOBRE LAS HORAS FILTRADAS */}
       {horasParaMostrar.map(hora => (
         <React.Fragment key={hora}>
           <div className="bg-white text-center text-xs p-2">{hora}</div>
@@ -800,207 +483,328 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
     </div>
   );
 }
-
     
-    function ListaDeClases({ clases, alumnos, onEdit }) {
-  const [modo, setModo] = React.useState('semana'); // 'hoy' | 'semana' | 'mes' | 'prox30'
-  const [baseDate, setBaseDate] = React.useState(new Date());
-  const [incluirPasadas, setIncluirPasadas] = React.useState(false);
-  const [qAlumno, setQAlumno] = React.useState('');
-  const [fEstado, setFEstado] = React.useState('');   // ← nuevo
-  const [fDeporte, setFDeporte] = React.useState(''); // ← nuevo
+    function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar }) {
+      const [showForm, setShowForm] = useState(false);
+      const [editing, setEditing] = useState(null);
+      const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
+      const [form, setForm] = useState(emptyForm);
+      const [formStep, setFormStep] = useState(1);
+      const [alumnoSearchQuery, setAlumnoSearchQuery] = useState("");
+      const [isAlumnosListOpen, setIsAlumnosListOpen] = useState(false);
+      const [grupos, setGrupos] = useState([]);
+      const [filtroAlumno, setFiltroAlumno] = useState(""); 
+      const [filtroEstado, setFiltroEstado] = useState(""); 
+      const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
+      const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
 
-  const alumnoMap = React.useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
+      useEffect(() => {
+        if (!user) return;
+        const unsub = db.collection('users').doc(user.uid).collection('grupos').onSnapshot(snapshot => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setGrupos(data);
+        });
+        return () => unsub();
+      }, [user]);
+      
+      useEffect(() => {
+        if (claseParaEditar) {
+            openEdit(claseParaEditar);
+            setClaseParaEditar(null);
+        }
+      }, [claseParaEditar]);
 
-  const { desdeISO, hastaISO } = React.useMemo(
-    () => rangoFechas(modo, baseDate),
-    [modo, baseDate]
-  );
+      const alumnosActivos = useMemo(() => alumnos.filter(a => a.estado === 'activo'), [alumnos]);
+      const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
+      
+      const alumnosFiltrados = useMemo(() => {
+        if (!alumnoSearchQuery) {
+            return alumnosActivos;
+        }
+        return alumnosActivos.filter(alumno =>
+            getNombreCompleto(alumno).toLowerCase().includes(alumnoSearchQuery.toLowerCase())
+        );
+      }, [alumnoSearchQuery, alumnosActivos]);
 
-  // Hora/minuto actual para filtrar "hoy"
-  const ahoraHM = React.useMemo(() => {
-    const d = new Date();
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
-  }, []);
-  const hoyISO = React.useMemo(() => formatDate(new Date()), []);
+      const pagosPorClase = useMemo(() => {
+        const map = new Map();
+        pagos.forEach(p => {
+          if (!map.has(p.claseId)) map.set(p.claseId, []);
+          map.get(p.claseId).push(p);
+        });
+        return map;
+      }, [pagos]);
 
-  // 1) Rango + orden
-  const baseRango = React.useMemo(
-    () => filtrarYOrdenarClases(clases, desdeISO, hastaISO),
-    [clases, desdeISO, hastaISO]
-  );
+      const clasesConDatos = useMemo(() => clases.map(c => ({ 
+        ...c, 
+        nombresAlumnos: (c.alumnoIds || []).map(id => getNombreCompleto(alumnoMap.get(id))).filter(Boolean).join(', '), 
+        pagos: pagosPorClase.get(c.id) || [] 
+      })), [clases, alumnoMap, pagosPorClase]);
 
-  // 2) Pasadas / futuras
-  const soloFuturas = React.useMemo(() => {
-    if (incluirPasadas) return baseRango;
-    return baseRango.filter(c => {
-      if (c.fecha > hoyISO) return true;
-      if (c.fecha < hoyISO) return false;
-      if (!c.hora) return true;
-      return c.hora >= ahoraHM;
-    });
-  }, [baseRango, incluirPasadas, hoyISO, ahoraHM]);
+      const clasesFiltradas = useMemo(() => {
+        return clasesConDatos.filter(c => {
+            const pasaFiltroAlumno = !filtroAlumno || c.alumnoIds.includes(filtroAlumno);
+            const pasaFiltroEstado = !filtroEstado || c.estado === filtroEstado;
+            const pasaFiltroFechaDesde = !filtroFechaDesde || c.fecha >= filtroFechaDesde;
+            const pasaFiltroFechaHasta = !filtroFechaHasta || c.fecha <= filtroFechaHasta;
+            return pasaFiltroAlumno && pasaFiltroEstado && pasaFiltroFechaDesde && pasaFiltroFechaHasta;
+        }).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      }, [clasesConDatos, filtroAlumno, filtroEstado, filtroFechaDesde, filtroFechaHasta]);
 
-  // 3) Filtros: alumno (texto), estado, deporte
-  const visibles = React.useMemo(() => {
-    let arr = soloFuturas;
+      const canchasDisponibles = useMemo(() => (perfil.canchas || '').split('\n').filter(c => c.trim() !== ''), [perfil.canchas]);
+      
+      function handleFormChange(e) {
+        const { name, value, type, checked } = e.target;
+        const val = type === 'checkbox' ? checked : value;
+        setForm(prev => {
+            const newState = { ...prev, [name]: val };
+            if (name === "tipo") {
+                const primerAlumno = alumnoMap.get(prev.alumnoIds[0]);
+                const esPlanMensual = primerAlumno?.plan === 'mensual';
+                newState.precio = esPlanMensual ? "0" : (perfil.precios[val.toLowerCase()] || "");
+                const numAlumnos = TIPOS_CLASE_MAP[val] || 1;
+                newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
+            }
+            return newState;
+        });
+      }
+      
+      function handleAlumnoChange(index, newId) {
+        setForm(prev => {
+            const newAlumnoIds = prev.alumnoIds.map((id, i) => i === index ? newId : id);
+            const primerAlumno = alumnoMap.get(newAlumnoIds[0]);
+            const esPlanMensual = primerAlumno?.plan === 'mensual';
+            const nuevoPrecio = esPlanMensual ? "0" : (perfil.precios[prev.tipo.toLowerCase()] || "");
+            return { ...prev, alumnoIds: newAlumnoIds, precio: nuevoPrecio };
+        });
+        if (index === 0 && newId) { 
+            const alumnoSeleccionado = alumnoMap.get(newId);
+            if (alumnoSeleccionado && alumnoSeleccionado.horarios && alumnoSeleccionado.horarios.length > 0) {
+                setFormStep(2);
+            } else {
+                setFormStep(3);
+            }
+        }
+      }
+      
+      function handleSelectAlumno(alumno) {
+        setAlumnoSearchQuery(getNombreCompleto(alumno));
+        setIsAlumnosListOpen(false);
+        handleAlumnoChange(0, alumno.id);
+      }
 
-    // Buscador por alumno
-    const q = qAlumno.trim().toLowerCase();
-    if (q) {
-      arr = arr.filter(c =>
-        (c.alumnoIds || []).some(id => {
-          const a = alumnoMap.get(id);
-          return a ? getNombreCompleto(a).toLowerCase().includes(q) : false;
-        })
+      const getNextDateForDay = (dayName) => {
+        const dayIndex = DIAS_SEMANA_NOMBRES.indexOf(dayName);
+        if (dayIndex === -1) return new Date();
+        const today = new Date();
+        const resultDate = new Date(today.getTime());
+        const daysUntilTarget = (dayIndex - today.getDay() + 7) % 7;
+        resultDate.setDate(today.getDate() + (daysUntilTarget === 0 ? 7 : daysUntilTarget));
+        return resultDate;
+      };
+
+      function handleScheduleSelect(horario) {
+        const proximaFecha = getNextDateForDay(horario.dia);
+        setForm(prev => ({
+            ...prev,
+            fecha: formatDate(proximaFecha),
+            hora: horario.hora
+        }));
+        setFormStep(3);
+      }
+
+      function openNew() { 
+        setEditing(null); 
+        setForm(emptyForm);
+        setAlumnoSearchQuery("");
+        setFormStep(1); 
+        setShowForm(true); 
+        window.scrollTo({ top: 0, behavior: "smooth" }); 
+      }
+      function openEdit(c) { 
+        setEditing(c); 
+        setForm({ ...emptyForm, ...c, recurrente: false }); 
+        setFormStep(3);
+        setShowForm(true); 
+        window.scrollTo({ top: 0, behavior: "smooth" }); 
+      }
+      function cancel() { 
+        setShowForm(false); 
+        setEditing(null); 
+        setForm(emptyForm);
+        setFormStep(1);
+      }
+      function submit(e) { 
+        e.preventDefault(); 
+        const validAlumnos = form.alumnoIds.filter(id => id); 
+        if (validAlumnos.length === 0) return alert("Seleccioná al menos un alumno"); 
+        const finalForm = {...form, alumnoIds: validAlumnos}; 
+        if (editing) { 
+            onUpdate({ ...finalForm, id: editing.id }); 
+        } else { 
+            onCreate(finalForm); 
+        } 
+        cancel(); 
+      }
+      const changeWeek = (offset) => setCurrentDate(prev => addDays(prev, offset * 7));
+      function handleStatusChange(clase, newStatus) {
+        onUpdate({ ...clase, estado: newStatus, pagos: clase.pagos });
+      }
+      
+      const primerAlumnoId = form.alumnoIds[0];
+      const esMensual = alumnoMap.get(primerAlumnoId)?.plan === 'mensual';
+      
+      return (
+        <div className="grid gap-4">
+          <Card title={editing ? "Editar clase" : "Nueva clase"} right={!showForm && <button id="nueva-clase-btn" onClick={openNew} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
+            {showForm ? (
+                <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
+                    {/* --- PASO 1: SELECCIONAR ALUMNO (VERSIÓN CON BUSCADOR) --- */}
+                    {(formStep === 1) && (
+                        <div className="md:col-span-6 relative">
+                            <label className="text-sm text-slate-600 font-semibold">Selecciona Alumno/a</label>
+                            <input
+                                type="text"
+                                value={alumnoSearchQuery}
+                                onChange={(e) => {
+                                    setAlumnoSearchQuery(e.target.value);
+                                    setIsAlumnosListOpen(true);
+                                }}
+                                onFocus={() => setIsAlumnosListOpen(true)}
+                                onBlur={() => setTimeout(() => setIsAlumnosListOpen(false), 200)}
+                                placeholder="Escribe para buscar..."
+                                className="w-full mt-1 border rounded-lg px-3 py-2"
+                            />
+                            {isAlumnosListOpen && (
+                                <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
+                                    {alumnosFiltrados.length > 0 ? (
+                                        alumnosFiltrados.map(alumno => (
+                                            <li key={alumno.id} onClick={() => handleSelectAlumno(alumno)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">
+                                                {getNombreCompleto(alumno)}
+                                            </li>
+                                        ))
+                                    ) : (
+                                        <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>
+                                    )}
+                                </ul>
+                            )}
+                        </div>
+                    )}
+
+                    {/* --- PASO 2: ELEGIR HORARIO FIJO (si existe) --- */}
+                    {(formStep === 2 && alumnoMap.get(form.alumnoIds[0])) && (
+                        <div className="md:col-span-6">
+                            <p className="text-sm text-slate-700 mb-2"><span className="font-bold">{getNombreCompleto(alumnoMap.get(form.alumnoIds[0]))}</span> tiene horarios fijos guardados.</p>
+                            <p className="text-sm font-semibold text-slate-600">¿Quieres agendar una clase en uno de sus horarios habituales?</p>
+                            <div className="flex flex-wrap gap-2 my-3">
+                                {(alumnoMap.get(form.alumnoIds[0]).horarios || []).map(horario => (
+                                    <button type="button" key={`${horario.dia}-${horario.hora}`} onClick={() => handleScheduleSelect(horario)} className="px-3 py-2 text-sm rounded-lg border bg-sky-50 text-sky-800 hover:bg-sky-100">
+                                        {horario.dia} {horario.hora}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="border-t pt-3 mt-3">
+                                <button type="button" onClick={() => setFormStep(3)} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-100">O agendar una clase personalizada en otro horario</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* --- PASO 3: DETALLES COMPLETOS DE LA CLASE --- */}
+                    {(formStep === 3) && (
+                        <>
+                            <div className="md:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {(form.alumnoIds || [""]).map((alumnoId, index) => (
+                                    <div key={index}>
+                                        <label className="text-sm text-slate-600">Alumno {index + 1}</label>
+                                        <select value={alumnoId} onChange={(e) => handleAlumnoChange(index, e.target.value)} className="w-full border rounded-lg px-3 py-2" required>
+                                            <option value="">Seleccionar...</option>
+                                            {alumnosActivos.filter(a => !form.alumnoIds.includes(a.id) || a.id === alumnoId).map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="md:col-span-2"><label className="text-sm text-slate-600">Ubicación / Cancha</label><select name="cancha" value={form.cancha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{canchasDisponibles.map(c => <option key={c}>{c}</option>)}</select></div>
+                            <div><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
+                            <div><label className="text-sm text-slate-600">Hora</label><input type="time" name="hora" value={form.hora} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
+                            <div><label className="text-sm text-slate-600">Tipo de Clase</label><select name="tipo" value={form.tipo} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}</select></div>
+                            <div><label className="text-sm text-slate-600">Precio</label><input type="number" name="precio" value={esMensual ? "0" : form.precio} onChange={handleFormChange} className={`w-full border rounded-lg px-3 py-2 ${esMensual ? 'bg-slate-100' : ''}`} placeholder="0" disabled={esMensual} /></div>
+                            <div className="md:col-span-2"><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}</select></div>
+                            <div className="md:col-span-6"><label className="text-sm text-slate-600">Notas</label><textarea name="notas" value={form.notas} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" rows={2} placeholder="Comentarios sobre la clase" /></div>
+                            {!editing && <div className="md:col-span-6 flex items-center gap-2"><input type="checkbox" name="recurrente" id="recurrente" checked={form.recurrente} onChange={handleFormChange} /><label htmlFor="recurrente" className="text-sm text-slate-600 mr-2">Repetir semanalmente por</label>{form.recurrente && <select name="mesesRecurrencia" value={form.mesesRecurrencia} onChange={handleFormChange} className="border rounded-lg px-3 py-2">{MESES_RECURRENCIA.map(m => <option key={m} value={m}>{m} mes{m > 1 ? 'es' : ''}</option>)}</select>}</div>}
+                        </>
+                    )}
+
+                    <div className="md:col-span-6 flex gap-2 justify-end">
+                        <button type="button" onClick={() => { cancel(); setFormStep(1); }} className="px-3 py-2 rounded-lg border">Cancelar</button>
+                        {formStep === 3 && <button className="px-3 py-2 rounded-lg bg-emerald-600 text-white">Guardar</button>}
+                    </div>
+                </form>
+            ) : ( <p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p> )}
+          </Card>
+          
+          <Card title="Listado de clases">
+            <div className="grid md:grid-cols-4 gap-3 mb-4 p-2 border rounded-lg">
+                <select value={filtroAlumno} onChange={(e) => setFiltroAlumno(e.target.value)}>
+                <option value="">Todos los Alumnos</option>
+                {alumnos.map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
+                </select>
+                <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
+                <option value="">Todos los Estados</option>
+                {ESTADOS_CLASE.map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+                <input type="date" value={filtroFechaDesde} onChange={(e) => setFiltroFechaDesde(e.target.value)} />
+                <input type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} />
+            </div>
+            <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                <thead>
+                    <tr className="text-left text-slate-600">
+                    <th className="p-2">Fecha</th>
+                    <th className="p-2">Alumnos</th>
+                    <th className="p-2">Ubicación</th>
+                    <th className="p-2">Estado</th>
+                    <th className="p-2">Precio</th>
+                    <th className="p-2 text-right">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {clasesFiltradas.length === 0 && (
+                    <tr>
+                        <td colSpan={6} className="text-center py-6 text-slate-400">
+                        No hay clases que coincidan con los filtros
+                        </td>
+                    </tr>
+                    )}
+                    {clasesFiltradas.map((c) => (
+                    <tr key={c.id} className="border-t">
+                        <td className="p-2">{c.fecha} {c.hora}</td>
+                        <td className="p-2">{c.nombresAlumnos}</td>
+                        <td className="p-2">{c.cancha}</td>
+                        <td className="p-2">
+                        <select value={c.estado} onChange={(e) => handleStatusChange(c, e.target.value)} className="w-full border rounded-lg px-2 py-1 bg-white">
+                            {ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}
+                        </select>
+                        </td>
+                        <td className="p-2 flex items-center gap-2">
+                        {c.precio ? `$${c.precio}` : '-'}
+                        {c.pagos.length > 0 && <span className={`w-2 h-2 rounded-full ${c.pagos.some(p => p.metodo === 'Pendiente') ? 'bg-orange-400' : 'bg-green-500'}`} title={`Pago Registrado`}></span>}
+                        </td>
+                        <td className="p-2 text-right">
+                        <div className="inline-flex gap-2">
+                            {c.estado === 'Realizada' && c.pagos.length === 0 && <button onClick={() => onPay(c)} className="px-2 py-1 text-xs rounded-lg border bg-emerald-50 text-emerald-700 hover:bg-emerald-100">💳 Pagar</button>}
+                            <button onClick={() => openEdit(c)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button>
+                            <button type="button" onClick={() => onDelete(c.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button>
+                        </div>
+                        </td>
+                    </tr>
+                    ))}
+                </tbody>
+                </table>
+            </div>
+          </Card>
+        </div>
       );
     }
-
-    // Filtro por estado
-    if (fEstado) {
-      arr = arr.filter(c => c.estado === fEstado);
-    }
-
-    // Filtro por deporte
-    if (fDeporte) {
-      arr = arr.filter(c => (c.deporte || 'Pádel') === fDeporte);
-    }
-
-    return arr;
-  }, [soloFuturas, qAlumno, fEstado, fDeporte, alumnoMap]);
-
-  const grupos = React.useMemo(() => agruparPorFecha(visibles), [visibles]);
-  const fechasOrdenadas = React.useMemo(
-    () => Object.keys(grupos).sort((a,b) => a.localeCompare(b)),
-    [grupos]
-  );
-
-  return (
-    <Card
-      title="Clases (filtradas)"
-      right={
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Buscador por alumno */}
-          <input
-            value={qAlumno}
-            onChange={e => setQAlumno(e.target.value)}
-            placeholder="Buscar alumno/a"
-            className="border rounded-lg px-2 py-1 text-sm"
-          />
-
-          {/* Filtro por Estado */}
-          <select
-            value={fEstado}
-            onChange={e => setFEstado(e.target.value)}
-            className="border rounded-lg px-2 py-1 text-sm"
-            title="Estado"
-          >
-            <option value="">Todos los estados</option>
-            {ESTADOS_CLASE.map(est => (
-              <option key={est} value={est}>{est}</option>
-            ))}
-          </select>
-
-          {/* Filtro por Deporte */}
-          <select
-            value={fDeporte}
-            onChange={e => setFDeporte(e.target.value)}
-            className="border rounded-lg px-2 py-1 text-sm"
-            title="Deporte"
-          >
-            <option value="">Todos los deportes</option>
-            {DEPORTES.map(dep => (
-              <option key={dep} value={dep}>{dep}</option>
-            ))}
-          </select>
-
-          {/* Toggle incluir pasadas */}
-          <label className="flex items-center gap-1 text-sm">
-            <input
-              type="checkbox"
-              checked={incluirPasadas}
-              onChange={e => setIncluirPasadas(e.target.checked)}
-            />
-            Incluir pasadas
-          </label>
-
-          {/* Selector de rango */}
-          <select
-            value={modo}
-            onChange={e => setModo(e.target.value)}
-            className="border rounded-lg px-2 py-1 text-sm"
-            title="Rango"
-          >
-            <option value="hoy">Hoy</option>
-            <option value="semana">Semana actual</option>
-            <option value="mes">Mes actual</option>
-            <option value="prox30">Próximos 30 días</option>
-          </select>
-
-          <button
-            onClick={() => { setBaseDate(new Date()); }}
-            className="px-2 py-1 text-sm rounded-lg border"
-            title="Ir a hoy"
-          >
-            Hoy
-          </button>
-        </div>
-      }
-    >
-      {fechasOrdenadas.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          No hay clases en el rango seleccionado
-          {qAlumno ? " para ese alumno" : ""}
-          {fEstado ? ` (${fEstado})` : ""}
-          {fDeporte ? ` - ${fDeporte}` : ""}.
-        </p>
-      ) : (
-        <div className="divide-y">
-          {fechasOrdenadas.map(fecha => (
-            <div key={fecha} className="py-2">
-              <div className="sticky top-0 bg-white/90 backdrop-blur px-1 py-1 mb-2 border-b">
-                <p className="text-sm font-semibold">
-                  {getDiaNombreES(fecha)} · {formatDate(new Date(fecha), 'dd/mm')}
-                </p>
-              </div>
-              <ul className="space-y-1">
-                {grupos[fecha].map(c => {
-                  const nombresAlumnos = (c.alumnoIds || [])
-                    .map(id => alumnoMap.get(id))
-                    .filter(Boolean)
-                    .map(a => getNombreCompleto(a))
-                    .join(', ');
-                  return (
-                    <li
-                      key={c.id}
-                      className="p-2 bg-slate-50 rounded-lg border flex justify-between items-center"
-                    >
-                      <div>
-                        <p className="font-semibold">{c.hora || '—'} - {nombresAlumnos || '—'}</p>
-                        <p className="text-xs text-slate-500">
-                          {c.tipo} · {c.deporte || 'Pádel'} · {c.cancha || 'N/A'} · {c.estado}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => onEdit?.(c)}
-                        className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-100"
-                      >
-                        Editar
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
-
     function Grupos({ alumnos, user }) {
     console.log("Componente Grupos se está renderizando...");
   // --- Estados del Componente ---
@@ -1544,293 +1348,192 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
       );
     }
     
-    function Perfil({ perfil, alumnos, onUpdate, user, setToast, onExport, onImport }) {
-  const { useRef } = React;
-  const fileInputRef = useRef(null);
-  
-  // Estado para el formulario principal del perfil
-  const [form, setForm] = useState(perfil);
+    function Perfil({ perfil, onUpdate, user, setToast, onExport, onImport }) {
+      const { useRef } = React; // Asegúrate de tener useRef disponible
+      const [form, setForm] = useState(perfil);
+      const fileInputRef = useRef(null); // <-- AGREGA ESTA LÍNEA
 
-  // Estados para el Centro de Comunicaciones
-  const [plantillas, setPlantillas] = useState([]);
-  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
-  const [mensajePersonalizado, setMensajePersonalizado] = useState("");
-  const [destinatarios, setDestinatarios] = useState([]);
-  const [busquedaAlumno, setBusquedaAlumno] = useState("");
-  const [listaBusquedaAbierta, setListaBusquedaAbierta] = useState(false);
+      
+      useEffect(() => {
+        const defaultPerfil = initialState.perfil;
+        setForm({
+            ...defaultPerfil,
+            ...perfil,
+            datosBancarios: { ...defaultPerfil.datosBancarios, ...(perfil.datosBancarios || {}) },
+            horarioLaboral: perfil.horarioLaboral || defaultPerfil.horarioLaboral,
+        });
+      }, [perfil]);
 
-  // Carga las plantillas de mensajes desde Firebase
-  useEffect(() => {
-    if (!user) return;
-    const plantillasCollection = db.collection('users').doc(user.uid).collection('plantillas');
-    const unsubscribe = plantillasCollection.onSnapshot(snapshot => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setPlantillas(data);
-    });
-    return () => unsubscribe();
-  }, [user]);
+      const handleChange = (e) => {
+        const { name, value } = e.target;
+        setForm(prev => ({ ...prev, [name]: value }));
+      };
 
-  // Sincroniza el formulario del perfil con los datos que vienen de MainApp
-  useEffect(() => {
-    const defaultPerfil = initialState.perfil;
-    setForm({
-        ...defaultPerfil, ...perfil,
-        datosBancarios: { ...defaultPerfil.datosBancarios, ...(perfil.datosBancarios || {}) },
-        horarioLaboral: perfil.horarioLaboral || defaultPerfil.horarioLaboral,
-    });
-  }, [perfil]);
+      const handlePrecioChange = (e) => {
+        const { name, value } = e.target;
+        setForm(prev => ({ ...prev, precios: { ...prev.precios, [name]: value } }));
+      };
+      const handlePrecioMensualChange = (e) => {
+        const { name, value } = e.target;
+        setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value } }));
+      };
+        
+      const handleDatosBancariosChange = (e) => {
+        const { name, value } = e.target;
+        setForm(prev => ({ ...prev, datosBancarios: { ...prev.datosBancarios, [name]: value } }));
+      };
 
-  // Lógica de búsqueda para el selector de alumnos
-  const alumnosFiltrados = useMemo(() => {
-    if (!busquedaAlumno) return [];
-    // Asegúrate de que 'alumnos' exista antes de filtrar
-    return (alumnos || []).filter(a => a.estado === 'activo' && getNombreCompleto(a).toLowerCase().includes(busquedaAlumno.toLowerCase()));
-  }, [busquedaAlumno, alumnos]);
+      const handleHorarioChange = (index, campo, valor) => {
+        setForm(prev => {
+            const nuevoHorario = [...prev.horarioLaboral];
+            nuevoHorario[index] = { ...nuevoHorario[index], [campo]: valor };
+            return { ...prev, horarioLaboral: nuevoHorario };
+        });
+      };
+        
+      const handleCopyToClipboard = (text) => {
+        navigator.clipboard.writeText(text).then(() => {
+            setToast("¡Copiado al portapapeles!");
+        }, (err) => {
+            setToast("Error al copiar");
+            console.error('Error al copiar: ', err);
+        });
+      };
 
-  // Funciones para manejar la selección de destinatarios
-  const handleAgregarDestinatario = (alumno) => {
-    if (!destinatarios.find(d => d.id === alumno.id)) {
-      setDestinatarios([...destinatarios, alumno]);
-    }
-    setBusquedaAlumno("");
-    setListaBusquedaAbierta(false);
-  };
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        onUpdate(form);
+      };
 
-  const handleQuitarDestinatario = (alumnoId) => {
-    setDestinatarios(destinatarios.filter(d => d.id !== alumnoId));
-  };
-  const handleSendMessage = (destinatario) => {
-    if (!mensajePersonalizado.trim()) {
-        alert("El mensaje no puede estar vacío.");
-        return;
-    }
+      const handlePasswordReset = () => {
+        if(user && user.email) {
+            auth.sendPasswordResetEmail(user.email)
+                .then(() => setToast("Email para restablecer contraseña enviado."))
+                .catch((error) => setToast(`Error: ${error.message}`));
+        }
+      };
 
-    // Reemplaza la variable {nombre_alumno} por el nombre real
-    const mensajeFinal = mensajePersonalizado.replace(/{nombre_alumno}/g, destinatario.nombre || '');
-    
-    // Genera y abre el enlace de WhatsApp
-    const link = waLink(destinatario.telefono, mensajeFinal);
-    if (link) {
-        window.open(link, '_blank');
-    } else {
-        alert(`No se pudo generar el enlace para ${getNombreCompleto(destinatario)} porque no tiene un número de teléfono válido.`);
-    }
-};
-  // --- OTRAS FUNCIONES DEL PERFIL (NO CAMBIAN) ---
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
-  };
-  const handlePrecioChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, precios: { ...prev.precios, [name]: value } }));
-  };
-  const handlePrecioMensualChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value } }));
-  };
-  const handleDatosBancariosChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, datosBancarios: { ...prev.datosBancarios, [name]: value } }));
-  };
-  const handleHorarioChange = (index, campo, valor) => {
-    setForm(prev => {
-        const nuevoHorario = [...prev.horarioLaboral];
-        nuevoHorario[index] = { ...nuevoHorario[index], [campo]: valor };
-        return { ...prev, horarioLaboral: nuevoHorario };
-    });
-  };
-  const handleCopyToClipboard = (text) => {
-    navigator.clipboard.writeText(text).then(() => {
-        setToast("¡Copiado al portapapeles!");
-    }, (err) => {
-        setToast("Error al copiar");
-        console.error('Error al copiar: ', err);
-    });
-  };
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onUpdate(form);
-  };
-  const handlePasswordReset = () => {
-    if(user && user.email) {
-        auth.sendPasswordResetEmail(user.email)
-            .then(() => setToast("Email para restablecer contraseña enviado."))
-            .catch((error) => setToast(`Error: ${error.message}`));
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
-      {/* --- COLUMNA IZQUIERDA --- */}
-      <div className="flex flex-col gap-6">
-        <Card title="Perfil y Configuración">
-            <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
-            <div className="grid gap-3">
-              <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-            </div>
-            <div className="mt-6 border-t pt-6">
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Cuenta</h4>
+      return (
+        <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
+          <div className="flex flex-col gap-6">
+            <Card title="Perfil y Configuración">
+                <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
                 <div className="grid gap-3">
-                  <div>
-                    <label className="text-sm text-slate-600">Email de la cuenta</label>
-                    <p className="w-full bg-slate-100 rounded-lg px-3 py-2 text-slate-700">{user?.email}</p>
-                  </div>
-                  <div><button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">Restablecer Contraseña</button></div>
+                  <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
                 </div>
-            </div>
-        </Card>
-        
-        <Card title="Datos Bancarios para Transferencias">
-            <div className="grid gap-4">
-                {['alias', 'cbu', 'banco', 'titular'].map(field => (
-                    <div key={field}>
-                        <label className="text-sm font-medium text-slate-600 capitalize">{field}</label>
-                        <div className="flex gap-2 mt-1">
-                            <input type="text" name={field} value={form.datosBancarios[field]} onChange={handleDatosBancariosChange} className="w-full border rounded-lg px-3 py-2" />
-                            <button type="button" onClick={() => handleCopyToClipboard(form.datosBancarios[field])} className="px-3 py-2 rounded-lg border text-sm hover:bg-slate-100">Copiar</button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </Card>
-        
-        <Card title="Centro de Comunicaciones">
-            <div className="grid gap-4">
-                <div>
-                    <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
-                    <select 
-                        className="w-full mt-1 border rounded-lg px-3 py-2"
-                        value={plantillaSeleccionada ? plantillaSeleccionada.id : ""}
-                        onChange={(e) => {
-                            const idPlantilla = e.target.value;
-                            const plantillaElegida = plantillas.find(p => p.id === idPlantilla);
-                            if (plantillaElegida) {
-                                setPlantillaSeleccionada(plantillaElegida);
-                                setMensajePersonalizado(plantillaElegida.texto);
-                            } else {
-                                setPlantillaSeleccionada(null);
-                                setMensajePersonalizado("");
-                            }
-                        }}
-                    >
-                        <option value="">Seleccionar plantilla...</option>
-                        {plantillas.map(p => (<option key={p.id} value={p.id}>{p.titulo}</option>))}
-                    </select>
-                    <textarea value={mensajePersonalizado} onChange={(e) => setMensajePersonalizado(e.target.value)} className="w-full mt-2 border rounded-lg px-3 py-2" rows={5} placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar." />
-                </div>
-                <div className="relative">
-                    <label className="text-sm font-medium text-slate-600">2. Selecciona los destinatarios</label>
-                    <input type="text" value={busquedaAlumno} onChange={(e) => { setBusquedaAlumno(e.target.value); setListaBusquedaAbierta(true); }} onBlur={() => setTimeout(() => setListaBusquedaAbierta(false), 200)} placeholder="Escribe para buscar alumnos..." className="w-full mt-1 border rounded-lg px-3 py-2" />
-                    {listaBusquedaAbierta && busquedaAlumno && (
-                        <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
-                            {alumnosFiltrados.length > 0 ? alumnosFiltrados.map(a => (
-                                <li key={a.id} onMouseDown={() => handleAgregarDestinatario(a)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">{getNombreCompleto(a)}</li>
-                            )) : <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>}
-                        </ul>
-                    )}
-                    <div className="mt-2">
-                        <p className="text-xs font-semibold text-slate-500">Destinatarios ({destinatarios.length}):</p>
-                        {destinatarios.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-1 p-2 border rounded-lg bg-slate-50">
-                                {destinatarios.map(d => (
-                                    <span key={d.id} className="flex items-center gap-2 bg-sky-100 text-sky-800 text-sm rounded-full px-2 py-1">
-                                        {getNombreCompleto(d)}
-                                        <button type="button" onClick={() => handleQuitarDestinatario(d.id)} className="w-4 h-4 rounded-full bg-sky-200 text-sky-800 flex items-center justify-center font-bold text-xs">x</button>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-                {/* Sección 3: Envío de Mensajes */}
-<div>
-    <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
-    <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2 max-h-48 overflow-y-auto">
-        {destinatarios.length > 0 ? (
-            destinatarios.map(destinatario => (
-                <button 
-                    key={destinatario.id}
-                    type="button"
-                    onClick={() => handleSendMessage(destinatario)}
-                    className="w-full flex justify-between items-center text-left px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
-                >
-                    <span>Enviar a: <strong>{getNombreCompleto(destinatario)}</strong></span>
-                    <span role="img" aria-label="send">💬</span>
-                </button>
-            ))
-        ) : (
-            <p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>
-        )}
-    </div>
-</div>
-            </div>
-        </Card>
-        
-        <Card title="Gestión de Datos">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button onClick={onExport} className="w-full px-4 py-2 rounded-lg border bg-blue-600 text-white hover:bg-blue-700">Exportar Datos (Backup)</button>
-                <button onClick={() => fileInputRef.current.click()} className="w-full px-4 py-2 rounded-lg border bg-amber-600 text-white hover:bg-amber-700">Importar Datos</button>
-                <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={onImport} />
-            </div>
-            <p className="text-xs text-slate-500 mt-3">**Atención:** La importación de datos reemplazará toda la información existente.</p>
-        </Card>
-      </div>
-
-      {/* --- COLUMNA DERECHA --- */}
-      <div className="flex flex-col gap-6">
-          <Card title="Configuración General">
-                <div className="grid gap-4">
-                     <div>
-                        <h4 className="text-md font-semibold text-slate-700 mb-2">Modalidad de Cobro Principal</h4>
-                        <select name="metodoCobro" value={form.metodoCobro} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">
-                          <option value="porClase">Por Clase</option>
-                          <option value="mensual">Mensual</option>
-                        </select>
-                     </div>
-                     <div>
-                        <h4 className="text-md font-semibold text-slate-700 mb-2">Canchas / Ubicaciones</h4>
-                        <textarea name="canchas" value={form.canchas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={4} placeholder="Una ubicación por línea..."></textarea>
-                     </div>
-                </div>
-          </Card>
-          <Card title="Precios por Clase">
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-sm text-slate-600">Individual</label><input type="number" name="individual" value={form.precios.individual} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div><label className="text-sm text-slate-600">Dupla</label><input type="number" name="dupla" value={form.precios.dupla} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div><label className="text-sm text-slate-600">Trío</label><input type="number" name="trio" value={form.precios.trio} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div><label className="text-sm text-slate-600">Cuarteto</label><input type="number" name="cuarteto" value={form.precios.cuarteto} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div className="col-span-2"><label className="text-sm text-slate-600">Escuelita</label><input type="number" name="escuelita" value={form.precios.escuelita} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-            </div>
-        </Card>
-         <Card title="Precios Mensuales">
-             <div className="grid md:grid-cols-2 gap-3">
-                {FRECUENCIAS_MENSUALES.map(f => (
-                    <div key={f.value}><label className="text-sm text-slate-600">{f.label}</label><input type="number" name={f.value} value={form.preciosMensuales[f.value]} onChange={handlePrecioMensualChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                ))}
-            </div>
-        </Card>
-          <Card title="Horario Laboral General">
-              <div className="space-y-3">
-                  {(form.horarioLaboral || []).map((item, index) => (
-                      <div key={item.dia} className="grid grid-cols-[80px_1fr_1fr_auto] items-center gap-3">
-                          <label htmlFor={`activo-${index}`} className="font-semibold text-sm flex items-center">{item.dia}</label>
-                          <input type="time" value={item.desde} onChange={(e) => handleHorarioChange(index, 'desde', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
-                          <input type="time" value={item.hasta} onChange={(e) => handleHorarioChange(index, 'hasta', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
-                          <input type="checkbox" id={`activo-${index}`} checked={item.activo} onChange={(e) => handleHorarioChange(index, 'activo', e.target.checked)} className="form-checkbox h-5 w-5" />
+                <div className="mt-6 border-t pt-6">
+                    <h4 className="text-md font-semibold text-slate-700 mb-2">Cuenta</h4>
+                    <div className="grid gap-3">
+                      <div>
+                        <label className="text-sm text-slate-600">Email de la cuenta</label>
+                        <p className="w-full bg-slate-100 rounded-lg px-3 py-2 text-slate-700">{user?.email}</p>
                       </div>
-                  ))}
-              </div>
-          </Card>
-          <div className="mt-6 flex justify-end">
-            <button type="submit" className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold">Guardar Todos los Cambios</button>
+                      <div><button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">Restablecer Contraseña</button></div>
+                    </div>
+                </div>
+            </Card>
+
+            <Card title="Datos Bancarios para Transferencias">
+                <div className="grid gap-4">
+                    {['alias', 'cbu', 'banco', 'titular'].map(field => (
+                        <div key={field}>
+                            <label className="text-sm font-medium text-slate-600 capitalize">{field}</label>
+                            <div className="flex gap-2 mt-1">
+                                <input type="text" name={field} value={form.datosBancarios[field]} onChange={handleDatosBancariosChange} className="w-full border rounded-lg px-3 py-2" />
+                                <button type="button" onClick={() => handleCopyToClipboard(form.datosBancarios[field])} className="px-3 py-2 rounded-lg border text-sm hover:bg-slate-100">Copiar</button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </Card>
+
+            <Card title="Precios por Clase">
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-sm text-slate-600">Individual</label><input type="number" name="individual" value={form.precios.individual} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div><label className="text-sm text-slate-600">Dupla</label><input type="number" name="dupla" value={form.precios.dupla} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div><label className="text-sm text-slate-600">Trío</label><input type="number" name="trio" value={form.precios.trio} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div><label className="text-sm text-slate-600">Cuarteto</label><input type="number" name="cuarteto" value={form.precios.cuarteto} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                  <div className="col-span-2"><label className="text-sm text-slate-600">Escuelita</label><input type="number" name="escuelita" value={form.precios.escuelita} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                </div>
+            </Card>
+             <Card title="Precios Mensuales">
+                 <div className="grid md:grid-cols-2 gap-3">
+                    {FRECUENCIAS_MENSUALES.map(f => (
+                        <div key={f.value}><label className="text-sm text-slate-600">{f.label}</label><input type="number" name={f.value} value={form.preciosMensuales[f.value]} onChange={handlePrecioMensualChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                    ))}
+                </div>
+            </Card>
           </div>
-      </div>
-    </form>
-  );
-}
+          <Card title="Gestión de Datos">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <button 
+            onClick={onExport}
+            className="w-full px-4 py-2 rounded-lg border bg-blue-600 text-white hover:bg-blue-700"
+        >
+            Exportar Datos (Backup)
+        </button>
+        <button 
+            onClick={() => fileInputRef.current.click()}
+            className="w-full px-4 py-2 rounded-lg border bg-amber-600 text-white hover:bg-amber-700"
+        >
+            Importar Datos
+        </button>
+        <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept=".json" 
+            onChange={onImport} 
+        />
+    </div>
+    <p className="text-xs text-slate-500 mt-3">
+        **Atención:** La importación de datos reemplazará toda la información existente.
+    </p>
+</Card>
+
+          <div className="flex flex-col gap-6">
+              <Card title="Horario Laboral General">
+                  <div className="space-y-3">
+                      {(form.horarioLaboral || []).map((item, index) => (
+                          <div key={item.dia} className="grid grid-cols-[80px_1fr_1fr_auto] items-center gap-3">
+                              <label htmlFor={`activo-${index}`} className="font-semibold text-sm flex items-center">{item.dia}</label>
+                              <input type="time" value={item.desde} onChange={(e) => handleHorarioChange(index, 'desde', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
+                              <input type="time" value={item.hasta} onChange={(e) => handleHorarioChange(index, 'hasta', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
+                              <input type="checkbox" id={`activo-${index}`} checked={item.activo} onChange={(e) => handleHorarioChange(index, 'activo', e.target.checked)} className="form-checkbox h-5 w-5" />
+                          </div>
+                      ))}
+                  </div>
+              </Card>
+              
+              <Card title="Configuración General">
+                    <div className="grid gap-4">
+                         <div>
+                            <h4 className="text-md font-semibold text-slate-700 mb-2">Modalidad de Cobro Principal</h4>
+                            <select name="metodoCobro" value={form.metodoCobro} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">
+                              <option value="porClase">Por Clase</option>
+                              <option value="mensual">Mensual</option>
+                            </select>
+                         </div>
+                         <div>
+                            <h4 className="text-md font-semibold text-slate-700 mb-2">Canchas / Ubicaciones</h4>
+                            <textarea name="canchas" value={form.canchas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={4} placeholder="Una ubicación por línea..."></textarea>
+                         </div>
+                    </div>
+              </Card>
+              
+              <Card title="Políticas de Cancelación">
+                  <textarea name="politicasCancelacion" value={form.politicasCancelacion} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={6} placeholder="Escribe aquí tus reglas sobre cancelaciones, recupero de clases, etc." ></textarea>
+              </Card>
+
+              <div className="mt-6 flex justify-end">
+                <button type="submit" className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold">Guardar Todos los Cambios</button>
+              </div>
+          </div>
+        </form>
+      );
+    }
 
     function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave }) {
   const [pagos, setPagos] = useState({});
@@ -2054,14 +1757,11 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
         return (
             <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4">
                 <div className="w-full max-w-sm mx-auto">
-                    <div className="flex flex-col items-center mb-8"> {/* Aumentamos un poco el margen inferior */}
-    <img 
-      src="coachexpro logos N.png" // <-- EL NOMBRE DE TU NUEVO ARCHIVO
-      alt="Coachex-Pro Logo" 
-      className="w-64" // Ajusta el ancho aquí si es necesario
-    />
-    <p className="text-slate-500 text-lg mt-2">Gestión de Profesores</p>
-</div>
+                    <div className="flex flex-col items-center mb-6">
+                        <img src={logoCircularBase64} alt="Logo Circular" className="w-20 h-20 rounded-full mb-4"/>
+                        <img src={logoCoachexBase64} alt="Coachex-Pro Logo" style={{ height: '32px' }}/>
+                        <p className="text-slate-600 mt-1">Gestión de Profesores</p>
+                    </div>
                     
                     <div className="bg-white rounded-2xl shadow-lg p-8">
                         {view === 'login' && (
@@ -2328,7 +2028,7 @@ const goToEditClass = (clase) => {
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
             {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
             {current === "reportes" && <Reportes pagos={state.pagos} gastos={state.gastos} alumnos={state.alumnos} clases={state.clases} />}
-            {current === "perfil" && <Perfil perfil={state.perfil} alumnos={state.alumnos} onUpdate={perfilCrud.update} user={user} setToast={setToast} onExport={handleExportData} onImport={handleImportData} />}
+            {current === "perfil" && <Perfil perfil={state.perfil} onUpdate={perfilCrud.update} user={user} setToast={setToast} onExport={handleExportData} onImport={handleImportData} />}
           </main>
           <Toast msg={toast} onClose={() => setToast("")} />
           <Modal isOpen={!!deletingInfo.id} title={`Eliminar ${deletingInfo.type}`} onConfirm={confirmDelete} onCancel={() => setDeletingInfo({ id: null, type: null, collection: null })} >
