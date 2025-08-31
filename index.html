@@ -448,9 +448,14 @@ const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", d
 }
     
 
-function AlumnoFichaModal({ alumno, clases, pagos, onClose }) {
+function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onClose }) {
   if (!alumno) return null;
-  const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id)), [clases, alumno]);
+  const alumnoMap = useMemo(() => {
+  const m = new Map();
+  (alumnos || []).forEach(a => m.set(a.id, getNombreCompleto(a)));
+  return m;
+}, [alumnos]);
+const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id)), [clases, alumno]);
   const pagosDelAlumno  = useMemo(() => (pagos  || []).filter(p => p.alumnoId === alumno.id), [pagos, alumno]);
   const pagosPorClase = useMemo(() => {
     const map = new Map();
@@ -516,7 +521,9 @@ function AlumnoFichaModal({ alumno, clases, pagos, onClose }) {
         </Card>
       </div>
     </Modal>
-  );
+  
+      <AlumnoFichaModal alumno={alumnoFicha} clases={state.clases} pagos={state.pagos} alumnos={alumnos} onClose={() => setAlumnoFicha(null)} />
+    );
 }
 
 function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHorarioLaboral }) {
