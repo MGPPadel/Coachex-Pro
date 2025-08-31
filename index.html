@@ -594,14 +594,26 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
       }
 
       const getNextDateForDay = (dayName) => {
-        const dayIndex = DIAS_SEMANA_NOMBRES.indexOf(dayName);
-        if (dayIndex === -1) return new Date();
-        const today = new Date();
-        const resultDate = new Date(today.getTime());
-        const daysUntilTarget = (dayIndex - today.getDay() + 7) % 7;
-        resultDate.setDate(today.getDate() + (daysUntilTarget === 0 ? 7 : daysUntilTarget));
-        return resultDate;
-      };
+    const today = new Date();
+    const todayDayIndex = today.getDay(); // El índice de JS donde Domingo=0, Lunes=1, etc.
+
+    // Nuestro array tiene Lunes=0, Martes=1, etc. Necesitamos convertirlo al de JS.
+    const targetDayIndex = (DIAS_SEMANA_NOMBRES.indexOf(dayName) + 1) % 7;
+
+    // Calculamos la diferencia de días.
+    let dayDifference = targetDayIndex - todayDayIndex;
+
+    // Si la diferencia es negativa o cero, significa que el día ya pasó esta semana
+    // o es hoy, así que le sumamos 7 para que agende para la semana siguiente.
+    if (dayDifference <= 0) {
+        dayDifference += 7;
+    }
+
+    const resultDate = new Date(today.getTime());
+    resultDate.setDate(today.getDate() + dayDifference);
+    
+    return resultDate;
+};
 
       function handleScheduleSelect(horario) {
         const proximaFecha = getNextDateForDay(horario.dia);
@@ -1348,192 +1360,293 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
       );
     }
     
-    function Perfil({ perfil, onUpdate, user, setToast, onExport, onImport }) {
-      const { useRef } = React; // Asegúrate de tener useRef disponible
-      const [form, setForm] = useState(perfil);
-      const fileInputRef = useRef(null); // <-- AGREGA ESTA LÍNEA
+    function Perfil({ perfil, alumnos, onUpdate, user, setToast, onExport, onImport }) {
+  const { useRef } = React;
+  const fileInputRef = useRef(null);
+  
+  // Estado para el formulario principal del perfil
+  const [form, setForm] = useState(perfil);
 
-      
-      useEffect(() => {
-        const defaultPerfil = initialState.perfil;
-        setForm({
-            ...defaultPerfil,
-            ...perfil,
-            datosBancarios: { ...defaultPerfil.datosBancarios, ...(perfil.datosBancarios || {}) },
-            horarioLaboral: perfil.horarioLaboral || defaultPerfil.horarioLaboral,
-        });
-      }, [perfil]);
+  // Estados para el Centro de Comunicaciones
+  const [plantillas, setPlantillas] = useState([]);
+  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
+  const [mensajePersonalizado, setMensajePersonalizado] = useState("");
+  const [destinatarios, setDestinatarios] = useState([]);
+  const [busquedaAlumno, setBusquedaAlumno] = useState("");
+  const [listaBusquedaAbierta, setListaBusquedaAbierta] = useState(false);
 
-      const handleChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, [name]: value }));
-      };
+  // Carga las plantillas de mensajes desde Firebase
+  useEffect(() => {
+    if (!user) return;
+    const plantillasCollection = db.collection('users').doc(user.uid).collection('plantillas');
+    const unsubscribe = plantillasCollection.onSnapshot(snapshot => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setPlantillas(data);
+    });
+    return () => unsubscribe();
+  }, [user]);
 
-      const handlePrecioChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, precios: { ...prev.precios, [name]: value } }));
-      };
-      const handlePrecioMensualChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value } }));
-      };
-        
-      const handleDatosBancariosChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, datosBancarios: { ...prev.datosBancarios, [name]: value } }));
-      };
+  // Sincroniza el formulario del perfil con los datos que vienen de MainApp
+  useEffect(() => {
+    const defaultPerfil = initialState.perfil;
+    setForm({
+        ...defaultPerfil, ...perfil,
+        datosBancarios: { ...defaultPerfil.datosBancarios, ...(perfil.datosBancarios || {}) },
+        horarioLaboral: perfil.horarioLaboral || defaultPerfil.horarioLaboral,
+    });
+  }, [perfil]);
 
-      const handleHorarioChange = (index, campo, valor) => {
-        setForm(prev => {
-            const nuevoHorario = [...prev.horarioLaboral];
-            nuevoHorario[index] = { ...nuevoHorario[index], [campo]: valor };
-            return { ...prev, horarioLaboral: nuevoHorario };
-        });
-      };
-        
-      const handleCopyToClipboard = (text) => {
-        navigator.clipboard.writeText(text).then(() => {
-            setToast("¡Copiado al portapapeles!");
-        }, (err) => {
-            setToast("Error al copiar");
-            console.error('Error al copiar: ', err);
-        });
-      };
+  // Lógica de búsqueda para el selector de alumnos
+  const alumnosFiltrados = useMemo(() => {
+    if (!busquedaAlumno) return [];
+    // Asegúrate de que 'alumnos' exista antes de filtrar
+    return (alumnos || []).filter(a => a.estado === 'activo' && getNombreCompleto(a).toLowerCase().includes(busquedaAlumno.toLowerCase()));
+  }, [busquedaAlumno, alumnos]);
 
-      const handleSubmit = (e) => {
-        e.preventDefault();
-        onUpdate(form);
-      };
-
-      const handlePasswordReset = () => {
-        if(user && user.email) {
-            auth.sendPasswordResetEmail(user.email)
-                .then(() => setToast("Email para restablecer contraseña enviado."))
-                .catch((error) => setToast(`Error: ${error.message}`));
-        }
-      };
-
-      return (
-        <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
-          <div className="flex flex-col gap-6">
-            <Card title="Perfil y Configuración">
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
-                <div className="grid gap-3">
-                  <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                </div>
-                <div className="mt-6 border-t pt-6">
-                    <h4 className="text-md font-semibold text-slate-700 mb-2">Cuenta</h4>
-                    <div className="grid gap-3">
-                      <div>
-                        <label className="text-sm text-slate-600">Email de la cuenta</label>
-                        <p className="w-full bg-slate-100 rounded-lg px-3 py-2 text-slate-700">{user?.email}</p>
-                      </div>
-                      <div><button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">Restablecer Contraseña</button></div>
-                    </div>
-                </div>
-            </Card>
-
-            <Card title="Datos Bancarios para Transferencias">
-                <div className="grid gap-4">
-                    {['alias', 'cbu', 'banco', 'titular'].map(field => (
-                        <div key={field}>
-                            <label className="text-sm font-medium text-slate-600 capitalize">{field}</label>
-                            <div className="flex gap-2 mt-1">
-                                <input type="text" name={field} value={form.datosBancarios[field]} onChange={handleDatosBancariosChange} className="w-full border rounded-lg px-3 py-2" />
-                                <button type="button" onClick={() => handleCopyToClipboard(form.datosBancarios[field])} className="px-3 py-2 rounded-lg border text-sm hover:bg-slate-100">Copiar</button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </Card>
-
-            <Card title="Precios por Clase">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-sm text-slate-600">Individual</label><input type="number" name="individual" value={form.precios.individual} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Dupla</label><input type="number" name="dupla" value={form.precios.dupla} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Trío</label><input type="number" name="trio" value={form.precios.trio} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Cuarteto</label><input type="number" name="cuarteto" value={form.precios.cuarteto} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div className="col-span-2"><label className="text-sm text-slate-600">Escuelita</label><input type="number" name="escuelita" value={form.precios.escuelita} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                </div>
-            </Card>
-             <Card title="Precios Mensuales">
-                 <div className="grid md:grid-cols-2 gap-3">
-                    {FRECUENCIAS_MENSUALES.map(f => (
-                        <div key={f.value}><label className="text-sm text-slate-600">{f.label}</label><input type="number" name={f.value} value={form.preciosMensuales[f.value]} onChange={handlePrecioMensualChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                    ))}
-                </div>
-            </Card>
-          </div>
-          <Card title="Gestión de Datos">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <button 
-            onClick={onExport}
-            className="w-full px-4 py-2 rounded-lg border bg-blue-600 text-white hover:bg-blue-700"
-        >
-            Exportar Datos (Backup)
-        </button>
-        <button 
-            onClick={() => fileInputRef.current.click()}
-            className="w-full px-4 py-2 rounded-lg border bg-amber-600 text-white hover:bg-amber-700"
-        >
-            Importar Datos
-        </button>
-        <input 
-            type="file" 
-            ref={fileInputRef} 
-            className="hidden" 
-            accept=".json" 
-            onChange={onImport} 
-        />
-    </div>
-    <p className="text-xs text-slate-500 mt-3">
-        **Atención:** La importación de datos reemplazará toda la información existente.
-    </p>
-</Card>
-
-          <div className="flex flex-col gap-6">
-              <Card title="Horario Laboral General">
-                  <div className="space-y-3">
-                      {(form.horarioLaboral || []).map((item, index) => (
-                          <div key={item.dia} className="grid grid-cols-[80px_1fr_1fr_auto] items-center gap-3">
-                              <label htmlFor={`activo-${index}`} className="font-semibold text-sm flex items-center">{item.dia}</label>
-                              <input type="time" value={item.desde} onChange={(e) => handleHorarioChange(index, 'desde', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
-                              <input type="time" value={item.hasta} onChange={(e) => handleHorarioChange(index, 'hasta', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
-                              <input type="checkbox" id={`activo-${index}`} checked={item.activo} onChange={(e) => handleHorarioChange(index, 'activo', e.target.checked)} className="form-checkbox h-5 w-5" />
-                          </div>
-                      ))}
-                  </div>
-              </Card>
-              
-              <Card title="Configuración General">
-                    <div className="grid gap-4">
-                         <div>
-                            <h4 className="text-md font-semibold text-slate-700 mb-2">Modalidad de Cobro Principal</h4>
-                            <select name="metodoCobro" value={form.metodoCobro} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">
-                              <option value="porClase">Por Clase</option>
-                              <option value="mensual">Mensual</option>
-                            </select>
-                         </div>
-                         <div>
-                            <h4 className="text-md font-semibold text-slate-700 mb-2">Canchas / Ubicaciones</h4>
-                            <textarea name="canchas" value={form.canchas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={4} placeholder="Una ubicación por línea..."></textarea>
-                         </div>
-                    </div>
-              </Card>
-              
-              <Card title="Políticas de Cancelación">
-                  <textarea name="politicasCancelacion" value={form.politicasCancelacion} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={6} placeholder="Escribe aquí tus reglas sobre cancelaciones, recupero de clases, etc." ></textarea>
-              </Card>
-
-              <div className="mt-6 flex justify-end">
-                <button type="submit" className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold">Guardar Todos los Cambios</button>
-              </div>
-          </div>
-        </form>
-      );
+  // Funciones para manejar la selección de destinatarios
+  const handleAgregarDestinatario = (alumno) => {
+    if (!destinatarios.find(d => d.id === alumno.id)) {
+      setDestinatarios([...destinatarios, alumno]);
     }
+    setBusquedaAlumno("");
+    setListaBusquedaAbierta(false);
+  };
+
+  const handleQuitarDestinatario = (alumnoId) => {
+    setDestinatarios(destinatarios.filter(d => d.id !== alumnoId));
+  };
+  const handleSendMessage = (destinatario) => {
+    if (!mensajePersonalizado.trim()) {
+        alert("El mensaje no puede estar vacío.");
+        return;
+    }
+
+    // Reemplaza la variable {nombre_alumno} por el nombre real
+    const mensajeFinal = mensajePersonalizado.replace(/{nombre_alumno}/g, destinatario.nombre || '');
+    
+    // Genera y abre el enlace de WhatsApp
+    const link = waLink(destinatario.telefono, mensajeFinal);
+    if (link) {
+        window.open(link, '_blank');
+    } else {
+        alert(`No se pudo generar el enlace para ${getNombreCompleto(destinatario)} porque no tiene un número de teléfono válido.`);
+    }
+};
+  // --- OTRAS FUNCIONES DEL PERFIL (NO CAMBIAN) ---
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+  const handlePrecioChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, precios: { ...prev.precios, [name]: value } }));
+  };
+  const handlePrecioMensualChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value } }));
+  };
+  const handleDatosBancariosChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, datosBancarios: { ...prev.datosBancarios, [name]: value } }));
+  };
+  const handleHorarioChange = (index, campo, valor) => {
+    setForm(prev => {
+        const nuevoHorario = [...prev.horarioLaboral];
+        nuevoHorario[index] = { ...nuevoHorario[index], [campo]: valor };
+        return { ...prev, horarioLaboral: nuevoHorario };
+    });
+  };
+  const handleCopyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+        setToast("¡Copiado al portapapeles!");
+    }, (err) => {
+        setToast("Error al copiar");
+        console.error('Error al copiar: ', err);
+    });
+  };
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onUpdate(form);
+  };
+  const handlePasswordReset = () => {
+    if(user && user.email) {
+        auth.sendPasswordResetEmail(user.email)
+            .then(() => setToast("Email para restablecer contraseña enviado."))
+            .catch((error) => setToast(`Error: ${error.message}`));
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
+      {/* --- COLUMNA IZQUIERDA --- */}
+      <div className="flex flex-col gap-6">
+        <Card title="Perfil y Configuración">
+            <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
+            <div className="grid gap-3">
+              <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+            </div>
+            <div className="mt-6 border-t pt-6">
+                <h4 className="text-md font-semibold text-slate-700 mb-2">Cuenta</h4>
+                <div className="grid gap-3">
+                  <div>
+                    <label className="text-sm text-slate-600">Email de la cuenta</label>
+                    <p className="w-full bg-slate-100 rounded-lg px-3 py-2 text-slate-700">{user?.email}</p>
+                  </div>
+                  <div><button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">Restablecer Contraseña</button></div>
+                </div>
+            </div>
+        </Card>
+        
+        <Card title="Datos Bancarios para Transferencias">
+            <div className="grid gap-4">
+                {['alias', 'cbu', 'banco', 'titular'].map(field => (
+                    <div key={field}>
+                        <label className="text-sm font-medium text-slate-600 capitalize">{field}</label>
+                        <div className="flex gap-2 mt-1">
+                            <input type="text" name={field} value={form.datosBancarios[field]} onChange={handleDatosBancariosChange} className="w-full border rounded-lg px-3 py-2" />
+                            <button type="button" onClick={() => handleCopyToClipboard(form.datosBancarios[field])} className="px-3 py-2 rounded-lg border text-sm hover:bg-slate-100">Copiar</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </Card>
+        
+        <Card title="Centro de Comunicaciones">
+            <div className="grid gap-4">
+                <div>
+                    <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
+                    <select 
+                        className="w-full mt-1 border rounded-lg px-3 py-2"
+                        value={plantillaSeleccionada ? plantillaSeleccionada.id : ""}
+                        onChange={(e) => {
+                            const idPlantilla = e.target.value;
+                            const plantillaElegida = plantillas.find(p => p.id === idPlantilla);
+                            if (plantillaElegida) {
+                                setPlantillaSeleccionada(plantillaElegida);
+                                setMensajePersonalizado(plantillaElegida.texto);
+                            } else {
+                                setPlantillaSeleccionada(null);
+                                setMensajePersonalizado("");
+                            }
+                        }}
+                    >
+                        <option value="">Seleccionar plantilla...</option>
+                        {plantillas.map(p => (<option key={p.id} value={p.id}>{p.titulo}</option>))}
+                    </select>
+                    <textarea value={mensajePersonalizado} onChange={(e) => setMensajePersonalizado(e.target.value)} className="w-full mt-2 border rounded-lg px-3 py-2" rows={5} placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar." />
+                </div>
+                <div className="relative">
+                    <label className="text-sm font-medium text-slate-600">2. Selecciona los destinatarios</label>
+                    <input type="text" value={busquedaAlumno} onChange={(e) => { setBusquedaAlumno(e.target.value); setListaBusquedaAbierta(true); }} onBlur={() => setTimeout(() => setListaBusquedaAbierta(false), 200)} placeholder="Escribe para buscar alumnos..." className="w-full mt-1 border rounded-lg px-3 py-2" />
+                    {listaBusquedaAbierta && busquedaAlumno && (
+                        <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
+                            {alumnosFiltrados.length > 0 ? alumnosFiltrados.map(a => (
+                                <li key={a.id} onMouseDown={() => handleAgregarDestinatario(a)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">{getNombreCompleto(a)}</li>
+                            )) : <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>}
+                        </ul>
+                    )}
+                    <div className="mt-2">
+                        <p className="text-xs font-semibold text-slate-500">Destinatarios ({destinatarios.length}):</p>
+                        {destinatarios.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-1 p-2 border rounded-lg bg-slate-50">
+                                {destinatarios.map(d => (
+                                    <span key={d.id} className="flex items-center gap-2 bg-sky-100 text-sky-800 text-sm rounded-full px-2 py-1">
+                                        {getNombreCompleto(d)}
+                                        <button type="button" onClick={() => handleQuitarDestinatario(d.id)} className="w-4 h-4 rounded-full bg-sky-200 text-sky-800 flex items-center justify-center font-bold text-xs">x</button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+                {/* Sección 3: Envío de Mensajes */}
+<div>
+    <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
+    <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2 max-h-48 overflow-y-auto">
+        {destinatarios.length > 0 ? (
+            destinatarios.map(destinatario => (
+                <button 
+                    key={destinatario.id}
+                    type="button"
+                    onClick={() => handleSendMessage(destinatario)}
+                    className="w-full flex justify-between items-center text-left px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+                >
+                    <span>Enviar a: <strong>{getNombreCompleto(destinatario)}</strong></span>
+                    <span role="img" aria-label="send">💬</span>
+                </button>
+            ))
+        ) : (
+            <p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>
+        )}
+    </div>
+</div>
+            </div>
+        </Card>
+        
+        <Card title="Gestión de Datos">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button onClick={onExport} className="w-full px-4 py-2 rounded-lg border bg-blue-600 text-white hover:bg-blue-700">Exportar Datos (Backup)</button>
+                <button onClick={() => fileInputRef.current.click()} className="w-full px-4 py-2 rounded-lg border bg-amber-600 text-white hover:bg-amber-700">Importar Datos</button>
+                <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={onImport} />
+            </div>
+            <p className="text-xs text-slate-500 mt-3">**Atención:** La importación de datos reemplazará toda la información existente.</p>
+        </Card>
+      </div>
+
+      {/* --- COLUMNA DERECHA --- */}
+      <div className="flex flex-col gap-6">
+          <Card title="Configuración General">
+                <div className="grid gap-4">
+                     <div>
+                        <h4 className="text-md font-semibold text-slate-700 mb-2">Modalidad de Cobro Principal</h4>
+                        <select name="metodoCobro" value={form.metodoCobro} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">
+                          <option value="porClase">Por Clase</option>
+                          <option value="mensual">Mensual</option>
+                        </select>
+                     </div>
+                     <div>
+                        <h4 className="text-md font-semibold text-slate-700 mb-2">Canchas / Ubicaciones</h4>
+                        <textarea name="canchas" value={form.canchas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={4} placeholder="Una ubicación por línea..."></textarea>
+                     </div>
+                </div>
+          </Card>
+          <Card title="Precios por Clase">
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-sm text-slate-600">Individual</label><input type="number" name="individual" value={form.precios.individual} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Dupla</label><input type="number" name="dupla" value={form.precios.dupla} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Trío</label><input type="number" name="trio" value={form.precios.trio} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Cuarteto</label><input type="number" name="cuarteto" value={form.precios.cuarteto} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div className="col-span-2"><label className="text-sm text-slate-600">Escuelita</label><input type="number" name="escuelita" value={form.precios.escuelita} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+            </div>
+        </Card>
+         <Card title="Precios Mensuales">
+             <div className="grid md:grid-cols-2 gap-3">
+                {FRECUENCIAS_MENSUALES.map(f => (
+                    <div key={f.value}><label className="text-sm text-slate-600">{f.label}</label><input type="number" name={f.value} value={form.preciosMensuales[f.value]} onChange={handlePrecioMensualChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                ))}
+            </div>
+        </Card>
+          <Card title="Horario Laboral General">
+              <div className="space-y-3">
+                  {(form.horarioLaboral || []).map((item, index) => (
+                      <div key={item.dia} className="grid grid-cols-[80px_1fr_1fr_auto] items-center gap-3">
+                          <label htmlFor={`activo-${index}`} className="font-semibold text-sm flex items-center">{item.dia}</label>
+                          <input type="time" value={item.desde} onChange={(e) => handleHorarioChange(index, 'desde', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
+                          <input type="time" value={item.hasta} onChange={(e) => handleHorarioChange(index, 'hasta', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
+                          <input type="checkbox" id={`activo-${index}`} checked={item.activo} onChange={(e) => handleHorarioChange(index, 'activo', e.target.checked)} className="form-checkbox h-5 w-5" />
+                      </div>
+                  ))}
+              </div>
+          </Card>
+          <div className="mt-6 flex justify-end">
+            <button type="submit" className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold">Guardar Todos los Cambios</button>
+          </div>
+      </div>
+    </form>
+  );
+}
 
     function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave }) {
   const [pagos, setPagos] = useState({});
@@ -1757,11 +1870,14 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
         return (
             <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4">
                 <div className="w-full max-w-sm mx-auto">
-                    <div className="flex flex-col items-center mb-6">
-                        <img src={logoCircularBase64} alt="Logo Circular" className="w-20 h-20 rounded-full mb-4"/>
-                        <img src={logoCoachexBase64} alt="Coachex-Pro Logo" style={{ height: '32px' }}/>
-                        <p className="text-slate-600 mt-1">Gestión de Profesores</p>
-                    </div>
+                    <div className="flex flex-col items-center mb-8"> {/* Aumentamos un poco el margen inferior */}
+    <img 
+      src="coachexpro logos N.png" // <-- EL NOMBRE DE TU NUEVO ARCHIVO
+      alt="Coachex-Pro Logo" 
+      className="w-64" // Ajusta el ancho aquí si es necesario
+    />
+    <p className="text-slate-500 text-lg mt-2">Gestión de Profesores</p>
+</div>
                     
                     <div className="bg-white rounded-2xl shadow-lg p-8">
                         {view === 'login' && (
@@ -2028,7 +2144,7 @@ const goToEditClass = (clase) => {
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
             {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
             {current === "reportes" && <Reportes pagos={state.pagos} gastos={state.gastos} alumnos={state.alumnos} clases={state.clases} />}
-            {current === "perfil" && <Perfil perfil={state.perfil} onUpdate={perfilCrud.update} user={user} setToast={setToast} onExport={handleExportData} onImport={handleImportData} />}
+            {current === "perfil" && <Perfil perfil={state.perfil} alumnos={state.alumnos} onUpdate={perfilCrud.update} user={user} setToast={setToast} onExport={handleExportData} onImport={handleImportData} />}
           </main>
           <Toast msg={toast} onClose={() => setToast("")} />
           <Modal isOpen={!!deletingInfo.id} title={`Eliminar ${deletingInfo.type}`} onConfirm={confirmDelete} onCancel={() => setDeletingInfo({ id: null, type: null, collection: null })} >
