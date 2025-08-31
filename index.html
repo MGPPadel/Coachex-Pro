@@ -86,6 +86,7 @@
         precios: { individual: "5000", dupla: "4000", trio: "3500", cuarteto: "3000", escuelita: "2500" },
         preciosMensuales: { "1xSemana": "18000", "2xSemana": "32000", "3xSemana": "45000", libre: "55000" },
         metodoCobro: "porClase",
+        modoTrabajo: "Independiente",
         canchas: "Club A - Cancha 1\nClub B - Cancha 2",
         // --- NUEVOS CAMPOS AÑADIDOS ---
         datosBancarios: {
@@ -116,7 +117,7 @@
     const TIPOS_CLASE_MAP = { Individual: 1, Dupla: 2, Trio: 3, Cuarteto: 4, Escuelita: 1 };
     const TIPOS_CLASE = Object.keys(TIPOS_CLASE_MAP);
     const TIPOS_CLASE_NOMBRES = { Individual: "Individual", Dupla: "Clase para 2", Trio: "Clase para 3", Cuarteto: "Clase para 4", Escuelita: "Escuelita" };
-    const METODOS_PAGO = ["Efectivo", "Transferencia", "Pendiente"];
+    const METODOS_PAGO = ["Efectivo", "Transferencia", "Mixto", "Pendiente"];
     const CATEGORIAS_GASTO = ["Alquiler", "Equipamiento", "Servicios", "Varios"];
     const PLANES_PAGO = [{value: "porClase", label: "Por Clase"}, {value: "mensual", label: "Mensual"}];
     const FRECUENCIAS_MENSUALES = [{value: "1xSemana", label: "1 vez por semana"}, {value: "2xSemana", label: "2 veces por semana"}, {value: "3xSemana", label: "3 veces por semana"}, {value: "libre", label: "Libre"}];
@@ -159,7 +160,7 @@
     function Card({ title, right, children }) { return (<section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4"><div className="flex items-center justify-between mb-3"><h3 className="text-base font-semibold text-slate-800">{title}</h3>{right}</div>{children}</section>); }
     function Toast({ msg, onClose }) { useEffect(() => { if (!msg) return; const t = setTimeout(onClose, 2500); return () => clearTimeout(t); }, [msg, onClose]); if (!msg) return null; return (<div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-xl z-50">{msg}</div>); }
     function Modal({ isOpen, title, children, onConfirm, onCancel, confirmText = "Confirmar" }) { if (!isOpen) return null; return (<div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md"><h3 className="text-lg font-semibold mb-4">{title}</h3><div className="text-slate-600 mb-6">{children}</div><div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg border">Cancelar</button><button onClick={onConfirm} className={`px-4 py-2 rounded-lg text-white ${confirmText === "Confirmar" ? "bg-red-600" : "bg-emerald-600"}`}>{confirmText}</button></div></div></div>); }
-    function Topbar({ current, setCurrent, onLogout }) { 
+    function Topbar({ current, setCurrent, onLogout, perfil, onChangeModo }) { 
       const tabs = [ { id: "dashboard", label: "Dashboard" }, { id: "alumnos", label: "Alumnos" }, { id: "clases", label: "Clases" },{ id: "grupos", label: "Grupos" }, { id: "pagos", label: "Pagos" }, { id: "gastos", label: "Gastos" }, { id: "reportes", label: "Reportes" }, { id: "perfil", label: "Perfil" } ]; 
       return (
         <header className="w-full bg-slate-900 text-white">
@@ -171,7 +172,8 @@
                  <p className="text-xs opacity-80 -mt-0.5">Gestión de Profesores</p>
               </div>
             </div>
-            <nav className="hidden md:flex items-center gap-2">
+            <nav className="hidden md:flex items-center gap-3">
+              <select value={perfil?.modoTrabajo || 'Independiente'} onChange={(e)=> onChangeModo(e.target.value)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-white border border-slate-700" title="Modo de trabajo"><option value="Independiente">Independiente</option><option value="Club">Club</option></select>
               {tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-1.5 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"}`}>{t.label}</button>))}
               <button onClick={onLogout} className="px-3 py-1.5 rounded-xl text-sm transition bg-red-600 hover:bg-red-700 text-white ml-4">Cerrar Sesión</button>
             </nav>
@@ -258,6 +260,13 @@ const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekSta
         
         return (
             <div className="grid gap-4">
+                <Card title="Modo de trabajo">
+                  <div className="text-sm">Modo actual: <span className="font-semibold">{(perfil?.modoTrabajo) || "Independiente"}</span></div>
+                </Card>
+                {(perfil?.modoTrabajo === "Club") && (
+                  <div className="mb-4"><ClasesPorTamanoMes clases={clases} /></div>
+                )}
+
                 <div className="grid md:grid-cols-3 gap-4">
                     <div className="bg-blue-50 p-4 rounded-xl"><p className="text-sm text-blue-800">Clases de Hoy</p><p className="text-2xl font-bold text-blue-900">{clasesHoy.length}</p></div>
                     <div className="bg-orange-50 p-4 rounded-xl"><p className="text-sm text-orange-800">Pagos Mensuales Pendientes</p><p className="text-2xl font-bold text-orange-900">{pagosPendientes}</p></div>
@@ -1667,7 +1676,9 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
       });
       setPagos(initialState);
     }
-  }, [clase, alumnos]);
+          mixtoEfectivo: "0",
+          mixtoTransferencia: "0"
+        }, [clase, alumnos]);
 
   if (!isOpen || !clase) return null;
 
@@ -1682,12 +1693,18 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   };
 
   const handleSave = () => {
-    const pagosAGuardar = Object.entries(pagos).map(([alumnoId, data]) => ({
-      alumnoId,
-      ...data
-    }));
-    onSave(pagosAGuardar);
-  };
+  const pagosAGuardar = Object.entries(pagos).map(([alumnoId, data]) => {
+    const registro = { alumnoId, ...data };
+    if (data.metodo === "Mixto") {
+      const ef = parseFloat(data.mixtoEfectivo || 0);
+      const tx = parseFloat(data.mixtoTransferencia || 0);
+      registro.detalleMixto = { efectivo: ef, transferencia: tx };
+      registro.monto = (ef + tx).toFixed(2);
+    }
+    return registro;
+  });
+  onSave(pagosAGuardar);
+};
 
   const alumnosDeClase = clase.alumnoIds.map(id => alumnos.find(a => a.id === id)).filter(Boolean);
 
@@ -1721,6 +1738,20 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
                                 >
                                     {METODOS_PAGO.map(m => <option key={m}>{m}</option>)}
                                 </select>
+{(pagos[alumno.id]?.metodo === "Mixto") && (
+  <div className="grid grid-cols-2 gap-2 mt-2">
+    <div>
+      <label className="text-xs text-slate-600">Efec.</label>
+      <input type="number" value={pagos[alumno.id]?.mixtoEfectivo || ""} onChange={(e)=> setPagos(prev => ({...prev, [alumno.id]: {...prev[alumno.id], mixtoEfectivo: e.target.value, monto: (parseFloat(e.target.value||0) + parseFloat(prev[alumno.id]?.mixtoTransferencia||0)).toFixed(2)}}))} className="w-full rounded-lg px-2 py-1 border" />
+    </div>
+    <div>
+      <label className="text-xs text-slate-600">Transf.</label>
+      <input type="number" value={pagos[alumno.id]?.mixtoTransferencia || ""} onChange={(e)=> setPagos(prev => ({...prev, [alumno.id]: {...prev[alumno.id], mixtoTransferencia: e.target.value, monto: (parseFloat(prev[alumno.id]?.mixtoEfectivo||0) + parseFloat(e.target.value||0)).toFixed(2)}}))} className="w-full rounded-lg px-2 py-1 border" />
+    </div>
+    <div className="col-span-2 text-xs text-slate-500">Total mixto: ${pagos[alumno.id]?.monto || "0.00"}</div>
+  </div>
+)}
+
                             </div>
                         </div>
                     )}
@@ -1984,17 +2015,20 @@ const pagoCrud = {
           pagosData.forEach(pago => {
             if (parseFloat(pago.monto) > 0 || pago.metodo === 'Pendiente') {
                 const docRef = getCollection('pagos').doc();
-                batch.set(docRef, { 
+                const payload = { 
                     claseId: payingClase.id, 
                     alumnoId: pago.alumnoId, 
                     fecha: payingClase.fecha, 
                     metodo: pago.metodo, 
                     monto: pago.monto 
-                });
+                };
+                if (pago.metodo === 'Mixto' && pago.detalleMixto) {
+                    payload.detalleMixto = pago.detalleMixto;
+                }
+                batch.set(docRef, payload);
             }
           });
-
-          await batch.commit();
+await batch.commit();
           setToast("Pagos registrados"); 
           setPayingClase(null);
         },
@@ -2135,7 +2169,7 @@ const goToEditClass = (clase) => {
       
        return (
         <div className="min-h-screen bg-slate-50 font-sans">
-          <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} />
+          <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} perfil={state.perfil} onChangeModo={(m)=> db.collection('users').doc(user.uid).collection('profile').doc('main').set({ modoTrabajo: m }, { merge: true })} />
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
             {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
             {current === "alumnos" && <Alumnos alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment} />}
