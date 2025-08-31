@@ -1360,276 +1360,262 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
       );
     }
     
-    function Perfil({ perfil, onUpdate, user, setToast, onExport, onImport }) {
-      const { useRef } = React; // Asegúrate de tener useRef disponible
-      const [form, setForm] = useState(perfil);
-      const [plantillas, setPlantillas] = useState([]);
-      const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
-      const [mensajePersonalizado, setMensajePersonalizado] = useState("");
-      const [destinatarios, setDestinatarios] = useState([]);
-      const [busquedaAlumno, setBusquedaAlumno] = useState("");
-      const [listaBusquedaAbierta, setListaBusquedaAbierta] = useState(false);
-      const fileInputRef = useRef(null); // <-- AGREGA ESTA LÍNEA
-      console.log("Plantillas cargadas:", plantillas); // <-- AGREGA ESTA LÍNEA
+    function Perfil({ perfil, alumnos, onUpdate, user, setToast, onExport, onImport }) {
+  const { useRef } = React;
+  const fileInputRef = useRef(null);
+  
+  // Estado para el formulario principal del perfil
+  const [form, setForm] = useState(perfil);
 
-      
-      useEffect(() => {
-        const defaultPerfil = initialState.perfil;
-        setForm({
-            ...defaultPerfil,
-            ...perfil,
-            datosBancarios: { ...defaultPerfil.datosBancarios, ...(perfil.datosBancarios || {}) },
-            horarioLaboral: perfil.horarioLaboral || defaultPerfil.horarioLaboral,
-        });
-      }, [perfil]);
-      useEffect(() => {
-    if (!user) return; // Nos aseguramos de que el usuario esté cargado
+  // Estados para el Centro de Comunicaciones
+  const [plantillas, setPlantillas] = useState([]);
+  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
+  const [mensajePersonalizado, setMensajePersonalizado] = useState("");
+  const [destinatarios, setDestinatarios] = useState([]);
+  const [busquedaAlumno, setBusquedaAlumno] = useState("");
+  const [listaBusquedaAbierta, setListaBusquedaAbierta] = useState(false);
 
-    // Creamos una conexión a la colección 'plantillas' del usuario
+  // Carga las plantillas de mensajes desde Firebase
+  useEffect(() => {
+    if (!user) return;
     const plantillasCollection = db.collection('users').doc(user.uid).collection('plantillas');
-
-    // Nos suscribimos para recibir los datos en tiempo real
     const unsubscribe = plantillasCollection.onSnapshot(snapshot => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setPlantillas(data); // Guardamos las plantillas en el estado que ya creamos
+        setPlantillas(data);
     });
-
-    // Limpiamos la conexión cuando el componente no está en pantalla
     return () => unsubscribe();
-}, [user]); // Este efecto se ejecuta solo cuando el usuario cambia
+  }, [user]);
 
-      const handleChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, [name]: value }));
-      };
+  // Sincroniza el formulario del perfil con los datos que vienen de MainApp
+  useEffect(() => {
+    const defaultPerfil = initialState.perfil;
+    setForm({
+        ...defaultPerfil, ...perfil,
+        datosBancarios: { ...defaultPerfil.datosBancarios, ...(perfil.datosBancarios || {}) },
+        horarioLaboral: perfil.horarioLaboral || defaultPerfil.horarioLaboral,
+    });
+  }, [perfil]);
 
-      const handlePrecioChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, precios: { ...prev.precios, [name]: value } }));
-      };
-      const handlePrecioMensualChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value } }));
-      };
-        
-      const handleDatosBancariosChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, datosBancarios: { ...prev.datosBancarios, [name]: value } }));
-      };
+  // Lógica de búsqueda para el selector de alumnos
+  const alumnosFiltrados = useMemo(() => {
+    if (!busquedaAlumno) return [];
+    // Asegúrate de que 'alumnos' exista antes de filtrar
+    return (alumnos || []).filter(a => a.estado === 'activo' && getNombreCompleto(a).toLowerCase().includes(busquedaAlumno.toLowerCase()));
+  }, [busquedaAlumno, alumnos]);
 
-      const handleHorarioChange = (index, campo, valor) => {
-        setForm(prev => {
-            const nuevoHorario = [...prev.horarioLaboral];
-            nuevoHorario[index] = { ...nuevoHorario[index], [campo]: valor };
-            return { ...prev, horarioLaboral: nuevoHorario };
-        });
-      };
-        
-      const handleCopyToClipboard = (text) => {
-        navigator.clipboard.writeText(text).then(() => {
-            setToast("¡Copiado al portapapeles!");
-        }, (err) => {
-            setToast("Error al copiar");
-            console.error('Error al copiar: ', err);
-        });
-      };
-
-      const handleSubmit = (e) => {
-        e.preventDefault();
-        onUpdate(form);
-      };
-
-      const handlePasswordReset = () => {
-        if(user && user.email) {
-            auth.sendPasswordResetEmail(user.email)
-                .then(() => setToast("Email para restablecer contraseña enviado."))
-                .catch((error) => setToast(`Error: ${error.message}`));
-        }
-      };
-
-      return (
-        <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
-          <div className="flex flex-col gap-6">
-            <Card title="Perfil y Configuración">
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
-                <div className="grid gap-3">
-                  <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                </div>
-                <div className="mt-6 border-t pt-6">
-                    <h4 className="text-md font-semibold text-slate-700 mb-2">Cuenta</h4>
-                    <div className="grid gap-3">
-                      <div>
-                        <label className="text-sm text-slate-600">Email de la cuenta</label>
-                        <p className="w-full bg-slate-100 rounded-lg px-3 py-2 text-slate-700">{user?.email}</p>
-                      </div>
-                      <div><button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">Restablecer Contraseña</button></div>
-                    </div>
-                </div>
-            </Card>
-
-            <Card title="Datos Bancarios para Transferencias">
-                <div className="grid gap-4">
-                    {['alias', 'cbu', 'banco', 'titular'].map(field => (
-                        <div key={field}>
-                            <label className="text-sm font-medium text-slate-600 capitalize">{field}</label>
-                            <div className="flex gap-2 mt-1">
-                                <input type="text" name={field} value={form.datosBancarios[field]} onChange={handleDatosBancariosChange} className="w-full border rounded-lg px-3 py-2" />
-                                <button type="button" onClick={() => handleCopyToClipboard(form.datosBancarios[field])} className="px-3 py-2 rounded-lg border text-sm hover:bg-slate-100">Copiar</button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </Card>
-
-            <Card title="Precios por Clase">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-sm text-slate-600">Individual</label><input type="number" name="individual" value={form.precios.individual} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Dupla</label><input type="number" name="dupla" value={form.precios.dupla} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Trío</label><input type="number" name="trio" value={form.precios.trio} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div><label className="text-sm text-slate-600">Cuarteto</label><input type="number" name="cuarteto" value={form.precios.cuarteto} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                  <div className="col-span-2"><label className="text-sm text-slate-600">Escuelita</label><input type="number" name="escuelita" value={form.precios.escuelita} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                </div>
-            </Card>
-             <Card title="Precios Mensuales">
-                 <div className="grid md:grid-cols-2 gap-3">
-                    {FRECUENCIAS_MENSUALES.map(f => (
-                        <div key={f.value}><label className="text-sm text-slate-600">{f.label}</label><input type="number" name={f.value} value={form.preciosMensuales[f.value]} onChange={handlePrecioMensualChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                    ))}
-                </div>
-            </Card>
-          </div>
-          <Card title="Gestión de Datos">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <button 
-            onClick={onExport}
-            className="w-full px-4 py-2 rounded-lg border bg-blue-600 text-white hover:bg-blue-700"
-        >
-            Exportar Datos (Backup)
-        </button>
-        <button 
-            onClick={() => fileInputRef.current.click()}
-            className="w-full px-4 py-2 rounded-lg border bg-amber-600 text-white hover:bg-amber-700"
-        >
-            Importar Datos
-        </button>
-        <input 
-            type="file" 
-            ref={fileInputRef} 
-            className="hidden" 
-            accept=".json" 
-            onChange={onImport} 
-        />
-    </div>
-    <p className="text-xs text-slate-500 mt-3">
-        **Atención:** La importación de datos reemplazará toda la información existente.
-    </p>
-</Card>
-
-          <div className="flex flex-col gap-6">
-              <Card title="Horario Laboral General">
-                  <div className="space-y-3">
-                      {(form.horarioLaboral || []).map((item, index) => (
-                          <div key={item.dia} className="grid grid-cols-[80px_1fr_1fr_auto] items-center gap-3">
-                              <label htmlFor={`activo-${index}`} className="font-semibold text-sm flex items-center">{item.dia}</label>
-                              <input type="time" value={item.desde} onChange={(e) => handleHorarioChange(index, 'desde', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
-                              <input type="time" value={item.hasta} onChange={(e) => handleHorarioChange(index, 'hasta', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
-                              <input type="checkbox" id={`activo-${index}`} checked={item.activo} onChange={(e) => handleHorarioChange(index, 'activo', e.target.checked)} className="form-checkbox h-5 w-5" />
-                          </div>
-                      ))}
-                  </div>
-              </Card>
-              
-              <Card title="Configuración General">
-                    <div className="grid gap-4">
-                         <div>
-                            <h4 className="text-md font-semibold text-slate-700 mb-2">Modalidad de Cobro Principal</h4>
-                            <select name="metodoCobro" value={form.metodoCobro} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">
-                              <option value="porClase">Por Clase</option>
-                              <option value="mensual">Mensual</option>
-                            </select>
-                         </div>
-                         <div>
-                            <h4 className="text-md font-semibold text-slate-700 mb-2">Canchas / Ubicaciones</h4>
-                            <textarea name="canchas" value={form.canchas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={4} placeholder="Una ubicación por línea..."></textarea>
-                         </div>
-                    </div>
-              </Card>
-              <Card title="Centro de Comunicaciones">
-    <div className="grid gap-4">
-        {/* Sección 1: Selector de Plantilla y Editor */}
-        <div>
-            <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
-<select 
-    className="w-full mt-1 border rounded-lg px-3 py-2"
-    // Usamos el ID de la plantilla seleccionada para controlar el select
-    value={plantillaSeleccionada ? plantillaSeleccionada.id : ""}
-    onChange={(e) => {
-        const idPlantilla = e.target.value;
-        const plantillaElegida = plantillas.find(p => p.id === idPlantilla);
-        
-        if (plantillaElegida) {
-            setPlantillaSeleccionada(plantillaElegida);
-            setMensajePersonalizado(plantillaElegida.texto); // Actualiza el cuadro de texto
-        } else {
-            // Si eligen "Seleccionar plantilla...", se limpia todo
-            setPlantillaSeleccionada(null);
-            setMensajePersonalizado("");
-        }
-    }}
->
-    <option value="">Seleccionar plantilla...</option>
-    {plantillas.map(p => (
-        <option key={p.id} value={p.id}>{p.titulo}</option>
-    ))}
-</select>
-            <textarea
-                value={mensajePersonalizado}
-                onChange={(e) => setMensajePersonalizado(e.target.value)}
-                className="w-full mt-2 border rounded-lg px-3 py-2"
-                rows={5}
-                placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar."
-            />
-        </div>
-
-        {/* Sección 2: Selector de Alumnos con Buscador */}
-        <div className="relative">
-            <label className="text-sm font-medium text-slate-600">2. Selecciona los destinatarios</label>
-            <input
-                type="text"
-                value={busquedaAlumno}
-                onChange={(e) => setBusquedaAlumno(e.target.value)}
-                placeholder="Escribe para buscar alumnos..."
-                className="w-full mt-1 border rounded-lg px-3 py-2"
-            />
-            {/* Aquí irá la lista de resultados de la búsqueda */}
-            
-            <div className="mt-2">
-                <p className="text-xs font-semibold text-slate-500">Destinatarios ({destinatarios.length}):</p>
-                <div className="flex flex-wrap gap-2 mt-1">
-                    {/* Aquí se mostrarán las etiquetas de los alumnos seleccionados */}
-                </div>
-            </div>
-        </div>
-
-        {/* Sección 3: Envío de Mensajes */}
-        <div>
-            <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
-            <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2">
-                {/* Aquí aparecerán los botones para enviar por WhatsApp */}
-                <p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>
-            </div>
-        </div>
-    </div>
-</Card>
-              <div className="mt-6 flex justify-end">
-                <button type="submit" className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold">Guardar Todos los Cambios</button>
-              </div>
-          </div>
-        </form>
-      );
+  // Funciones para manejar la selección de destinatarios
+  const handleAgregarDestinatario = (alumno) => {
+    if (!destinatarios.find(d => d.id === alumno.id)) {
+      setDestinatarios([...destinatarios, alumno]);
     }
+    setBusquedaAlumno("");
+    setListaBusquedaAbierta(false);
+  };
+
+  const handleQuitarDestinatario = (alumnoId) => {
+    setDestinatarios(destinatarios.filter(d => d.id !== alumnoId));
+  };
+  
+  // --- OTRAS FUNCIONES DEL PERFIL (NO CAMBIAN) ---
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+  const handlePrecioChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, precios: { ...prev.precios, [name]: value } }));
+  };
+  const handlePrecioMensualChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value } }));
+  };
+  const handleDatosBancariosChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, datosBancarios: { ...prev.datosBancarios, [name]: value } }));
+  };
+  const handleHorarioChange = (index, campo, valor) => {
+    setForm(prev => {
+        const nuevoHorario = [...prev.horarioLaboral];
+        nuevoHorario[index] = { ...nuevoHorario[index], [campo]: valor };
+        return { ...prev, horarioLaboral: nuevoHorario };
+    });
+  };
+  const handleCopyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+        setToast("¡Copiado al portapapeles!");
+    }, (err) => {
+        setToast("Error al copiar");
+        console.error('Error al copiar: ', err);
+    });
+  };
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onUpdate(form);
+  };
+  const handlePasswordReset = () => {
+    if(user && user.email) {
+        auth.sendPasswordResetEmail(user.email)
+            .then(() => setToast("Email para restablecer contraseña enviado."))
+            .catch((error) => setToast(`Error: ${error.message}`));
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
+      {/* --- COLUMNA IZQUIERDA --- */}
+      <div className="flex flex-col gap-6">
+        <Card title="Perfil y Configuración">
+            <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
+            <div className="grid gap-3">
+              <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+            </div>
+            <div className="mt-6 border-t pt-6">
+                <h4 className="text-md font-semibold text-slate-700 mb-2">Cuenta</h4>
+                <div className="grid gap-3">
+                  <div>
+                    <label className="text-sm text-slate-600">Email de la cuenta</label>
+                    <p className="w-full bg-slate-100 rounded-lg px-3 py-2 text-slate-700">{user?.email}</p>
+                  </div>
+                  <div><button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">Restablecer Contraseña</button></div>
+                </div>
+            </div>
+        </Card>
+        
+        <Card title="Datos Bancarios para Transferencias">
+            <div className="grid gap-4">
+                {['alias', 'cbu', 'banco', 'titular'].map(field => (
+                    <div key={field}>
+                        <label className="text-sm font-medium text-slate-600 capitalize">{field}</label>
+                        <div className="flex gap-2 mt-1">
+                            <input type="text" name={field} value={form.datosBancarios[field]} onChange={handleDatosBancariosChange} className="w-full border rounded-lg px-3 py-2" />
+                            <button type="button" onClick={() => handleCopyToClipboard(form.datosBancarios[field])} className="px-3 py-2 rounded-lg border text-sm hover:bg-slate-100">Copiar</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </Card>
+        
+        <Card title="Centro de Comunicaciones">
+            <div className="grid gap-4">
+                <div>
+                    <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
+                    <select 
+                        className="w-full mt-1 border rounded-lg px-3 py-2"
+                        value={plantillaSeleccionada ? plantillaSeleccionada.id : ""}
+                        onChange={(e) => {
+                            const idPlantilla = e.target.value;
+                            const plantillaElegida = plantillas.find(p => p.id === idPlantilla);
+                            if (plantillaElegida) {
+                                setPlantillaSeleccionada(plantillaElegida);
+                                setMensajePersonalizado(plantillaElegida.texto);
+                            } else {
+                                setPlantillaSeleccionada(null);
+                                setMensajePersonalizado("");
+                            }
+                        }}
+                    >
+                        <option value="">Seleccionar plantilla...</option>
+                        {plantillas.map(p => (<option key={p.id} value={p.id}>{p.titulo}</option>))}
+                    </select>
+                    <textarea value={mensajePersonalizado} onChange={(e) => setMensajePersonalizado(e.target.value)} className="w-full mt-2 border rounded-lg px-3 py-2" rows={5} placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar." />
+                </div>
+                <div className="relative">
+                    <label className="text-sm font-medium text-slate-600">2. Selecciona los destinatarios</label>
+                    <input type="text" value={busquedaAlumno} onChange={(e) => { setBusquedaAlumno(e.target.value); setListaBusquedaAbierta(true); }} onBlur={() => setTimeout(() => setListaBusquedaAbierta(false), 200)} placeholder="Escribe para buscar alumnos..." className="w-full mt-1 border rounded-lg px-3 py-2" />
+                    {listaBusquedaAbierta && busquedaAlumno && (
+                        <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
+                            {alumnosFiltrados.length > 0 ? alumnosFiltrados.map(a => (
+                                <li key={a.id} onMouseDown={() => handleAgregarDestinatario(a)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">{getNombreCompleto(a)}</li>
+                            )) : <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>}
+                        </ul>
+                    )}
+                    <div className="mt-2">
+                        <p className="text-xs font-semibold text-slate-500">Destinatarios ({destinatarios.length}):</p>
+                        {destinatarios.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-1 p-2 border rounded-lg bg-slate-50">
+                                {destinatarios.map(d => (
+                                    <span key={d.id} className="flex items-center gap-2 bg-sky-100 text-sky-800 text-sm rounded-full px-2 py-1">
+                                        {getNombreCompleto(d)}
+                                        <button type="button" onClick={() => handleQuitarDestinatario(d.id)} className="w-4 h-4 rounded-full bg-sky-200 text-sky-800 flex items-center justify-center font-bold text-xs">x</button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <div>
+                    <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
+                    <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2">
+                        <p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>
+                    </div>
+                </div>
+            </div>
+        </Card>
+        
+        <Card title="Gestión de Datos">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button onClick={onExport} className="w-full px-4 py-2 rounded-lg border bg-blue-600 text-white hover:bg-blue-700">Exportar Datos (Backup)</button>
+                <button onClick={() => fileInputRef.current.click()} className="w-full px-4 py-2 rounded-lg border bg-amber-600 text-white hover:bg-amber-700">Importar Datos</button>
+                <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={onImport} />
+            </div>
+            <p className="text-xs text-slate-500 mt-3">**Atención:** La importación de datos reemplazará toda la información existente.</p>
+        </Card>
+      </div>
+
+      {/* --- COLUMNA DERECHA --- */}
+      <div className="flex flex-col gap-6">
+          <Card title="Configuración General">
+                <div className="grid gap-4">
+                     <div>
+                        <h4 className="text-md font-semibold text-slate-700 mb-2">Modalidad de Cobro Principal</h4>
+                        <select name="metodoCobro" value={form.metodoCobro} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">
+                          <option value="porClase">Por Clase</option>
+                          <option value="mensual">Mensual</option>
+                        </select>
+                     </div>
+                     <div>
+                        <h4 className="text-md font-semibold text-slate-700 mb-2">Canchas / Ubicaciones</h4>
+                        <textarea name="canchas" value={form.canchas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={4} placeholder="Una ubicación por línea..."></textarea>
+                     </div>
+                </div>
+          </Card>
+          <Card title="Precios por Clase">
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-sm text-slate-600">Individual</label><input type="number" name="individual" value={form.precios.individual} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Dupla</label><input type="number" name="dupla" value={form.precios.dupla} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Trío</label><input type="number" name="trio" value={form.precios.trio} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Cuarteto</label><input type="number" name="cuarteto" value={form.precios.cuarteto} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div className="col-span-2"><label className="text-sm text-slate-600">Escuelita</label><input type="number" name="escuelita" value={form.precios.escuelita} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
+            </div>
+        </Card>
+         <Card title="Precios Mensuales">
+             <div className="grid md:grid-cols-2 gap-3">
+                {FRECUENCIAS_MENSUALES.map(f => (
+                    <div key={f.value}><label className="text-sm text-slate-600">{f.label}</label><input type="number" name={f.value} value={form.preciosMensuales[f.value]} onChange={handlePrecioMensualChange} className="w-full border rounded-lg px-3 py-2" /></div>
+                ))}
+            </div>
+        </Card>
+          <Card title="Horario Laboral General">
+              <div className="space-y-3">
+                  {(form.horarioLaboral || []).map((item, index) => (
+                      <div key={item.dia} className="grid grid-cols-[80px_1fr_1fr_auto] items-center gap-3">
+                          <label htmlFor={`activo-${index}`} className="font-semibold text-sm flex items-center">{item.dia}</label>
+                          <input type="time" value={item.desde} onChange={(e) => handleHorarioChange(index, 'desde', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
+                          <input type="time" value={item.hasta} onChange={(e) => handleHorarioChange(index, 'hasta', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
+                          <input type="checkbox" id={`activo-${index}`} checked={item.activo} onChange={(e) => handleHorarioChange(index, 'activo', e.target.checked)} className="form-checkbox h-5 w-5" />
+                      </div>
+                  ))}
+              </div>
+          </Card>
+          <div className="mt-6 flex justify-end">
+            <button type="submit" className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold">Guardar Todos los Cambios</button>
+          </div>
+      </div>
+    </form>
+  );
+}
 
     function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave }) {
   const [pagos, setPagos] = useState({});
@@ -2127,7 +2113,7 @@ const goToEditClass = (clase) => {
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
             {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
             {current === "reportes" && <Reportes pagos={state.pagos} gastos={state.gastos} alumnos={state.alumnos} clases={state.clases} />}
-            {current === "perfil" && <Perfil perfil={state.perfil} onUpdate={perfilCrud.update} user={user} setToast={setToast} onExport={handleExportData} onImport={handleImportData} />}
+            {current === "perfil" && <Perfil perfil={state.perfil} alumnos={state.alumnos} onUpdate={perfilCrud.update} user={user} setToast={setToast} onExport={handleExportData} onImport={handleImportData} />}
           </main>
           <Toast msg={toast} onClose={() => setToast("")} />
           <Modal isOpen={!!deletingInfo.id} title={`Eliminar ${deletingInfo.type}`} onConfirm={confirmDelete} onCancel={() => setDeletingInfo({ id: null, type: null, collection: null })} >
