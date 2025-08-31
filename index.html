@@ -369,6 +369,52 @@ function autoGenerarClasesParaFecha(targetDate, alumnosArr, clasesExistentes) {
 
   return { nuevasClases, actualizadas };
 }
+// ---- Helpers de rango/orden para la lista de clases ----
+function rangoFechas(modo = 'semana', baseDate = new Date()) {
+  const base = new Date(baseDate);
+  base.setHours(0,0,0,0);
+
+  if (modo === 'hoy') {
+    const iso = formatDate(base);
+    return { desdeISO: iso, hastaISO: iso };
+  }
+
+  if (modo === 'semana') {
+    const start = getWeekStartDate(base); // Lunes
+    const end   = addDays(start, 6);      // Domingo
+    return { desdeISO: formatDate(start), hastaISO: formatDate(end) };
+  }
+
+  if (modo === 'mes') {
+    const y = base.getFullYear();
+    const m = base.getMonth();
+    const first = new Date(y, m, 1);
+    const last  = new Date(y, m + 1, 0);
+    return { desdeISO: formatDate(first), hastaISO: formatDate(last) };
+  }
+
+  // Próximos 30 días
+  const desde = formatDate(base);
+  const hasta = formatDate(addDays(base, 30));
+  return { desdeISO: desde, hastaISO: hasta };
+}
+
+function filtrarYOrdenarClases(clases, desdeISO, hastaISO) {
+  return (clases || [])
+    .filter(c => c.fecha >= desdeISO && c.fecha <= hastaISO)
+    .sort((a, b) => {
+      if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+      return (a.hora || '').localeCompare(b.hora || '');
+    });
+}
+
+function agruparPorFecha(clasesOrdenadas) {
+  const grupos = {};
+  for (const c of clasesOrdenadas) {
+    (grupos[c.fecha] ||= []).push(c);
+  }
+  return grupos;
+}
 
 
 // ------------------------------ UI Básicos ------------------------------
@@ -756,339 +802,205 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
 }
 
     
-    function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar }) {
-      const [showForm, setShowForm] = useState(false);
-      const [editing, setEditing] = useState(null);
-      const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
-      const [form, setForm] = useState(emptyForm);
-      const [formStep, setFormStep] = useState(1);
-      const [alumnoSearchQuery, setAlumnoSearchQuery] = useState("");
-      const [isAlumnosListOpen, setIsAlumnosListOpen] = useState(false);
-      const [grupos, setGrupos] = useState([]);
-      const [filtroAlumno, setFiltroAlumno] = useState(""); 
-      const [filtroEstado, setFiltroEstado] = useState(""); 
-      const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
-      const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
+    function ListaDeClases({ clases, alumnos, onEdit }) {
+  const [modo, setModo] = React.useState('semana'); // 'hoy' | 'semana' | 'mes' | 'prox30'
+  const [baseDate, setBaseDate] = React.useState(new Date());
+  const [incluirPasadas, setIncluirPasadas] = React.useState(false);
+  const [qAlumno, setQAlumno] = React.useState('');
+  const [fEstado, setFEstado] = React.useState('');   // ← nuevo
+  const [fDeporte, setFDeporte] = React.useState(''); // ← nuevo
 
-      useEffect(() => {
-        if (!user) return;
-        const unsub = db.collection('users').doc(user.uid).collection('grupos').onSnapshot(snapshot => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setGrupos(data);
-        });
-        return () => unsub();
-      }, [user]);
-      
-      useEffect(() => {
-        if (claseParaEditar) {
-            openEdit(claseParaEditar);
-            setClaseParaEditar(null);
-        }
-      }, [claseParaEditar]);
+  const alumnoMap = React.useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
 
-      const alumnosActivos = useMemo(() => alumnos.filter(a => a.estado === 'activo'), [alumnos]);
-      const alumnoMap = useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
-      
-      const alumnosFiltrados = useMemo(() => {
-        if (!alumnoSearchQuery) {
-            return alumnosActivos;
-        }
-        return alumnosActivos.filter(alumno =>
-            getNombreCompleto(alumno).toLowerCase().includes(alumnoSearchQuery.toLowerCase())
-        );
-      }, [alumnoSearchQuery, alumnosActivos]);
+  const { desdeISO, hastaISO } = React.useMemo(
+    () => rangoFechas(modo, baseDate),
+    [modo, baseDate]
+  );
 
-      const pagosPorClase = useMemo(() => {
-        const map = new Map();
-        pagos.forEach(p => {
-          if (!map.has(p.claseId)) map.set(p.claseId, []);
-          map.get(p.claseId).push(p);
-        });
-        return map;
-      }, [pagos]);
+  // Hora/minuto actual para filtrar "hoy"
+  const ahoraHM = React.useMemo(() => {
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }, []);
+  const hoyISO = React.useMemo(() => formatDate(new Date()), []);
 
-      const clasesConDatos = useMemo(() => clases.map(c => ({ 
-        ...c, 
-        nombresAlumnos: (c.alumnoIds || []).map(id => getNombreCompleto(alumnoMap.get(id))).filter(Boolean).join(', '), 
-        pagos: pagosPorClase.get(c.id) || [] 
-      })), [clases, alumnoMap, pagosPorClase]);
+  // 1) Rango + orden
+  const baseRango = React.useMemo(
+    () => filtrarYOrdenarClases(clases, desdeISO, hastaISO),
+    [clases, desdeISO, hastaISO]
+  );
 
-      const clasesFiltradas = useMemo(() => {
-        return clasesConDatos.filter(c => {
-            const pasaFiltroAlumno = !filtroAlumno || c.alumnoIds.includes(filtroAlumno);
-            const pasaFiltroEstado = !filtroEstado || c.estado === filtroEstado;
-            const pasaFiltroFechaDesde = !filtroFechaDesde || c.fecha >= filtroFechaDesde;
-            const pasaFiltroFechaHasta = !filtroFechaHasta || c.fecha <= filtroFechaHasta;
-            return pasaFiltroAlumno && pasaFiltroEstado && pasaFiltroFechaDesde && pasaFiltroFechaHasta;
-        }).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-      }, [clasesConDatos, filtroAlumno, filtroEstado, filtroFechaDesde, filtroFechaHasta]);
+  // 2) Pasadas / futuras
+  const soloFuturas = React.useMemo(() => {
+    if (incluirPasadas) return baseRango;
+    return baseRango.filter(c => {
+      if (c.fecha > hoyISO) return true;
+      if (c.fecha < hoyISO) return false;
+      if (!c.hora) return true;
+      return c.hora >= ahoraHM;
+    });
+  }, [baseRango, incluirPasadas, hoyISO, ahoraHM]);
 
-      const canchasDisponibles = useMemo(() => (perfil.canchas || '').split('\n').filter(c => c.trim() !== ''), [perfil.canchas]);
-      
-      function handleFormChange(e) {
-        const { name, value, type, checked } = e.target;
-        const val = type === 'checkbox' ? checked : value;
-        setForm(prev => {
-            const newState = { ...prev, [name]: val };
-            if (name === "tipo") {
-                const primerAlumno = alumnoMap.get(prev.alumnoIds[0]);
-                const esPlanMensual = primerAlumno?.plan === 'mensual';
-                newState.precio = esPlanMensual ? "0" : (perfil.precios[val.toLowerCase()] || "");
-                const numAlumnos = TIPOS_CLASE_MAP[val] || 1;
-                newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
-            }
-            return newState;
-        });
-      }
-      
-      function handleAlumnoChange(index, newId) {
-        setForm(prev => {
-            const newAlumnoIds = prev.alumnoIds.map((id, i) => i === index ? newId : id);
-            const primerAlumno = alumnoMap.get(newAlumnoIds[0]);
-            const esPlanMensual = primerAlumno?.plan === 'mensual';
-            const nuevoPrecio = esPlanMensual ? "0" : (perfil.precios[prev.tipo.toLowerCase()] || "");
-            return { ...prev, alumnoIds: newAlumnoIds, precio: nuevoPrecio };
-        });
-        if (index === 0 && newId) { 
-            const alumnoSeleccionado = alumnoMap.get(newId);
-            if (alumnoSeleccionado && alumnoSeleccionado.horarios && alumnoSeleccionado.horarios.length > 0) {
-                setFormStep(2);
-            } else {
-                setFormStep(3);
-            }
-        }
-      }
-      
-      function handleSelectAlumno(alumno) {
-        setAlumnoSearchQuery(getNombreCompleto(alumno));
-        setIsAlumnosListOpen(false);
-        handleAlumnoChange(0, alumno.id);
-      }
+  // 3) Filtros: alumno (texto), estado, deporte
+  const visibles = React.useMemo(() => {
+    let arr = soloFuturas;
 
-      const getNextDateForDay = (dayName) => {
-    const today = new Date();
-    const todayDayIndex = today.getDay(); // El índice de JS donde Domingo=0, Lunes=1, etc.
-
-    // Nuestro array tiene Lunes=0, Martes=1, etc. Necesitamos convertirlo al de JS.
-    const targetDayIndex = (DIAS_SEMANA_NOMBRES.indexOf(dayName) + 1) % 7;
-
-    // Calculamos la diferencia de días.
-    let dayDifference = targetDayIndex - todayDayIndex;
-
-    // Si la diferencia es negativa o cero, significa que el día ya pasó esta semana
-    // o es hoy, así que le sumamos 7 para que agende para la semana siguiente.
-    if (dayDifference <= 0) {
-        dayDifference += 7;
-    }
-
-    const resultDate = new Date(today.getTime());
-    resultDate.setDate(today.getDate() + dayDifference);
-    
-    return resultDate;
-};
-
-      function handleScheduleSelect(horario) {
-        const proximaFecha = getNextDateForDay(horario.dia);
-        setForm(prev => ({
-            ...prev,
-            fecha: formatDate(proximaFecha),
-            hora: horario.hora
-        }));
-        setFormStep(3);
-      }
-
-      function openNew() { 
-        setEditing(null); 
-        setForm(emptyForm);
-        setAlumnoSearchQuery("");
-        setFormStep(1); 
-        setShowForm(true); 
-        window.scrollTo({ top: 0, behavior: "smooth" }); 
-      }
-      function openEdit(c) { 
-        setEditing(c); 
-        setForm({ ...emptyForm, ...c, recurrente: false }); 
-        setFormStep(3);
-        setShowForm(true); 
-        window.scrollTo({ top: 0, behavior: "smooth" }); 
-      }
-      function cancel() { 
-        setShowForm(false); 
-        setEditing(null); 
-        setForm(emptyForm);
-        setFormStep(1);
-      }
-      function submit(e) { 
-        e.preventDefault(); 
-        const validAlumnos = form.alumnoIds.filter(id => id); 
-        if (validAlumnos.length === 0) return alert("Seleccioná al menos un alumno"); 
-        const finalForm = {...form, alumnoIds: validAlumnos}; 
-        if (editing) { 
-            onUpdate({ ...finalForm, id: editing.id }); 
-        } else { 
-            onCreate(finalForm); 
-        } 
-        cancel(); 
-      }
-      const changeWeek = (offset) => setCurrentDate(prev => addDays(prev, offset * 7));
-      function handleStatusChange(clase, newStatus) {
-        onUpdate({ ...clase, estado: newStatus, pagos: clase.pagos });
-      }
-      
-      const primerAlumnoId = form.alumnoIds[0];
-      const esMensual = alumnoMap.get(primerAlumnoId)?.plan === 'mensual';
-      
-      return (
-        <div className="grid gap-4">
-          <Card title={editing ? "Editar clase" : "Nueva clase"} right={!showForm && <button id="nueva-clase-btn" onClick={openNew} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
-            {showForm ? (
-                <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
-                    {/* --- PASO 1: SELECCIONAR ALUMNO (VERSIÓN CON BUSCADOR) --- */}
-                    {(formStep === 1) && (
-                        <div className="md:col-span-6 relative">
-                            <label className="text-sm text-slate-600 font-semibold">Selecciona Alumno/a</label>
-                            <input
-                                type="text"
-                                value={alumnoSearchQuery}
-                                onChange={(e) => {
-                                    setAlumnoSearchQuery(e.target.value);
-                                    setIsAlumnosListOpen(true);
-                                }}
-                                onFocus={() => setIsAlumnosListOpen(true)}
-                                onBlur={() => setTimeout(() => setIsAlumnosListOpen(false), 200)}
-                                placeholder="Escribe para buscar..."
-                                className="w-full mt-1 border rounded-lg px-3 py-2"
-                            />
-                            {isAlumnosListOpen && (
-                                <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
-                                    {alumnosFiltrados.length > 0 ? (
-                                        alumnosFiltrados.map(alumno => (
-                                            <li key={alumno.id} onClick={() => handleSelectAlumno(alumno)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">
-                                                {getNombreCompleto(alumno)}
-                                            </li>
-                                        ))
-                                    ) : (
-                                        <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>
-                                    )}
-                                </ul>
-                            )}
-                        </div>
-                    )}
-
-                    {/* --- PASO 2: ELEGIR HORARIO FIJO (si existe) --- */}
-                    {(formStep === 2 && alumnoMap.get(form.alumnoIds[0])) && (
-                        <div className="md:col-span-6">
-                            <p className="text-sm text-slate-700 mb-2"><span className="font-bold">{getNombreCompleto(alumnoMap.get(form.alumnoIds[0]))}</span> tiene horarios fijos guardados.</p>
-                            <p className="text-sm font-semibold text-slate-600">¿Quieres agendar una clase en uno de sus horarios habituales?</p>
-                            <div className="flex flex-wrap gap-2 my-3">
-                                {(alumnoMap.get(form.alumnoIds[0]).horarios || []).map(horario => (
-                                    <button type="button" key={`${horario.dia}-${horario.hora}`} onClick={() => handleScheduleSelect(horario)} className="px-3 py-2 text-sm rounded-lg border bg-sky-50 text-sky-800 hover:bg-sky-100">
-                                        {horario.dia} {horario.hora}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="border-t pt-3 mt-3">
-                                <button type="button" onClick={() => setFormStep(3)} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-100">O agendar una clase personalizada en otro horario</button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* --- PASO 3: DETALLES COMPLETOS DE LA CLASE --- */}
-                    {(formStep === 3) && (
-                        <>
-                            <div className="md:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {(form.alumnoIds || [""]).map((alumnoId, index) => (
-                                    <div key={index}>
-                                        <label className="text-sm text-slate-600">Alumno {index + 1}</label>
-                                        <select value={alumnoId} onChange={(e) => handleAlumnoChange(index, e.target.value)} className="w-full border rounded-lg px-3 py-2" required>
-                                            <option value="">Seleccionar...</option>
-                                            {alumnosActivos.filter(a => !form.alumnoIds.includes(a.id) || a.id === alumnoId).map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
-                                        </select>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="md:col-span-2"><label className="text-sm text-slate-600">Ubicación / Cancha</label><select name="cancha" value={form.cancha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{canchasDisponibles.map(c => <option key={c}>{c}</option>)}</select></div>
-                            <div><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
-                            <div><label className="text-sm text-slate-600">Hora</label><input type="time" name="hora" value={form.hora} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
-                            <div><label className="text-sm text-slate-600">Tipo de Clase</label><select name="tipo" value={form.tipo} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}</select></div>
-                            <div><label className="text-sm text-slate-600">Precio</label><input type="number" name="precio" value={esMensual ? "0" : form.precio} onChange={handleFormChange} className={`w-full border rounded-lg px-3 py-2 ${esMensual ? 'bg-slate-100' : ''}`} placeholder="0" disabled={esMensual} /></div>
-                            <div className="md:col-span-2"><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}</select></div>
-                            <div className="md:col-span-6"><label className="text-sm text-slate-600">Notas</label><textarea name="notas" value={form.notas} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" rows={2} placeholder="Comentarios sobre la clase" /></div>
-                            {!editing && <div className="md:col-span-6 flex items-center gap-2"><input type="checkbox" name="recurrente" id="recurrente" checked={form.recurrente} onChange={handleFormChange} /><label htmlFor="recurrente" className="text-sm text-slate-600 mr-2">Repetir semanalmente por</label>{form.recurrente && <select name="mesesRecurrencia" value={form.mesesRecurrencia} onChange={handleFormChange} className="border rounded-lg px-3 py-2">{MESES_RECURRENCIA.map(m => <option key={m} value={m}>{m} mes{m > 1 ? 'es' : ''}</option>)}</select>}</div>}
-                        </>
-                    )}
-
-                    <div className="md:col-span-6 flex gap-2 justify-end">
-                        <button type="button" onClick={() => { cancel(); setFormStep(1); }} className="px-3 py-2 rounded-lg border">Cancelar</button>
-                        {formStep === 3 && <button className="px-3 py-2 rounded-lg bg-emerald-600 text-white">Guardar</button>}
-                    </div>
-                </form>
-            ) : ( <p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p> )}
-          </Card>
-          
-          <Card title="Listado de clases">
-            <div className="grid md:grid-cols-4 gap-3 mb-4 p-2 border rounded-lg">
-                <select value={filtroAlumno} onChange={(e) => setFiltroAlumno(e.target.value)}>
-                <option value="">Todos los Alumnos</option>
-                {alumnos.map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
-                </select>
-                <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
-                <option value="">Todos los Estados</option>
-                {ESTADOS_CLASE.map(e => <option key={e} value={e}>{e}</option>)}
-                </select>
-                <input type="date" value={filtroFechaDesde} onChange={(e) => setFiltroFechaDesde(e.target.value)} />
-                <input type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} />
-            </div>
-            <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                <thead>
-                    <tr className="text-left text-slate-600">
-                    <th className="p-2">Fecha</th>
-                    <th className="p-2">Alumnos</th>
-                    <th className="p-2">Ubicación</th>
-                    <th className="p-2">Estado</th>
-                    <th className="p-2">Precio</th>
-                    <th className="p-2 text-right">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {clasesFiltradas.length === 0 && (
-                    <tr>
-                        <td colSpan={6} className="text-center py-6 text-slate-400">
-                        No hay clases que coincidan con los filtros
-                        </td>
-                    </tr>
-                    )}
-                    {clasesFiltradas.map((c) => (
-                    <tr key={c.id} className="border-t">
-                        <td className="p-2">{c.fecha} {c.hora}</td>
-                        <td className="p-2">{c.nombresAlumnos}</td>
-                        <td className="p-2">{c.cancha}</td>
-                        <td className="p-2">
-                        <select value={c.estado} onChange={(e) => handleStatusChange(c, e.target.value)} className="w-full border rounded-lg px-2 py-1 bg-white">
-                            {ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}
-                        </select>
-                        </td>
-                        <td className="p-2 flex items-center gap-2">
-                        {c.precio ? `$${c.precio}` : '-'}
-                        {c.pagos.length > 0 && <span className={`w-2 h-2 rounded-full ${c.pagos.some(p => p.metodo === 'Pendiente') ? 'bg-orange-400' : 'bg-green-500'}`} title={`Pago Registrado`}></span>}
-                        </td>
-                        <td className="p-2 text-right">
-                        <div className="inline-flex gap-2">
-                            {c.estado === 'Realizada' && c.pagos.length === 0 && <button onClick={() => onPay(c)} className="px-2 py-1 text-xs rounded-lg border bg-emerald-50 text-emerald-700 hover:bg-emerald-100">💳 Pagar</button>}
-                            <button onClick={() => openEdit(c)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button>
-                            <button type="button" onClick={() => onDelete(c.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button>
-                        </div>
-                        </td>
-                    </tr>
-                    ))}
-                </tbody>
-                </table>
-            </div>
-          </Card>
-        </div>
+    // Buscador por alumno
+    const q = qAlumno.trim().toLowerCase();
+    if (q) {
+      arr = arr.filter(c =>
+        (c.alumnoIds || []).some(id => {
+          const a = alumnoMap.get(id);
+          return a ? getNombreCompleto(a).toLowerCase().includes(q) : false;
+        })
       );
     }
+
+    // Filtro por estado
+    if (fEstado) {
+      arr = arr.filter(c => c.estado === fEstado);
+    }
+
+    // Filtro por deporte
+    if (fDeporte) {
+      arr = arr.filter(c => (c.deporte || 'Pádel') === fDeporte);
+    }
+
+    return arr;
+  }, [soloFuturas, qAlumno, fEstado, fDeporte, alumnoMap]);
+
+  const grupos = React.useMemo(() => agruparPorFecha(visibles), [visibles]);
+  const fechasOrdenadas = React.useMemo(
+    () => Object.keys(grupos).sort((a,b) => a.localeCompare(b)),
+    [grupos]
+  );
+
+  return (
+    <Card
+      title="Clases (filtradas)"
+      right={
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Buscador por alumno */}
+          <input
+            value={qAlumno}
+            onChange={e => setQAlumno(e.target.value)}
+            placeholder="Buscar alumno/a"
+            className="border rounded-lg px-2 py-1 text-sm"
+          />
+
+          {/* Filtro por Estado */}
+          <select
+            value={fEstado}
+            onChange={e => setFEstado(e.target.value)}
+            className="border rounded-lg px-2 py-1 text-sm"
+            title="Estado"
+          >
+            <option value="">Todos los estados</option>
+            {ESTADOS_CLASE.map(est => (
+              <option key={est} value={est}>{est}</option>
+            ))}
+          </select>
+
+          {/* Filtro por Deporte */}
+          <select
+            value={fDeporte}
+            onChange={e => setFDeporte(e.target.value)}
+            className="border rounded-lg px-2 py-1 text-sm"
+            title="Deporte"
+          >
+            <option value="">Todos los deportes</option>
+            {DEPORTES.map(dep => (
+              <option key={dep} value={dep}>{dep}</option>
+            ))}
+          </select>
+
+          {/* Toggle incluir pasadas */}
+          <label className="flex items-center gap-1 text-sm">
+            <input
+              type="checkbox"
+              checked={incluirPasadas}
+              onChange={e => setIncluirPasadas(e.target.checked)}
+            />
+            Incluir pasadas
+          </label>
+
+          {/* Selector de rango */}
+          <select
+            value={modo}
+            onChange={e => setModo(e.target.value)}
+            className="border rounded-lg px-2 py-1 text-sm"
+            title="Rango"
+          >
+            <option value="hoy">Hoy</option>
+            <option value="semana">Semana actual</option>
+            <option value="mes">Mes actual</option>
+            <option value="prox30">Próximos 30 días</option>
+          </select>
+
+          <button
+            onClick={() => { setBaseDate(new Date()); }}
+            className="px-2 py-1 text-sm rounded-lg border"
+            title="Ir a hoy"
+          >
+            Hoy
+          </button>
+        </div>
+      }
+    >
+      {fechasOrdenadas.length === 0 ? (
+        <p className="text-sm text-slate-500">
+          No hay clases en el rango seleccionado
+          {qAlumno ? " para ese alumno" : ""}
+          {fEstado ? ` (${fEstado})` : ""}
+          {fDeporte ? ` - ${fDeporte}` : ""}.
+        </p>
+      ) : (
+        <div className="divide-y">
+          {fechasOrdenadas.map(fecha => (
+            <div key={fecha} className="py-2">
+              <div className="sticky top-0 bg-white/90 backdrop-blur px-1 py-1 mb-2 border-b">
+                <p className="text-sm font-semibold">
+                  {getDiaNombreES(fecha)} · {formatDate(new Date(fecha), 'dd/mm')}
+                </p>
+              </div>
+              <ul className="space-y-1">
+                {grupos[fecha].map(c => {
+                  const nombresAlumnos = (c.alumnoIds || [])
+                    .map(id => alumnoMap.get(id))
+                    .filter(Boolean)
+                    .map(a => getNombreCompleto(a))
+                    .join(', ');
+                  return (
+                    <li
+                      key={c.id}
+                      className="p-2 bg-slate-50 rounded-lg border flex justify-between items-center"
+                    >
+                      <div>
+                        <p className="font-semibold">{c.hora || '—'} - {nombresAlumnos || '—'}</p>
+                        <p className="text-xs text-slate-500">
+                          {c.tipo} · {c.deporte || 'Pádel'} · {c.cancha || 'N/A'} · {c.estado}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => onEdit?.(c)}
+                        className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-100"
+                      >
+                        Editar
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
     function Grupos({ alumnos, user }) {
     console.log("Componente Grupos se está renderizando...");
   // --- Estados del Componente ---
