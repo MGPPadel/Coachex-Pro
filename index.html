@@ -1693,6 +1693,29 @@
             });
         }
       }; // <-- LA LLAVE DE CIERRE IBA AQUÍ
+      const claseCrud = { 
+  create: async (c) => { 
+      const claseData = {...c};
+      delete claseData.id;
+      if (claseData.recurrente) {
+          const batch = db.batch();
+          const semanas = parseInt(claseData.mesesRecurrencia, 10) * 4;
+          for(let i=0; i<semanas; i++) {
+              const nuevaFecha = addDays(new Date(claseData.fecha), i * 7);
+              const newClase = { ...claseData, fecha: formatDate(nuevaFecha), recurrente: false };
+              const docRef = getCollection('clases').doc();
+              batch.set(docRef, newClase);
+          }
+          await batch.commit();
+          setToast("Clases recurrentes creadas");
+      } else {
+          await getCollection('clases').add(claseData);
+          setToast("Clase creada");
+      }
+  }, 
+  update: ({id, ...data}) => getCollection('clases').doc(id).update(data).then(() => setToast("Clase actualizada")),
+  delete: (id) => setDeletingInfo({ id, type: 'clase', collection: 'clases' })
+};
       const gastoCrud = { 
         create: (g) => getCollection('gastos').add(g).then(() => setToast("Gasto creado")),
         update: ({id, ...data}) => getCollection('gastos').doc(id).update(data).then(() => setToast("Gasto actualizado")),
