@@ -551,7 +551,6 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
         }).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       }, [clasesConDatos, filtroAlumno, filtroEstado, filtroFechaDesde, filtroFechaHasta]);
 
-      const clasesDeLaSemana = useMemo(() => clasesConDatos.filter(c => weekDates.includes(c.fecha)), [clasesConDatos, weekDates]);
       const canchasDisponibles = useMemo(() => (perfil.canchas || '').split('\n').filter(c => c.trim() !== ''), [perfil.canchas]);
       
       function handleFormChange(e) {
