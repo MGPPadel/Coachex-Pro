@@ -383,7 +383,7 @@ const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekSta
       );
     }
     
-function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment }) { // <-- 1. AQUÍ ACEPTAMOS LA NUEVA FUNCIÓN
+function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment , clases, pagos}) { // <-- 1. AQUÍ ACEPTAMOS LA NUEVA FUNCIÓN
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -445,7 +445,7 @@ const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", d
       </Card>
     </div>
   
-      <AlumnoFichaModal alumno={alumnoFicha} clases={state.clases} pagos={state.pagos} alumnos={alumnos} onClose={() => setAlumnoFicha(null)} />
+      <AlumnoFichaModal alumno={alumnoFicha} clases={clases} pagos={pagos} alumnos={alumnos} onClose={() => setAlumnoFicha(null)} />
     </>);
 }
     
@@ -2047,8 +2047,7 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
     }
     
     function MainApp({ user, onLogout }) {
-        console.log("User en MainApp:", user);
-      const [current, setCurrent] = useState("dashboard");
+        const [current, setCurrent] = useState("dashboard");
       const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
       const [loading, setLoading] = useState(true);
       const [toast, setToast] = useState("");
@@ -2264,7 +2263,7 @@ const goToEditClass = (clase) => {
           <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} perfil={state.perfil} onChangeModo={(m)=> db.collection('users').doc(user.uid).collection('profile').doc('main').set({ modoTrabajo: m }, { merge: true })} />
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
             {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
-            {current === "alumnos" && <Alumnos alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment} />}
+            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment} />}
             {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
