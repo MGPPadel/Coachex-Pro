@@ -287,7 +287,17 @@ const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekSta
                                 <li key={c.id} className="p-2 border-b flex justify-between items-center">
                                     <div>
                                         <p className="font-semibold">{c.hora} - {c.nombresAlumnos}</p>
-                                        <p className="text-xs text-slate-500">{c.tipo} en {c.cancha || 'N/A'}</p>
+                                        
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {(c.alumnoIds || []).map(id => {
+                                            const pago = (pagos || []).find(p => p.claseId === c.id && p.alumnoId === id);
+                                            const status = pago ? (pago.metodo === "Pendiente" ? "Pendiente" : "Pagado") : "Pendiente";
+                                            const cls = status==="Pagado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700";
+                                            const nombreCorto = (alumnoMap.get(id) || "").split(" ")[0] || "Alumno";
+                                            return <span key={id} className={`text-[11px] px-2 py-0.5 rounded-full ${cls}`}>{nombreCorto}: {status}</span>;
+                                          })}
+                                        </div>
+<p className="text-xs text-slate-500">{c.tipo} en {c.cancha || 'N/A'}</p>
                                     </div>
                                     <span className={`px-2 py-0.5 rounded-full text-xs ${c.estado === 'Programada' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>{c.estado}</span>
                                 </li>
@@ -377,7 +387,9 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", deporte: "Pádel", estado: "activo", plan: "porClase", frecuencia: "1xSemana", notas: "", horarios: [] };
+  
+  const [alumnoFicha, setAlumnoFicha] = useState(null);
+const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", deporte: "Pádel", estado: "activo", plan: "porClase", frecuencia: "1xSemana", notas: "", horarios: [] };
   
   const sortedAlumnos = useMemo(() => {
     return [...alumnos].sort((a, b) => getNombreCompleto(a).localeCompare(getNombreCompleto(b)));
@@ -435,6 +447,78 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
   );
 }
     
+
+function AlumnoFichaModal({ alumno, clases, pagos, onClose }) {
+  if (!alumno) return null;
+  const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id)), [clases, alumno]);
+  const pagosDelAlumno  = useMemo(() => (pagos  || []).filter(p => p.alumnoId === alumno.id), [pagos, alumno]);
+  const pagosPorClase = useMemo(() => {
+    const map = new Map();
+    pagosDelAlumno.forEach(p => {
+      const arr = map.get(p.claseId) || [];
+      arr.push(p);
+      map.set(p.claseId, arr);
+    });
+    return map;
+  }, [pagosDelAlumno]);
+  const stats = useMemo(() => {
+    const ahora = new Date();
+    const mes = ahora.getMonth(), anio = ahora.getFullYear();
+    let realizadasMes = 0, deuda = 0, pagadoEf = 0, pagadoTx = 0, pagadoMixto = 0;
+    clasesDelAlumno.forEach(c => {
+      const f = new Date(c.fecha);
+      const esMes = f.getMonth()===mes && f.getFullYear()===anio;
+      if (c.estado === "realizada" && esMes) realizadasMes++;
+      const pagosClase = pagosPorClase.get(c.id) || [];
+      const pagadoClase = pagosClase.reduce((acc,p)=> acc + (p.metodo==="Mixto" ? (parseFloat(p.detalleMixto?.efectivo||0)+parseFloat(p.detalleMixto?.transferencia||0)) : (p.metodo==="Pendiente" ? 0 : parseFloat(p.monto||0))), 0);
+      const pendiente = (c.estado==="realizada") && pagadoClase<=0;
+      if (pendiente) deuda += (parseFloat(c.montoPagado||0) || parseFloat(c.precioSugerido||0) || 0); // fallback
+      pagosClase.forEach(p => {
+        if (p.metodo==="Efectivo") pagadoEf += parseFloat(p.monto||0);
+        if (p.metodo==="Transferencia") pagadoTx += parseFloat(p.monto||0);
+        if (p.metodo==="Mixto") pagadoMixto += (parseFloat(p.detalleMixto?.efectivo||0)+parseFloat(p.detalleMixto?.transferencia||0));
+      });
+    });
+    return { realizadasMes, deuda, pagadoEf, pagadoTx, pagadoMixto };
+  }, [clasesDelAlumno, pagosPorClase]);
+  return (
+    <Modal isOpen={!!alumno} title={"Ficha de " + getNombreCompleto(alumno)} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar">
+      <div className="grid gap-4">
+        <Card title="Resumen del mes">
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="bg-emerald-50 p-3 rounded-xl"><p className="text-xs text-emerald-700">Clases realizadas</p><p className="text-xl font-bold">{stats.realizadasMes}</p></div>
+            <div className="bg-amber-50 p-3 rounded-xl"><p className="text-xs text-amber-700">Deuda estimada</p><p className="text-xl font-bold">${stats.deuda.toFixed(2)}</p></div>
+            <div className="bg-slate-50 p-3 rounded-xl"><p className="text-xs text-slate-600">Pagado</p><p className="text-sm">Ef: ${stats.pagadoEf.toFixed(2)} · Tx: ${stats.pagadoTx.toFixed(2)} · Mix: ${stats.pagadoMixto.toFixed(2)}</p></div>
+          </div>
+        </Card>
+        <Card title="Clases del alumno (últimas)">
+          <ul className="space-y-2 max-h-[50vh] overflow-auto pr-1">
+            {clasesDelAlumno
+              .slice()
+              .sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora))
+              .map(c => {
+                const pagosClase = pagosPorClase.get(c.id) || [];
+                const pago = pagosClase[0]; // si hay varios, mostramos el primero como referencia
+                const status = pago ? (pago.metodo==="Pendiente" ? "Pendiente" : "Pagado") : "Pendiente";
+                const cls = status==="Pagado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700";
+                const tam = (c.alumnoIds||[]).length || (TIPOS_CLASE.includes(c.tipo) ? parseInt(c.tipo.replace('x','')) : 1);
+                return (
+                  <li key={c.id} className="p-2 border rounded-lg flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold">{c.fecha} {c.hora} · {tam} persona(s)</p>
+                      <p className="text-xs text-slate-500">{(c.alumnoIds||[]).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')}</p>
+                    </div>
+                    <span className={"text-[11px] px-2 py-0.5 rounded-full " + cls}>{status}</span>
+                  </li>
+                );
+              })}
+          </ul>
+        </Card>
+      </div>
+    </Modal>
+  );
+}
+
 function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHorarioLaboral }) {
   const getStatusColor = (status) => {
     switch (status) { case "Realizada": return "bg-green-200 border-green-400"; case "Cancelada": return "bg-red-200 border-red-400"; case "Ausente": return "bg-yellow-200 border-yellow-400"; default: return "bg-blue-200 border-blue-400"; }
