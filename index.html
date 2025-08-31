@@ -192,7 +192,7 @@
             
             const clasesDelMes = clases.filter(c => {
                 const fechaClase = new Date(c.fecha);
-                return fechaClase.getMonth() === mesActual && fechaClase.getFullYear() === anioActual;
+                return fechaClase.getMonth() === mesActual && fechaClase.getFullYear() === anioActual && c.estado === "realizada";
             });
 
             return TIPOS_CLASE.reduce((acc, tipo) => {
@@ -276,7 +276,7 @@ const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekSta
                     <Card title="Nueva clase" right={<button onClick={goToNewClass} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
                         <p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p>
                     </Card>
-                    <ClasesPorTamanoMes clases={clases} />
+
                 </div>
                 <Card title="Agenda del Día">
                     {clasesHoy.length === 0 ? (
@@ -1351,7 +1351,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
               <div className="bg-blue-50 p-4 rounded-xl"><p className="text-sm text-blue-800">Balance Neto</p><p className={`text-2xl font-bold ${totales.balance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${totales.balance.toFixed(2)}</p></div>
             </div>
 
-            <div className="mb-6"><ClasesPorTamanoMes clases={clases} /></div>
+
             <div className="mb-6"><h4 className="text-md font-semibold text-slate-700 mb-2">Resumen Gráfico</h4><GraficoBarras data={dataGrafico} /></div>
 
             <div className="grid md:grid-cols-2 gap-4">
