@@ -187,6 +187,94 @@ function tipoPorCantidad(n) {
   if (n === 4) return "Cuarteto";
   return "Escuelita"; // para 5 o más
 }
+// ----------------------- Gestión de slots de clase (duplicar / mover) -----------------------
+
+// Devuelve la clase que ocupa (fecha|hora|deporte) o null
+function getClaseEnSlot(clases, fecha, hora, deporte = "Pádel") {
+  const f = String(fecha).trim();
+  const h = String(hora).trim();
+  const d = String(deporte || "Pádel").trim();
+  return (clases || []).find(
+    c => c.fecha === f && (c.hora || "").trim() === h && (c.deporte || "Pádel").trim() === d
+  ) || null;
+}
+
+// Duplicar una clase a otro slot (por defecto: misma hora, la semana siguiente).
+// options:
+//   - mergeSiExiste (bool, default true): si el slot destino está ocupado, une alumnoIds y recalcula tipo.
+//   - copiarNotas (bool, default true)
+//   - recalcularTipo (bool, default true)
+function duplicarClase(clases, claseId, overrides = {}, options = {}) {
+  const { mergeSiExiste = true, copiarNotas = true, recalcularTipo = true } = options;
+  const original = (clases || []).find(c => c.id === claseId);
+  if (!original) return { clases, error: "clase-no-encontrada" };
+
+  const fechaDestino  = overrides.fecha ? formatDate(overrides.fecha) : formatDate(addDays(new Date(original.fecha), 7));
+  const horaDestino   = overrides.hora     ?? original.hora;
+  const deporteDestino= overrides.deporte  ?? (original.deporte || "Pádel");
+
+  const existente = getClaseEnSlot(clases, fechaDestino, horaDestino, deporteDestino);
+
+  if (existente) {
+    if (!mergeSiExiste) return { clases, error: "slot-ocupado" };
+    const unionIds = Array.from(new Set([...(existente.alumnoIds || []), ...(original.alumnoIds || [])]));
+    const tipoNuevo = recalcularTipo ? tipoPorCantidad(unionIds.length) : (existente.tipo || original.tipo);
+    const actualizada = { ...existente, alumnoIds: unionIds, tipo: tipoNuevo };
+    const out = (clases || []).map(c => c.id === existente.id ? actualizada : c);
+    return { clases: out, actualizada };
+  }
+
+  // crear nueva
+  const alumnoIds = Array.from(new Set(original.alumnoIds || []));
+  const tipoNuevo = recalcularTipo ? tipoPorCantidad(alumnoIds.length) : (original.tipo || tipoPorCantidad(alumnoIds.length));
+  const notas = copiarNotas
+    ? [original.notas, `Duplicada de ${original.fecha} ${original.hora}`].filter(Boolean).join(" · ")
+    : `Duplicada de ${original.fecha} ${original.hora}`;
+
+  const creada = {
+    id: uid(),
+    fecha: fechaDestino,
+    hora: horaDestino,
+    alumnoIds,
+    tipo: tipoNuevo,
+    estado: "Programada",
+    deporte: deporteDestino || "Pádel",
+    cancha: original.cancha || "",
+    notas
+  };
+
+  return { clases: [...(clases || []), creada], creada };
+}
+
+// Mover una clase a otro slot.
+// Si el destino está ocupado y mergeSiExiste=true, une alumnos y elimina la original.
+function moverClase(clases, claseId, overrides = {}, options = {}) {
+  const { mergeSiExiste = true, recalcularTipo = true } = options;
+  const original = (clases || []).find(c => c.id === claseId);
+  if (!original) return { clases, error: "clase-no-encontrada" };
+
+  const fechaDestino  = overrides.fecha ? formatDate(overrides.fecha) : original.fecha;
+  const horaDestino   = overrides.hora    ?? original.hora;
+  const deporteDestino= overrides.deporte ?? (original.deporte || "Pádel");
+
+  const existente = getClaseEnSlot(clases, fechaDestino, horaDestino, deporteDestino);
+
+  if (existente) {
+    if (!mergeSiExiste) return { clases, error: "slot-ocupado" };
+    const unionIds = Array.from(new Set([...(existente.alumnoIds || []), ...(original.alumnoIds || [])]));
+    const tipoNuevo = recalcularTipo ? tipoPorCantidad(unionIds.length) : (existente.tipo || original.tipo);
+    const actualizada = { ...existente, alumnoIds: unionIds, tipo: tipoNuevo };
+    const sinOriginal = (clases || []).filter(c => c.id !== original.id);
+    const out = sinOriginal.map(c => c.id === existente.id ? actualizada : c);
+    return { clases: out, actualizada, eliminadaId: original.id };
+  }
+
+  // mover sin conflicto
+  const movida = { ...original, fecha: fechaDestino, hora: horaDestino, deporte: deporteDestino };
+  const out = (clases || []).map(c => c.id === original.id ? movida : c);
+  return { clases: out, movida };
+}
+
 /**
  * Genera clases para una fecha a partir de horarios fijos de los alumnos.
  * - Agrupa por (hora + deporte)
