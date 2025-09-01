@@ -532,7 +532,13 @@ const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds ||
                       <p className="font-semibold">{c.fecha} {c.hora} · {tam} persona(s)</p>
                       <p className="text-xs text-slate-500">{(c.alumnoIds||[]).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')}</p>
                     </div>
-                    <span className={"text-[11px] px-2 py-0.5 rounded-full " + cls}>{status}</span>
+                    <span className={"text-[11px] px-2 py-0.5 rounded-full " + cls}>{status}</span>{status==="Pendiente" && onPagarPendiente && (
+                      <button type="button"
+                              onClick={() => onPagarPendiente(c.id, alumno.id)}
+                              className="ml-2 text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 hover:bg-amber-100">
+                        Registrar pago
+                      </button>
+                    )}
                   </li>
                 );
               })}
