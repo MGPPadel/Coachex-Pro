@@ -404,7 +404,9 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   
+  
   const [alumnoFicha, setAlumnoFicha] = useState(null);
+const [alumnoFicha, setAlumnoFicha] = useState(null);
 const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", deporte: "Pádel", estado: "activo", plan: "porClase", frecuencia: "1xSemana", notas: "", horarios: [] };
   
   const sortedAlumnos = useMemo(() => {
