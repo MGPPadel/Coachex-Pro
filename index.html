@@ -1775,10 +1775,11 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
     function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave, focusAlumnoId }) {
   const [pagos, setPagos] = useState({});
 
+  
+  // Derived lists available for render and effects
+  const alumnosDeClase = clase ? (clase.alumnoIds || []).map(id => (alumnos || []).find(a => a.id === id)).filter(Boolean) : [];
   useEffect(() => {
     if (clase) {
-      const alumnosDeClase = clase.alumnoIds.map(id => alumnos.find(a => a.id === id)).filter(Boolean);
-  const visibles = focusAlumnoId ? alumnosDeClase.filter(a => a.id === focusAlumnoId) : alumnosDeClase;
       const alumnosQuePagan = alumnosDeClase.filter(a => a.plan !== 'mensual');
       const precioPorAlumno = alumnosQuePagan.length > 0 ? (parseFloat(clase.precio) / alumnosQuePagan.length) : 0;
 
@@ -1822,8 +1823,6 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   });
   onSave(pagosAGuardar);
 };
-
-  const alumnosDeClase = clase.alumnoIds.map(id => alumnos.find(a => a.id === id)).filter(Boolean);
 
   return (
     <Modal isOpen={isOpen} title={`Registrar Pago: ${clase.tipo}`} onCancel={onCancel} onConfirm={handleSave} confirmText="Guardar Pagos">
