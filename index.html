@@ -1778,7 +1778,9 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   
   // Derived lists available for render and effects
   const alumnosDeClase = clase ? (clase.alumnoIds || []).map(id => (alumnos || []).find(a => a.id === id)).filter(Boolean) : [];
-  useEffect(() => {
+  
+  const visibles = focusAlumnoId ? alumnosDeClase.filter(a => a.id === focusAlumnoId) : alumnosDeClase;
+useEffect(() => {
     if (clase) {
       const alumnosQuePagan = alumnosDeClase.filter(a => a.plan !== 'mensual');
       const precioPorAlumno = alumnosQuePagan.length > 0 ? (parseFloat(clase.precio) / alumnosQuePagan.length) : 0;
