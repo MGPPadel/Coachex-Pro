@@ -2414,9 +2414,7 @@ const goToEditClass = (clase) => {
                 onPagarPendiente={openPagoPendiente}
               />
             )}
- pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente}  onPagarPendiente={openPagoPendiente}  onRegistrarClase={openRegistrarClaseForAlumno} />}
-            
-            {current === "clases" && (
+{current === "clases" && (
               <Clases
                 clases={state.clases}
                 alumnos={state.alumnos}
@@ -2432,7 +2430,7 @@ const goToEditClass = (clase) => {
                 nuevoAlumnoId={nuevoAlumnoId}
               />
             )}
- alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) = nuevoAlumnoId={nuevoAlumnoId}> setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
+ alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) = /*removed_corrupt*/ nuevoAlumnoId={nuevoAlumnoId}> setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
             {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
