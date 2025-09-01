@@ -480,18 +480,30 @@ const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", d
     
 
 function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, onClose }) {
+  // Hooks at top-level (stable order)
   const [periodo, setPeriodo] = useState("mes");
   const rango = useMemo(() => {
     const now = new Date();
     let from = new Date(0);
     if (periodo === "mes") { from = new Date(now.getFullYear(), now.getMonth(), 1); }
-    else if (periodo === "tres") { from = new Date(now); from.setMonth(from.getMonth()-3); }
-    else if (periodo === "doce") { from = new Date(now); from.setMonth(from.getMonth()-12); }
+    else if (periodo === "tres") { from = new Date(now); from.setMonth(from.getMonth() - 3); }
+    else if (periodo === "doce") { from = new Date(now); from.setMonth(from.getMonth() - 12); }
     return { from };
   }, [periodo]);
-  const alumnoMap = useMemo(() => { const m = new Map(); (alumnos||[]).forEach(a => m.set(a.id, getNombreCompleto(a))); return m; }, [alumnos]);
-  const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno?.id)), [clases, alumno]);
-  const clasesFiltradas = useMemo(() => (clasesDelAlumno || []).filter(c => { const d = new Date(c.fecha); 
+
+  const clasesDelAlumno = useMemo(
+    () => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno?.id)),
+    [clases, alumno]
+  );
+
+  const clasesFiltradas = useMemo(
+    () => (clasesDelAlumno || []).filter(c => {
+      const d = new Date(c.fecha);
+      return isNaN(d) ? true : d >= rango.from;
+    }),
+    [clasesDelAlumno, rango]
+  );
+
   const stats = useMemo(() => {
     const now = new Date();
     const thisMonth = now.getMonth();
@@ -521,55 +533,69 @@ function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, on
 
     return { realizadasMes, deuda, pagadoEf, pagadoTx, pagadoMixto, pagadoMensual };
   }, [clasesFiltradas, pagos, alumno]);
-return isNaN(d) ? true : d >= rango.from; }), [clasesDelAlumno, rango]);
+
   if (!alumno) return null;
-    return (
-<Modal isOpen={!!alumno} title={"Ficha de " + getNombreCompleto(alumno)} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar">
-      <div className="grid gap-4">
-        <Card title="Resumen del mes">
-          <div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option></select></div><div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option></select></div><div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option><option value="todo">Todo</option></select></div><div className="grid grid-cols-3 gap-3 text-center">
-            <div className="bg-emerald-50 p-3 rounded-xl"><p className="text-xs text-emerald-700">Clases realizadas</p><p className="text-xl font-bold">{stats.realizadasMes}</p></div>
-            <div className="bg-amber-50 p-3 rounded-xl"><p className="text-xs text-amber-700">Deuda estimada</p><p className="text-xl font-bold">${stats.deuda.toFixed(2)}</p></div>
-            <div className="bg-slate-50 p-3 rounded-xl"><p className="text-xs text-slate-600">Pagado</p><p className="text-sm">Ef: $${stats.pagadoEf.toFixed(2)} · Tx: $${stats.pagadoTx.toFixed(2)} · Mix: $${stats.pagadoMixto.toFixed(2)} · Men: $${stats.pagadoMensual.toFixed(2)}</p></div>
+
+  const nombre = getNombreCompleto(alumno);
+
+  return (
+    <Modal isOpen={!!alumno} title={`Ficha de ${nombre}`} onCancel={onClose}>
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs">
+            <option value="mes">Mes actual</option>
+            <option value="tres">Últimos 3 meses</option>
+            <option value="doce">Últimos 12 meses</option>
+          </select>
+        </div>
+
+        <div className="p-3 border rounded-lg bg-white">
+          <div className="text-sm font-medium">Resumen</div>
+          <div className="text-sm mt-1">Clases realizadas (mes actual): {stats.realizadasMes}</div>
+          <div className="text-sm">Deuda: ${stats.deuda.toFixed(2)}</div>
+          <div className="text-xs text-slate-600">
+            Ef: ${stats.pagadoEf.toFixed(2)} · Tx: ${stats.pagadoTx.toFixed(2)} · Mix: ${stats.pagadoMixto.toFixed(2)} · Men: ${stats.pagadoMensual.toFixed(2)}
           </div>
-        </Card>
-        <Card title="Clases del alumno (últimas)">
-          <ul className="space-y-2 max-h-[50vh] overflow-auto pr-1">
-            {clasesDelAlumno
-              .slice()
-              .sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora))
-              .map(c => {
-                const pagosClase = (pagos || []).filter(p => p.claseId === c.id && p.alumnoId === alumno.id);
-                const pago = pagosClase[0];
-                const status = pago ? (pago.metodo==="Pendiente" ? "Pendiente" : "Pagado") : "Pendiente";
-                const cls = status==="Pagado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700";
-                const tam = (c.alumnoIds||[]).length || 1;
-                return (
-                  <li key={c.id} className="p-2 border rounded-lg flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">{c.fecha} {c.hora} · {tam} persona(s)</p>
-                      <p className="text-xs text-slate-500">{(c.alumnoIds||[]).map(id => (alumnos||[]).find(a=>a.id===id)).filter(Boolean).map(a => getNombreCompleto(a)).join(', ')}</p>
-                    </div>
-                    <div className="flex items-center">
-                      <span className={"text-[11px] px-2 py-0.5 rounded-full " + cls}>{status}</span>
-                      {status==="Pendiente" && onPagarPendiente && (
-                        <button type="button"
-                                onClick={() => onPagarPendiente(c.id, alumno.id)}
-                                className="ml-2 text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 hover:bg-amber-100">
-                          Registrar pago
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-          </ul>
-    </Card>
+        </div>
+
+        <ul className="space-y-2 max-h-[50vh] overflow-auto pr-1">
+          {clasesFiltradas.map(c => {
+            const pagosClase = (pagos || []).filter(p => p.claseId === c.id && p.alumnoId === alumno.id);
+            const status = pagosClase.length > 0 && !pagosClase.some(p => p.metodo === "Pendiente") ? "Pagado" : "Pendiente";
+            const cls = status === "Pagado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700";
+            const tam = (c.alumnoIds || []).length || 1;
+            const nombres = (c.alumnoIds || [])
+              .map(id => (alumnos || []).find(a => a.id === id))
+              .filter(Boolean)
+              .map(a => getNombreCompleto(a))
+              .join(", ");
+
+            return (
+              <li key={c.id} className="p-2 border rounded-lg flex items-center justify-between">
+                <div>
+                  <p className="font-semibold">{c.fecha} {c.hora} · {tam} persona(s)</p>
+                  <p className="text-xs text-slate-500">{nombres}</p>
+                </div>
+                <div className="flex items-center">
+                  <span className={"text-[11px] px-2 py-0.5 rounded-full " + cls}>{status}</span>
+                  {status === "Pendiente" && onPagarPendiente && (
+                    <button
+                      type="button"
+                      onClick={() => onPagarPendiente(c.id, alumno.id)}
+                      className="ml-2 text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 hover:bg-amber-100">
+                      Registrar pago
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </Modal>
-  
-        );
+  );
 }
+
 function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHorarioLaboral }) {
   const getStatusColor = (status) => {
     switch (status) { case "Realizada": return "bg-green-200 border-green-400"; case "Cancelada": return "bg-red-200 border-red-400"; case "Ausente": return "bg-yellow-200 border-yellow-400"; default: return "bg-blue-200 border-blue-400"; }
