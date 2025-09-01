@@ -493,7 +493,8 @@ function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, on
   const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno?.id)), [clases, alumno]);
   const clasesFiltradas = useMemo(() => (clasesDelAlumno || []).filter(c => { const d = new Date(c.fecha); return isNaN(d) ? true : d >= rango.from; }), [clasesDelAlumno, rango]);
   if (!alumno) return null;
-  <Modal isOpen={!!alumno} title={"Ficha de " + getNombreCompleto(alumno)} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar">
+    return (
+<Modal isOpen={!!alumno} title={"Ficha de " + getNombreCompleto(alumno)} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar">
       <div className="grid gap-4">
         <Card title="Resumen del mes">
           <div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option></select></div><div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option></select></div><div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option><option value="todo">Todo</option></select></div><div className="grid grid-cols-3 gap-3 text-center">
