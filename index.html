@@ -159,8 +159,24 @@
     // ------------------------------ UI Básicos ------------------------------
     function Card({ title, right, children }) { return (<section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4"><div className="flex items-center justify-between mb-3"><h3 className="text-base font-semibold text-slate-800">{title}</h3>{right}</div>{children}</section>); }
     function Toast({ msg, onClose }) { useEffect(() => { if (!msg) return; const t = setTimeout(onClose, 2500); return () => clearTimeout(t); }, [msg, onClose]); if (!msg) return null; return (<div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-xl z-50">{msg}</div>); }
-    function Modal({ isOpen, title, children, onConfirm, onCancel, confirmText = "Confirmar" }) { if (!isOpen) return null; return (<div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md"><h3 className="text-lg font-semibold mb-4">{title}</h3><div className="text-slate-600 mb-6">{children}</div><div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg border">Cancelar</button><button onClick={onConfirm} className={`px-4 py-2 rounded-lg text-white ${confirmText === "Confirmar" ? "bg-red-600" : "bg-emerald-600"}`}>{confirmText}</button></div></div></div>); }
-    function Topbar({ current, setCurrent, onLogout, perfil, onChangeModo }) { 
+    function Modal({ isOpen, title, children, onConfirm, onCancel, confirmText = "Confirmar", size = 'md' }) { // <-- 1. Agregamos 'size' aquí
+  if (!isOpen) return null; 
+  
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      {/* --- 👇 AQUÍ ES DONDE CAMBIA EL TAMAÑO 👇 --- */}
+      <div className={`bg-white rounded-2xl shadow-xl p-6 w-full max-w-${size}`}>
+        <h3 className="text-lg font-semibold mb-4">{title}</h3>
+        <div className="text-slate-600 mb-6">{children}</div>
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg border">Cancelar</button>
+          {/* El código del botón no cambia */}
+          <button onClick={onConfirm} className={`px-4 py-2 rounded-lg text-white ${confirmText === "Confirmar" ? "bg-red-600" : "bg-emerald-600"}`}>{confirmText}</button>
+        </div>
+      </div>
+    </div>
+  ); 
+}    function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubChange }) { 
       const tabs = [ { id: "dashboard", label: "Dashboard" }, { id: "alumnos", label: "Alumnos" }, { id: "clases", label: "Clases" },{ id: "grupos", label: "Grupos" }, { id: "pagos", label: "Pagos" }, { id: "gastos", label: "Gastos" }, { id: "reportes", label: "Reportes" }, { id: "perfil", label: "Perfil" } ]; 
       return (
         <header className="w-full bg-slate-900 text-white">
@@ -173,7 +189,17 @@
               </div>
             </div>
             <nav className="hidden md:flex items-center gap-3">
-              <select value={perfil?.modoTrabajo || 'Independiente'} onChange={(e)=> onChangeModo(e.target.value)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-white border border-slate-700" title="Modo de trabajo"><option value="Independiente">Independiente</option><option value="Club">Club</option></select>
+              <select 
+    value={clubActivoId || "general"} 
+    onChange={(e) => onClubChange(e.target.value === "general" ? null : e.target.value)} 
+    className="px-3 py-1.5 rounded-lg bg-slate-800 text-white border border-slate-700" 
+    title="Seleccionar Club"
+>
+    <option value="general">Independiente / Todos</option>
+    {clubes.map(club => (
+        <option key={club.id} value={club.id}>{club.nombre}</option>
+    ))}
+</select>
               {tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-1.5 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"}`}>{t.label}</button>))}
               <button onClick={onLogout} className="px-3 py-1.5 rounded-xl text-sm transition bg-red-600 hover:bg-red-700 text-white ml-4">Cerrar Sesión</button>
             </nav>
@@ -399,28 +425,24 @@ const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekSta
       );
     }
     
-function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment , clases, pagos, onRegistrarClase, onPagarPendiente}) { // <-- 1. AQUÍ ACEPTAMOS LA NUEVA FUNCIÓN
+function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment, clases, pagos, onRegistrarClase, onPagarPendiente, onEditarPago, onDeletePago }) {
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  
-  
-  
   const [busqueda, setBusqueda] = useState("");
-const [alumnoFicha, setAlumnoFicha] = useState(null);
-
-const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", deporte: "Pádel", estado: "activo", plan: "porClase", frecuencia: "1xSemana", notas: "", horarios: [] };
+  const [alumnoFicha, setAlumnoFicha] = useState(null);
+  const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", deporte: "Pádel", estado: "activo", plan: "porClase", frecuencia: "1xSemana", notas: "", horarios: [] };
   
   const sortedAlumnos = useMemo(() => {
-  const q = (busqueda || "").toLowerCase().trim();
-  const fil = (alumnos || []).filter(a => {
-    const n1 = (a.nombre || "").toLowerCase();
-    const n2 = (a.apellido || "").toLowerCase();
-    const nc = (getNombreCompleto(a) || "").toLowerCase();
-    return !q || n1.includes(q) || n2.includes(q) || nc.includes(q);
-  });
-  return fil.sort((a,b)=> getNombreCompleto(a).localeCompare(getNombreCompleto(b), "es", {sensitivity:"base"}));
-}, [alumnos, busqueda]);
+    const q = (busqueda || "").toLowerCase().trim();
+    const fil = (alumnos || []).filter(a => {
+      const n1 = (a.nombre || "").toLowerCase();
+      const n2 = (a.apellido || "").toLowerCase();
+      const nc = (getNombreCompleto(a) || "").toLowerCase();
+      return !q || n1.includes(q) || n2.includes(q) || nc.includes(q);
+    });
+    return fil.sort((a,b)=> getNombreCompleto(a).localeCompare(getNombreCompleto(b), "es", {sensitivity:"base"}));
+  }, [alumnos, busqueda]);
 
   const filtered = useMemo(() => { 
     const s = q.trim().toLowerCase(); 
@@ -431,166 +453,177 @@ const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", d
   function openNew() { setEditing(null); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
   function openEdit(a) { setEditing(a); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
   function cancel() { setShowForm(false); setEditing(null); }
+  
   async function submit(formData) {
     if (editing) {
-        // El modo EDICIÓN sigue funcionando como antes
         onUpdate({ ...formData, id: editing.id });
         cancel();
     } else {
-        // --- LÓGICA NUEVA PARA CREAR UN ALUMNO ---
         if (formData.plan === 'mensual') {
-            // Si el plan es mensual, guardamos al alumno y LUEGO abrimos el modal de pago.
             try {
-                // 'onCreate' ahora debe devolver el nuevo alumno con su ID
                 const nuevoAlumno = await onCreate(formData); 
-                cancel(); // Cierra el formulario de creación de alumno
-                onRegisterMonthlyPayment(nuevoAlumno); // Abre el modal de pago para el alumno recién creado
+                cancel();
+                onRegisterMonthlyPayment(nuevoAlumno);
             } catch (error) {
                 console.error("Error al guardar el alumno:", error);
                 alert("Hubo un error al guardar el alumno.");
             }
         } else {
-            // Si el plan es 'Por Clase', simplemente lo crea y cierra el formulario
             onCreate(formData);
             cancel();
         }
     }
-}
+  }
   
   return (<>
     <div className="grid gap-4">
       <Card title={editing ? "Editar alumno" : "Nuevo alumno"} right={!showForm && <button onClick={openNew} className="bg-slate-900 text-white text-sm px-3 py-1.5 rounded-xl">+ Nuevo</button>}>
         {showForm ? (
-            // --- 👇 2. AQUÍ LA PASAMOS AL FORMULARIO 👇 ---
             <AlumnoForm initialData={editing ? { ...emptyForm, ...editing } : emptyForm} onSubmit={submit} onCancel={cancel} onRegisterMonthlyPayment={onRegisterMonthlyPayment} studentBeingEdited={editing} />
-        ) : (
+         ) : (
             <p className="text-sm text-slate-500">Hacé clic en <b>+ Nuevo</b> para crear un alumno, o en el lápiz para editar.</p>
         )}
       </Card>
       <Card title="Listado de alumnos" right={<input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar" className="border rounded-xl px-3 py-1.5 text-sm" />}>
-        <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Nombre Completo</th><th className="p-2">Teléfono</th><th className="p-2">Plan de Pago</th><th className="p-2">Estado</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>{filtered.length === 0 && (<tr><td colSpan={5} className="text-center py-6 text-slate-400">No hay alumnos</td></tr>)}{filtered.map((a) => (<tr key={a.id} className="border-t"><td className="p-2 font-semibold">{getNombreCompleto(a)}</td><td className="p-2"><div className="flex items-center gap-2"><span>{a.telefono || "-"}</span>{a.telefono && (<a href={waLink(a.telefono, a.nombre)} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-0.5 text-xs rounded-full border text-green-700 bg-green-50 hover:bg-green-100">WhatsApp</a>)}</div></td><td className="p-2">{a.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</td><td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${a.estado === 'espera' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{a.estado === 'espera' ? 'Espera' : 'Activo'}</span></td><td className="p-2 text-right"><div className="inline-flex gap-2"><button type="button" onClick={() => setAlumnoFicha(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">👁️ Ver ficha</button>
-            <button type="button" onClick={() => onRegistrarClase && onRegistrarClase(a.id)} className="px-2 py-1 text-xs rounded-lg border bg-emerald-50 text-emerald-700 hover:bg-emerald-100">🟢 Registrar clase</button>
-            <button onClick={() => openEdit(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button><button type="button" onClick={() => onDelete(a.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button></div></td></tr>))}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Nombre Completo</th><th className="p-2">Teléfono</th><th className="p-2">Plan de Pago</th><th className="p-2">Estado</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>{filtered.length === 0 && (<tr><td colSpan={5} className="text-center py-6 text-slate-400">No hay alumnos</td></tr>)}{filtered.map((a) => (<tr key={a.id} className="border-t"><td className="p-2 font-semibold">{getNombreCompleto(a)}</td><td className="p-2"><div className="flex items-center gap-2"><span>{a.telefono || "-"}</span>{a.telefono && (<a href={waLink(a.telefono, a.nombre)} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-0.5 text-xs rounded-full border text-green-700 bg-green-50 hover:bg-green-100">WhatsApp</a>)}</div></td><td className="p-2">{a.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</td><td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${a.estado === 'espera' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{a.estado === 'espera' ? 'Espera' : 'Activo'}</span></td><td className="p-2 text-right"><div className="inline-flex gap-2"><button type="button" onClick={() => setAlumnoFicha(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">👁️ Ver ficha</button><button type="button" onClick={() => onRegistrarClase && onRegistrarClase(a.id)} className="px-2 py-1 text-xs rounded-lg border bg-emerald-50 text-emerald-700 hover:bg-emerald-100">🟢 Registrar clase</button><button onClick={() => openEdit(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button><button type="button" onClick={() => onDelete(a.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button></div></td></tr>))}</tbody></table></div>
       </Card>
     </div>
   
-      <AlumnoFichaModal alumno={alumnoFicha} clases={clases} pagos={pagos} alumnos={alumnos} onPagarPendiente={onPagarPendiente} onClose={() => setAlumnoFicha(null)} />
+      <AlumnoFichaModal 
+          alumno={alumnoFicha} 
+          clases={clases} 
+          pagos={pagos} 
+          alumnos={alumnos} 
+          onPagarPendiente={onPagarPendiente} 
+          onClose={() => setAlumnoFicha(null)} 
+          onRegistrarPago={onRegisterMonthlyPayment} 
+          onEditarPago={onEditarPago} 
+          onDeletePago={onDeletePago} 
+      />
     </>);
 }
     
+function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, onClose, onRegistrarPago, onEditarPago, onDeletePago }) {
+  const [activeTab, setActiveTab] = useState('cuenta');
 
-function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, onClose }) {
-  // Hooks at top-level (stable order)
-  const [periodo, setPeriodo] = useState("mes");
-  const rango = useMemo(() => {
-    const now = new Date();
-    let from = new Date(0);
-    if (periodo === "mes") { from = new Date(now.getFullYear(), now.getMonth(), 1); }
-    else if (periodo === "tres") { from = new Date(now); from.setMonth(from.getMonth() - 3); }
-    else if (periodo === "doce") { from = new Date(now); from.setMonth(from.getMonth() - 12); }
-    return { from };
-  }, [periodo]);
-
-  const clasesDelAlumno = useMemo(
-    () => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno?.id)),
-    [clases, alumno]
-  );
-
-  const clasesFiltradas = useMemo(
-    () => (clasesDelAlumno || []).filter(c => {
-      const d = new Date(c.fecha);
-      return isNaN(d) ? true : d >= rango.from;
-    }),
-    [clasesDelAlumno, rango]
-  );
-
-  const stats = useMemo(() => {
-    const now = new Date();
-    const thisMonth = now.getMonth();
-    const thisYear = now.getFullYear();
-    let realizadasMes = 0, deuda = 0, pagadoEf = 0, pagadoTx = 0, pagadoMixto = 0, pagadoMensual = 0;
-
-    (clasesFiltradas || []).forEach(c => {
-      const f = new Date(c.fecha);
-      const enMes = f.getMonth() === thisMonth && f.getFullYear() === thisYear;
-      const tam = (c.alumnoIds || []).length || 1;
-      const precioClase = parseFloat(c.precio || 0) || 0;
-      const unit = tam > 0 ? (precioClase / tam) : precioClase;
-
-      const pagosClase = (pagos || []).filter(p => p.claseId === c.id && p.alumnoId === (alumno?.id));
-      const hayPendiente = pagosClase.length === 0 || pagosClase.some(p => p.metodo === "Pendiente");
-      if (hayPendiente) deuda += unit;
-
-      pagosClase.forEach(p => {
-        if (p.metodo === "Efectivo") pagadoEf += parseFloat(p.monto || 0);
-        if (p.metodo === "Transferencia") pagadoTx += parseFloat(p.monto || 0);
-        if (p.metodo === "Mixto") pagadoMixto += (parseFloat(p.detalleMixto?.efectivo || 0) + parseFloat(p.detalleMixto?.transferencia || 0));
-        if (p.metodo === "Mensual") pagadoMensual += parseFloat(p.monto || 0);
+  const estadoDeCuenta = useMemo(() => {
+    if (!alumno || !clases || !pagos) return { movimientos: [], saldoFinal: 0 };
+    const safeParseFloat = (value) => parseFloat(value) || 0;
+    const debitos = (clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id) && (c.estado === 'Realizada' || c.estado === 'Ausente')).map(c => {
+        const totalAlumnosEnClase = (c.alumnoIds || []).length || 1;
+        const precioClase = safeParseFloat(c.precio);
+        const precioPorAlumno = precioClase / totalAlumnosEnClase;
+        return { fecha: new Date(`${c.fecha}T${c.hora || '00:00'}`), concepto: `Clase de ${c.tipo || 'desconocido'}`, debe: precioPorAlumno, haber: 0, claseOriginal: c, tipoMovimiento: 'clase' };
       });
-
-      if ((c.estado || "realizada") === "realizada" && enMes) realizadasMes += 1;
+    const creditos = (pagos || []).filter(p => p.alumnoId === alumno.id && p.metodo !== 'Pendiente').map(p => ({ fecha: new Date(`${p.fecha}T23:59:59`), concepto: p.concepto || `Pago de clase`, debe: 0, haber: safeParseFloat(p.monto), pagoOriginal: p, tipoMovimiento: 'pago' }));
+    const movimientos = [...debitos, ...creditos].sort((a, b) => a.fecha - b.fecha);
+    let saldoAcumulado = 0;
+    const movimientosConSaldo = movimientos.map(mov => {
+      saldoAcumulado = saldoAcumulado + mov.debe - mov.haber;
+      return { ...mov, saldo: saldoAcumulado };
     });
-
-    return { realizadasMes, deuda, pagadoEf, pagadoTx, pagadoMixto, pagadoMensual };
-  }, [clasesFiltradas, pagos, alumno]);
+    return { movimientos: movimientosConSaldo, saldoFinal: saldoAcumulado };
+  }, [alumno, clases, pagos]);
 
   if (!alumno) return null;
 
   const nombre = getNombreCompleto(alumno);
+  const TabButton = ({ tabId, children }) => ( <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-semibold rounded-t-lg ${activeTab === tabId ? 'bg-white border-b-white -mb-px border-l border-r border-t' : 'bg-slate-100 text-slate-600 border'}`}> {children} </button> );
 
   return (
-    <Modal isOpen={!!alumno} title={`Ficha de ${nombre}`} onCancel={onClose}>
+    <Modal isOpen={!!alumno} title={`Ficha de ${nombre}`} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar" size="4xl">
       <div className="space-y-4">
-        <div className="flex justify-end">
-          <select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs">
-            <option value="mes">Mes actual</option>
-            <option value="tres">Últimos 3 meses</option>
-            <option value="doce">Últimos 12 meses</option>
-          </select>
+        <div className="flex border-b">
+          <TabButton tabId="cuenta">Estado de Cuenta</TabButton>
+          <TabButton tabId="clases">Historial de Clases</TabButton>
+          <TabButton tabId="datos">Datos Personales</TabButton>
         </div>
-
-        <div className="p-3 border rounded-lg bg-white">
-          <div className="text-sm font-medium">Resumen</div>
-          <div className="text-sm mt-1">Clases realizadas (mes actual): {stats.realizadasMes}</div>
-          <div className="text-sm">Deuda: ${stats.deuda.toFixed(2)}</div>
-          <div className="text-xs text-slate-600">
-            Ef: ${stats.pagadoEf.toFixed(2)} · Tx: ${stats.pagadoTx.toFixed(2)} · Mix: ${stats.pagadoMixto.toFixed(2)} · Men: ${stats.pagadoMensual.toFixed(2)}
-          </div>
-        </div>
-
-        <ul className="space-y-2 max-h-[50vh] overflow-auto pr-1">
-          {clasesFiltradas.map(c => {
-            const pagosClase = (pagos || []).filter(p => p.claseId === c.id && p.alumnoId === alumno.id);
-            const status = pagosClase.length > 0 && !pagosClase.some(p => p.metodo === "Pendiente") ? "Pagado" : "Pendiente";
-            const cls = status === "Pagado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700";
-            const tam = (c.alumnoIds || []).length || 1;
-            const nombres = (c.alumnoIds || [])
-              .map(id => (alumnos || []).find(a => a.id === id))
-              .filter(Boolean)
-              .map(a => getNombreCompleto(a))
-              .join(", ");
-
-            return (
-              <li key={c.id} className="p-2 border rounded-lg flex items-center justify-between">
+        <div className="p-4 border-x border-b rounded-b-lg bg-white min-h-[300px]">
+          {/* --- Pestaña de Estado de Cuenta --- */}
+          {activeTab === 'cuenta' && (
+            <div>
+              <div className="flex justify-between items-center mb-4 p-3 bg-slate-50 rounded-lg">
                 <div>
-                  <p className="font-semibold">{c.fecha} {c.hora} · {tam} persona(s)</p>
-                  <p className="text-xs text-slate-500">{nombres}</p>
+                  <h4 className="text-sm text-slate-600">{estadoDeCuenta.saldoFinal > 0 ? 'Deuda Total' : 'Saldo a Favor'}</h4>
+                  <p className={`text-2xl font-bold ${estadoDeCuenta.saldoFinal > 0 ? 'text-red-600' : 'text-emerald-600'}`}>${Math.abs(estadoDeCuenta.saldoFinal).toFixed(2)}</p>
                 </div>
-                <div className="flex items-center">
-                  <span className={"text-[11px] px-2 py-0.5 rounded-full " + cls}>{status}</span>
-                  {status === "Pendiente" && onPagarPendiente && (
-                    <button
-                      type="button"
-                      onClick={() => onPagarPendiente(c.id, alumno.id)}
-                      className="ml-2 text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 hover:bg-amber-100">
-                      Registrar pago
-                    </button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                <button onClick={() => onRegistrarPago(alumno)} className="px-4 py-2 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">[+] Acreditar Pago / Abono</button>
+              </div>
+              <div className="overflow-y-auto max-h-[300px]">
+                <table className="min-w-full text-sm text-left">
+                  <thead className="sticky top-0 bg-white"><tr><th className="p-2 border-b">Fecha</th><th className="p-2 border-b">Concepto</th><th className="p-2 border-b text-right">Debe</th><th className="p-2 border-b text-right">Haber</th><th className="p-2 border-b text-right">Saldo</th><th className="p-2 border-b text-right">Acciones</th></tr></thead>
+                  <tbody>
+                    {estadoDeCuenta.movimientos.slice().reverse().map((mov, index) => (
+                      <tr key={index} className={`border-t ${mov.tipoMovimiento === 'pago' ? 'hover:bg-sky-50' : ''}`}>
+                        <td className="p-2">{formatDate(mov.fecha, 'dd/mm/yyyy')}</td>
+                        <td className="p-2">{mov.concepto}</td>
+                        <td className="p-2 text-right text-red-600">{mov.debe > 0 ? `$${mov.debe.toFixed(2)}` : ''}</td>
+                        <td className="p-2 text-right text-emerald-600">{mov.haber > 0 ? `$${mov.haber.toFixed(2)}` : ''}</td>
+                        <td className="p-2 text-right font-semibold">${mov.saldo.toFixed(2)}</td>
+                        <td className="p-2 text-right">
+                          {mov.tipoMovimiento === 'pago' && (
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => onEditarPago(mov.pagoOriginal)} className="text-xs text-blue-600 hover:underline">Editar</button>
+                              <button onClick={() => onDeletePago(mov.pagoOriginal.id)} className="text-xs text-red-600 hover:underline">Eliminar</button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {estadoDeCuenta.movimientos.length === 0 && <p className="text-center text-slate-400 py-4">No hay movimientos.</p>}
+              </div>
+            </div>
+          )}
+          {/* --- Pestaña de Historial de Clases --- */}
+          {activeTab === 'clases' && (
+            <div>
+              <h3 className="font-bold text-lg mb-2">Historial de Clases</h3>
+              <ul className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                  {(clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id)).sort((a, b) => new Date(b.fecha + 'T' + b.hora) - new Date(a.fecha + 'T' + a.hora)).map(clase => {
+                      const pagosDeLaClase = (pagos || []).filter(p => p.claseId === clase.id && p.alumnoId === alumno.id);
+                      const estaPagado = pagosDeLaClase.some(p => p.metodo !== 'Pendiente');
+                      const estadoPago = estaPagado ? 'Pagado' : 'Pendiente';
+                      const mostrarBotonPagar = (clase.estado === 'Realizada' || clase.estado === 'Ausente') && !estaPagado;
+                      return (
+                          <li key={clase.id} className="p-3 border rounded-lg flex justify-between items-center hover:bg-slate-50">
+                              <div>
+                                  <p className="font-semibold">{formatDate(clase.fecha, 'dd/mm/yyyy')} - {clase.hora} - {clase.tipo}</p>
+                                  <p className="text-xs text-slate-500">{clase.cancha || 'Sin ubicación'}</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                  {mostrarBotonPagar ? (
+                                      <button onClick={() => onPagarPendiente(clase, alumno.id)} className="px-3 py-1 text-xs bg-white border border-emerald-600 text-emerald-600 rounded-lg hover:bg-emerald-50">💳 Pagar</button>
+                                  ) : (
+                                      <span className={`text-xs px-2 py-1 rounded-full ${estadoPago === 'Pagado' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>{estadoPago}</span>
+                                  )}
+                              </div>
+                          </li>
+                      );
+                  })}
+              </ul>
+              {(clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id)).length === 0 && (<p className="text-center text-slate-400 py-4">Este alumno aún no tiene clases registradas.</p>)}
+            </div>
+          )}
+          {/* --- Pestaña de Datos Personales --- */}
+          {activeTab === 'datos' && (
+            <div>
+              <h3 className="font-bold text-lg mb-2">Datos y Configuración del Alumno</h3>
+              <div className="space-y-3 text-sm max-h-[400px] overflow-y-auto pr-2">
+                  <div className="p-2 border-b"><p className="text-xs text-slate-500">Nombre Completo</p><p className="font-semibold text-slate-800">{getNombreCompleto(alumno)}</p></div>
+                  <div className="p-2 border-b"><p className="text-xs text-slate-500">Teléfono</p><p className="font-semibold text-slate-800">{alumno.telefono || "No especificado"}</p></div>
+                  <div className="p-2 border-b"><p className="text-xs text-slate-500">Plan de Pago</p><p className="font-semibold text-slate-800">{alumno.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</p></div>
+                  {alumno.plan === 'mensual' && (<div className="p-2 border-b"><p className="text-xs text-slate-500">Frecuencia</p><p className="font-semibold text-slate-800">{(FRECUENCIAS_MENSUALES.find(f => f.value === alumno.frecuencia) || {}).label || 'No especificada'}</p></div>)}
+                  <div className="p-2 border-b">
+                      <p className="text-xs text-slate-500">Horarios Fijos</p>
+                      {alumno.horarios && alumno.horarios.length > 0 ? (<div className="flex flex-wrap gap-2 mt-1">{alumno.horarios.map((h, i) => (<span key={i} className="px-2 py-1 bg-sky-100 text-sky-800 rounded-full text-xs">{h.dia} {h.hora}</span>))}</div>) : (<p className="font-semibold text-slate-800">No tiene horarios fijos</p>)}
+                  </div>
+                  <div className="p-2"><p className="text-xs text-slate-500">Notas</p><p className="font-semibold text-slate-800 whitespace-pre-wrap">{alumno.notas || "Sin notas"}</p></div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </Modal>
   );
@@ -1541,69 +1574,201 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
 
 function GestionClubes({ user }) {
   const [clubes, setClubes] = useState([]);
-  const [nombreClub, setNombreClub] = useState("");
+  const [activoId, setActivoId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({
+    nombre: "",
+    modalidadPrincipal: "por_clase",
+    ubicaciones: [],
+    reparto: { coach: 60, club: 40 },
+    preciosClase: { individual: 0, dupla: 0, trio: 0, cuarteto: 0, escuelita: 0 },
+    preciosMensuales: { "1xSemana": 0, "2xSemana": 0, "3xSemana": 0, "libre": 0 },
+    horarioLaboral: { bloques: [] }
+  });
 
-  // Referencia a la nueva colección 'clubs' en Firestore
   const clubsCollection = useMemo(() => {
     if (!user) return null;
     return db.collection('users').doc(user.uid).collection('clubs');
   }, [user]);
 
-  // Cargar los clubes existentes
+  // Cargar clubes + seleccionar primero
   useEffect(() => {
     if (!clubsCollection) return;
+    setLoading(true);
     const unsubscribe = clubsCollection.onSnapshot(snapshot => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setClubes(data);
+      if (!activoId && data.length) setActivoId(data[0].id);
       setLoading(false);
     });
     return () => unsubscribe();
   }, [clubsCollection]);
 
-  const handleCrearClub = () => {
-    if (!nombreClub.trim()) {
-      alert("El nombre del club no puede estar vacío.");
+  // Cargar datos del club activo al form
+  useEffect(() => {
+    if (!activoId || !clubsCollection) return;
+    const unsub = clubsCollection.doc(activoId).onSnapshot(doc => {
+      const d = doc.data() || {};
+      setForm({
+        nombre: d.nombre || "",
+        modalidadPrincipal: d.modalidadPrincipal || "por_clase",
+        ubicaciones: d.ubicaciones || [],
+        reparto: d.reparto || { coach: 60, club: 40 },
+        preciosClase: { individual: 0, dupla: 0, trio: 0, cuarteto: 0, escuelita: 0, ...(d.preciosClase||{}) },
+        preciosMensuales: { "1xSemana": 0, "2xSemana": 0, "3xSemana": 0, "libre": 0, ...(d.preciosMensuales||{}) },
+        horarioLaboral: d.horarioLaboral || { bloques: [] },
+      });
+    });
+    return () => unsub();
+  }, [activoId, clubsCollection]);
+
+  async function crearClub() {
+    if (!clubsCollection) return;
+    const base = {
+      nombre: "Nuevo Club",
+      modalidadPrincipal: "por_clase",
+      ubicaciones: [],
+      reparto: { coach: 60, club: 40 },
+      preciosClase: { individual: 0, dupla: 0, trio: 0, cuarteto: 0, escuelita: 0 },
+      preciosMensuales: { "1xSemana": 0, "2xSemana": 0, "3xSemana": 0, "libre": 0 },
+      horarioLaboral: { bloques: [] },
+      createdAt: new Date().toISOString()
+    };
+    const ref = await clubsCollection.add(base);
+    setActivoId(ref.id);
+  }
+
+  async function eliminarClub(id) {
+    if (!clubsCollection || !id) return;
+    if (!confirm("¿Eliminar este club? Esta acción no se puede deshacer.")) return;
+    await clubsCollection.doc(id).delete();
+    if (activoId === id) {
+      const rest = clubes.filter(c => c.id !== id);
+      setActivoId(rest[0]?.id || null);
+    }
+  }
+
+  async function guardarClub() {
+    if (!clubsCollection || !activoId) return;
+    const pct = Number(form.reparto.coach||0) + Number(form.reparto.club||0);
+    if (pct !== 100) {
+      alert("El reparto debe sumar 100%");
       return;
     }
-    clubsCollection.add({ nombre: nombreClub })
-      .then(() => setNombreClub(""))
-      .catch(e => console.error("Error al crear el club:", e));
-  };
+    await clubsCollection.doc(activoId).set({
+      ...form,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    alert("Configuración del club guardada");
+  }
 
-  const handleEliminarClub = (id) => {
-    if (window.confirm("¿Estás seguro de que quieres eliminar este club? Se borrarán todos los datos asociados a él en el futuro.")) {
-      clubsCollection.doc(id).delete()
-        .catch(e => console.error("Error al eliminar el club:", e));
-    }
-  };
+  // UI helpers
+  const dias = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+  const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  function addUbicacion() { setField('ubicaciones', [...(form.ubicaciones||[]), ""]); }
+  function updUbicacion(i, val) { const u=[...(form.ubicaciones||[])]; u[i]=val; setField('ubicaciones', u); }
+  function delUbicacion(i) { const u=[...(form.ubicaciones||[])]; u.splice(i,1); setField('ubicaciones', u); }
+
+  function addBloque() { setField('horarioLaboral', { bloques: [ ...(form.horarioLaboral?.bloques||[]), { dia:"Lunes", desde:"08:00", hasta:"12:00" } ]}); }
+  function updBloque(i, patch) { const b=[...(form.horarioLaboral?.bloques||[])]; b[i]={...b[i], ...patch}; setField('horarioLaboral', { bloques: b }); }
+  function delBloque(i) { const b=[...(form.horarioLaboral?.bloques||[])]; b.splice(i,1); setField('horarioLaboral', { bloques: b }); }
+
+  if (loading) return <div className="text-sm opacity-70">Cargando clubes…</div>;
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={nombreClub}
-          onChange={(e) => setNombreClub(e.target.value)}
-          placeholder="Nombre del nuevo club"
-          className="w-full border rounded-lg px-3 py-2"
-        />
-        <button onClick={handleCrearClub} className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold whitespace-nowrap">
-          + Agregar
-        </button>
+    <div className="space-y-6">
+      {/* Selector + Acciones */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select className="border rounded-xl px-3 py-2" value={activoId || ""} onChange={e=>setActivoId(e.target.value)}>
+          {clubes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+        </select>
+        <button className="px-3 py-2 rounded-xl border" onClick={crearClub}>Nuevo club</button>
+        {activoId && <button className="px-3 py-2 rounded-xl border text-red-600" onClick={()=>eliminarClub(activoId)}>Eliminar</button>}
+        <div className="grow" />
+        <button className="px-3 py-2 rounded-xl bg-black text-white" onClick={guardarClub}>Guardar cambios</button>
       </div>
-      <div>
-        {loading && <p className="text-sm text-slate-500">Cargando clubes...</p>}
-        <ul className="space-y-2">
-          {clubes.map(club => (
-            <li key={club.id} className="flex justify-between items-center p-2 border rounded-lg bg-slate-50">
-              <span className="text-slate-800">{club.nombre}</span>
-              <button onClick={() => handleEliminarClub(club.id)} className="text-red-500 hover:text-red-700 text-xs">
-                Eliminar
-              </button>
-            </li>
-          ))}
-        </ul>
+
+      {/* Config General */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="space-y-4 p-4 border rounded-2xl bg-white">
+          <h3 className="font-semibold">Configuración General</h3>
+          <label className="block text-sm">Nombre del Club</label>
+          <input className="w-full border rounded-xl px-3 py-2" value={form.nombre} onChange={e=>setField('nombre', e.target.value)} />
+
+          <label className="block text-sm mt-3">Modalidad de Cobro Principal</label>
+          <select className="w-full border rounded-xl px-3 py-2" value={form.modalidadPrincipal} onChange={e=>setField('modalidadPrincipal', e.target.value)}>
+            <option value="por_clase">Por Clase</option>
+            <option value="mensual">Mensual</option>
+          </select>
+
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <div>
+              <label className="block text-sm">Reparto % (Coach)</label>
+              <input type="number" className="w-full border rounded-xl px-3 py-2" value={form.reparto.coach} onChange={e=>setField('reparto', { coach:Number(e.target.value)||0, club: Number(form.reparto.club||0) })} />
+            </div>
+            <div>
+              <label className="block text-sm">Reparto % (Club)</label>
+              <input type="number" className="w-full border rounded-xl px-3 py-2" value={form.reparto.club} onChange={e=>setField('reparto', { coach:Number(form.reparto.coach||0), club: Number(e.target.value)||0 })} />
+            </div>
+            <div className="col-span-2 text-xs opacity-70">
+              Debe sumar 100%. Actual: {(Number(form.reparto.coach||0)+Number(form.reparto.club||0))}%
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <label className="block text-sm">Canchas / Ubicaciones</label>
+            <div className="space-y-2">
+              {(form.ubicaciones||[]).map((u,i)=>(
+                <div key={i} className="flex gap-2">
+                  <input className="flex-1 border rounded-xl px-3 py-2" value={u} onChange={e=>updUbicacion(i, e.target.value)} />
+                  <button className="px-3 py-2 rounded-xl border" onClick={()=>delUbicacion(i)}>Quitar</button>
+                </div>
+              ))}
+            </div>
+            <button className="mt-2 px-3 py-2 rounded-xl border" onClick={addUbicacion}>Agregar ubicación</button>
+          </div>
+        </div>
+
+        {/* Horario laboral por club */}
+        <div className="space-y-4 p-4 border rounded-2xl bg-white">
+          <h3 className="font-semibold">Horario Laboral (por club)</h3>
+          <div className="space-y-2">
+            {(form.horarioLaboral?.bloques||[]).map((b,i)=>(
+              <div key={i} className="grid grid-cols-4 gap-2 items-center">
+                <select className="border rounded-xl px-3 py-2" value={b.dia} onChange={e=>updBloque(i,{dia:e.target.value})}>
+                  {dias.map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
+                <input type="time" className="border rounded-xl px-3 py-2" value={b.desde} onChange={e=>updBloque(i,{desde:e.target.value})}/>
+                <input type="time" className="border rounded-xl px-3 py-2" value={b.hasta} onChange={e=>updBloque(i,{hasta:e.target.value})}/>
+                <button className="px-3 py-2 rounded-xl border" onClick={()=>delBloque(i)}>Quitar</button>
+              </div>
+            ))}
+          </div>
+          <button className="px-3 py-2 rounded-xl border" onClick={addBloque}>Agregar bloque</button>
+        </div>
+      </div>
+
+      {/* Precios por Clase */}
+      <div className="p-4 border rounded-2xl space-y-3 bg-white">
+        <h3 className="font-semibold">Precios por Clase</h3>
+        {["individual","dupla","trio","cuarteto","escuelita"].map(k=>(
+          <div key={k} className="grid grid-cols-2 md:grid-cols-3 gap-2 items-center">
+            <div className="text-sm capitalize">{k}</div>
+            <input type="number" className="border rounded-xl px-3 py-2" value={form.preciosClase[k] ?? 0} onChange={e=>setField('preciosClase', { ...(form.preciosClase||{}), [k]: Number(e.target.value)||0 })} />
+          </div>
+        ))}
+      </div>
+
+      {/* Precios Mensuales */}
+      <div className="p-4 border rounded-2xl space-y-3 bg-white">
+        <h3 className="font-semibold">Precios Mensuales</h3>
+        {[["1xSemana","1 vez por semana"],["2xSemana","2 veces por semana"],["3xSemana","3 veces por semana"],["libre","Libre"]].map(([key,label])=>(
+          <div key={key} className="grid grid-cols-2 md:grid-cols-3 gap-2 items-center">
+            <div className="text-sm">{label}</div>
+            <input type="number" className="border rounded-xl px-3 py-2" value={form.preciosMensuales[key] ?? 0} onChange={e=>setField('preciosMensuales', { ...(form.preciosMensuales||{}), [key]: Number(e.target.value)||0 })} />
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1623,6 +1788,7 @@ function GestionClubes({ user }) {
   const [destinatarios, setDestinatarios] = useState([]);
   const [busquedaAlumno, setBusquedaAlumno] = useState("");
   const [listaBusquedaAbierta, setListaBusquedaAbierta] = useState(false);
+  const [editingPlantilla, setEditingPlantilla] = useState(null); // null=cerrado, {}=nueva, {...datos}=editando
 
   // Carga las plantillas de mensajes desde Firebase
   useEffect(() => {
@@ -1681,6 +1847,33 @@ function GestionClubes({ user }) {
         alert(`No se pudo generar el enlace para ${getNombreCompleto(destinatario)} porque no tiene un número de teléfono válido.`);
     }
 };
+const handleSavePlantilla = (plantillaData) => {
+    const plantillasCollection = db.collection('users').doc(user.uid).collection('plantillas');
+    if (plantillaData.id) {
+      // Editando una existente
+      const { id, ...data } = plantillaData;
+      plantillasCollection.doc(id).update(data).then(() => {
+        setToast("Plantilla actualizada");
+        setEditingPlantilla(null); // Cierra el modal
+      });
+    } else {
+      // Creando una nueva
+      plantillasCollection.add(plantillaData).then(() => {
+        setToast("Plantilla creada");
+        setEditingPlantilla(null); // Cierra el modal
+      });
+    }
+  };
+
+  const handleDeletePlantilla = () => {
+    if (plantillaSeleccionada && window.confirm(`¿Estás seguro de que quieres eliminar la plantilla "${plantillaSeleccionada.titulo}"?`)) {
+        db.collection('users').doc(user.uid).collection('plantillas').doc(plantillaSeleccionada.id).delete().then(() => {
+            setToast("Plantilla eliminada");
+            setPlantillaSeleccionada(null);
+            setMensajePersonalizado("");
+        });
+    }
+  };
   // --- OTRAS FUNCIONES DEL PERFIL (NO CAMBIAN) ---
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -1766,76 +1959,38 @@ function GestionClubes({ user }) {
         </Card>
         
         <Card title="Centro de Comunicaciones">
-            <div className="grid gap-4">
-                <div>
-                    <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
-                    <select 
-                        className="w-full mt-1 border rounded-lg px-3 py-2"
-                        value={plantillaSeleccionada ? plantillaSeleccionada.id : ""}
-                        onChange={(e) => {
-                            const idPlantilla = e.target.value;
-                            const plantillaElegida = plantillas.find(p => p.id === idPlantilla);
-                            if (plantillaElegida) {
-                                setPlantillaSeleccionada(plantillaElegida);
-                                setMensajePersonalizado(plantillaElegida.texto);
-                            } else {
-                                setPlantillaSeleccionada(null);
-                                setMensajePersonalizado("");
-                            }
-                        }}
-                    >
-                        <option value="">Seleccionar plantilla...</option>
-                        {plantillas.map(p => (<option key={p.id} value={p.id}>{p.titulo}</option>))}
-                    </select>
-                    <textarea value={mensajePersonalizado} onChange={(e) => setMensajePersonalizado(e.target.value)} className="w-full mt-2 border rounded-lg px-3 py-2" rows={5} placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar." />
-                </div>
-                <div className="relative">
-                    <label className="text-sm font-medium text-slate-600">2. Selecciona los destinatarios</label>
-                    <input type="text" value={busquedaAlumno} onChange={(e) => { setBusquedaAlumno(e.target.value); setListaBusquedaAbierta(true); }} onBlur={() => setTimeout(() => setListaBusquedaAbierta(false), 200)} placeholder="Escribe para buscar alumnos..." className="w-full mt-1 border rounded-lg px-3 py-2" />
-                    {listaBusquedaAbierta && busquedaAlumno && (
-                        <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
-                            {alumnosFiltrados.length > 0 ? alumnosFiltrados.map(a => (
-                                <li key={a.id} onMouseDown={() => handleAgregarDestinatario(a)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">{getNombreCompleto(a)}</li>
-                            )) : <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>}
-                        </ul>
-                    )}
-                    <div className="mt-2">
-                        <p className="text-xs font-semibold text-slate-500">Destinatarios ({destinatarios.length}):</p>
-                        {destinatarios.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-1 p-2 border rounded-lg bg-slate-50">
-                                {destinatarios.map(d => (
-                                    <span key={d.id} className="flex items-center gap-2 bg-sky-100 text-sky-800 text-sm rounded-full px-2 py-1">
-                                        {getNombreCompleto(d)}
-                                        <button type="button" onClick={() => handleQuitarDestinatario(d.id)} className="w-4 h-4 rounded-full bg-sky-200 text-sky-800 flex items-center justify-center font-bold text-xs">x</button>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-                {/* Sección 3: Envío de Mensajes */}
-<div>
-    <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
-    <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2 max-h-48 overflow-y-auto">
-        {destinatarios.length > 0 ? (
-            destinatarios.map(destinatario => (
-                <button 
-                    key={destinatario.id}
-                    type="button"
-                    onClick={() => handleSendMessage(destinatario)}
-                    className="w-full flex justify-between items-center text-left px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+    <div className="grid gap-4">
+        {/* Sección 1: Selector de Plantilla y Editor */}
+        <div>
+            <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
+            <div className="flex gap-2 mt-1">
+                <select 
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={plantillaSeleccionada ? plantillaSeleccionada.id : ""}
+                    onChange={(e) => { /* ... (código sin cambios) ... */ }}
                 >
-                    <span>Enviar a: <strong>{getNombreCompleto(destinatario)}</strong></span>
-                    <span role="img" aria-label="send">💬</span>
-                </button>
-            ))
-        ) : (
-            <p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>
-        )}
-    </div>
-</div>
+                    <option value="">Seleccionar plantilla...</option>
+                    {plantillas.map(p => (<option key={p.id} value={p.id}>{p.titulo}</option>))}
+                </select>
+                {/* --- 👇 BOTONES NUEVOS 👇 --- */}
+                <button onClick={() => setEditingPlantilla({})} className="px-3 py-2 text-sm rounded-lg bg-emerald-600 text-white whitespace-nowrap">+ Nueva</button>
+                <button onClick={() => plantillaSeleccionada && setEditingPlantilla(plantillaSeleccionada)} disabled={!plantillaSeleccionada} className="px-3 py-2 text-sm rounded-lg border disabled:opacity-50">Editar</button>
+                <button onClick={handleDeletePlantilla} disabled={!plantillaSeleccionada} className="px-3 py-2 text-sm rounded-lg border text-red-600 disabled:opacity-50">Eliminar</button>
             </div>
-        </Card>
+            <textarea value={mensajePersonalizado} onChange={(e) => setMensajePersonalizado(e.target.value)} className="w-full mt-2 border rounded-lg px-3 py-2" rows={5} placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar." />
+        </div>
+
+        {/* ... (Sección 2 y 3 no cambian) ... */}
+
+    </div>
+    {/* --- 👇 RENDERIZAMOS EL MODAL AQUÍ 👇 --- */}
+    <PlantillaModal
+        isOpen={editingPlantilla !== null}
+        plantilla={editingPlantilla?.id ? editingPlantilla : null}
+        onCancel={() => setEditingPlantilla(null)}
+        onSave={handleSavePlantilla}
+    />
+</Card>
         
         <Card title="Gestión de Datos">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1900,128 +2055,103 @@ function GestionClubes({ user }) {
   );
 }
 
-    function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave, focusAlumnoId }) {
+    // Reemplaza tu PagoGrupalModal completo con este código
+function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave, focusAlumnoId }) {
   const [pagos, setPagos] = useState({});
-
-  
-  // Derived lists available for render and effects
   const alumnosDeClase = clase ? (clase.alumnoIds || []).map(id => (alumnos || []).find(a => a.id === id)).filter(Boolean) : [];
   
+  // Si nos pasan un focusAlumnoId, solo mostramos a ese alumno. Si no, a todos.
   const visibles = focusAlumnoId ? alumnosDeClase.filter(a => a.id === focusAlumnoId) : alumnosDeClase;
-useEffect(() => {
-    if (clase) {
-      const alumnosQuePagan = alumnosDeClase.filter(a => a.plan !== 'mensual');
-      const precioPorAlumno = (clase.alumnoIds?.length || 1) > 0 ? (parseFloat(clase.precio) / (clase.alumnoIds?.length || 1)) : 0;
 
+  useEffect(() => {
+    if (clase) {
+      const precioPorAlumno = (clase.alumnoIds?.length || 1) > 0 ? (parseFloat(clase.precio || 0) / (clase.alumnoIds?.length || 1)) : 0;
       const initialState = {};
       alumnosDeClase.forEach(alumno => {
-        const esMensual = alumno.plan === 'mensual';
         initialState[alumno.id] = {
-          monto: precioPorAlumno.toFixed(2),
-          metodo: esMensual ? "Mensual" : "Pendiente",
-          mixtoEfectivo: "0",
-          mixtoTransferencia: "0"
+          monto: alumno.plan === 'mensual' ? '0' : precioPorAlumno.toFixed(2),
+          metodo: alumno.plan === 'mensual' ? "Mensual" : "Pendiente",
+          mixtoEfectivo: "",
+          mixtoTransferencia: ""
         };
       });
       setPagos(initialState);
-  }
-}, [clase, alumnos]);
+    }
+  }, [clase, alumnos]);
 
   if (!isOpen || !clase) return null;
 
   const handlePaymentChange = (alumnoId, field, value) => {
-    setPagos(prev => ({
-      ...prev,
-      [alumnoId]: {
-        ...prev[alumnoId],
-        [field]: value
-      }
-    }));
+    setPagos(prev => ({ ...prev, [alumnoId]: { ...prev[alumnoId], [field]: value } }));
   };
+  
+  const handleMixtoChange = (alumnoId, efectivo, transferencia) => {
+      const ef = parseFloat(efectivo) || 0;
+      const tx = parseFloat(transferencia) || 0;
+      setPagos(prev => ({...prev, [alumnoId]: {...prev[alumnoId], mixtoEfectivo: efectivo, mixtoTransferencia: transferencia, monto: (ef + tx).toFixed(2)}}));
+  }
 
   const handleSave = () => {
-  const pagosAGuardar = Object.entries(pagos).map(([alumnoId, data]) => {
-    const registro = { alumnoId, ...data };
-    if (data.metodo === "Mixto") {
-      const ef = parseFloat(data.mixtoEfectivo || 0);
-      const tx = parseFloat(data.mixtoTransferencia || 0);
-      registro.detalleMixto = { efectivo: ef, transferencia: tx };
-      registro.monto = (ef + tx).toFixed(2);
-    }
-    return registro;
-  });
-  onSave(pagosAGuardar);
-};
+    const pagosAGuardar = Object.entries(pagos).map(([alumnoId, data]) => {
+      // Solo incluimos en el guardado a los alumnos que estamos viendo
+      if (visibles.some(a => a.id === alumnoId)) {
+        const registro = { alumnoId, ...data };
+        if (data.metodo === "Mixto") {
+          registro.monto = (parseFloat(data.mixtoEfectivo || 0) + parseFloat(data.mixtoTransferencia || 0)).toFixed(2);
+        }
+        return registro;
+      }
+      return null;
+    }).filter(Boolean); // Limpiamos los nulos
+    onSave(pagosAGuardar);
+  };
 
-return (
-  <Modal isOpen={isOpen} title={`Registrar Pago: ${clase.tipo}`} onCancel={onCancel} onConfirm={handleSave} confirmText="Guardar Pagos">
-    <div className="grid gap-4">
-      <p className="text-sm text-center border-b pb-2">Clase del {clase.fecha} a las {clase.hora}. Precio total: ${clase.precio}</p>
-      <div className="space-y-4 max-h-64 overflow-y-auto pr-2">
-        {visibles.map(alumno => (
-          <div key={alumno.id} className="p-2 border rounded-lg">
-            <p className="font-semibold">{getNombreCompleto(alumno)}</p>
-            <div className="grid grid-cols-2 gap-2 mt-1">
-              <div className="col-span-2 text-xs text-emerald-700">Plan Mensual activo</div>
-              <div>
-                <label className="text-xs text-slate-600">Monto</label>
-                <input 
-                  type="number" 
-                  value={pagos[alumno.id]?.monto || ''}
-                  onChange={(e) => handlePaymentChange(alumno.id, 'monto', e.target.value)}
-                  className="w-full border rounded-lg px-2 py-1" 
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-600">Método</label>
-                <select 
-                  value={pagos[alumno.id]?.metodo || 'Pendiente'}
-                  onChange={(e) => handlePaymentChange(alumno.id, 'metodo', e.target.value)}
-                  className="w-full border rounded-lg px-2 py-1"
-                >
-                  {METODOS_PAGO.map(m => <option key={m}>{m}</option>)}
-                </select>
-              </div>
+  // Título dinámico para mayor claridad
+  const modalTitle = focusAlumnoId ? `Pagar Clase Específica` : `Registrar Pagos de Clase`;
 
-              {/* Lógica para pago Mixto */}
-              {(pagos[alumno.id]?.metodo === "Mixto") && (
-                <div className="col-span-2 grid grid-cols-2 gap-2 mt-2">
+  return (
+    <Modal isOpen={isOpen} title={modalTitle} onCancel={onCancel} onConfirm={handleSave} confirmText="Guardar Pagos">
+      <div className="grid gap-4">
+        <p className="text-sm text-center border-b pb-2">Clase de {clase.tipo} del {clase.fecha} a las {clase.hora}. Precio total: ${clase.precio}</p>
+        <div className="space-y-4 max-h-64 overflow-y-auto pr-2">
+          {visibles.map(alumno => (
+            <div key={alumno.id} className="p-3 border rounded-lg bg-slate-50">
+              <p className="font-semibold">{getNombreCompleto(alumno)}</p>
+              {alumno.plan === 'mensual' ? (
+                <p className="text-sm text-emerald-700 mt-2">✅ Cubierto por Plan Mensual</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 mt-2">
                   <div>
-                    <label className="text-xs text-slate-600">Efec.</label>
-                    <input 
-                        type="number" 
-                        value={pagos[alumno.id]?.mixtoEfectivo || ""} 
-                        onChange={(e) => setPagos(prev => {
-                            const efectivo = parseFloat(e.target.value || 0);
-                            const transferencia = parseFloat(prev[alumno.id]?.mixtoTransferencia || 0);
-                            return {...prev, [alumno.id]: {...prev[alumno.id], mixtoEfectivo: e.target.value, monto: (efectivo + transferencia).toFixed(2)}}
-                        })} 
-                        className="w-full rounded-lg px-2 py-1 border" 
-                    />
+                    <label className="text-xs text-slate-600">Monto</label>
+                    <input type="number" value={pagos[alumno.id]?.monto || ''} onChange={(e) => handlePaymentChange(alumno.id, 'monto', e.target.value)} disabled={pagos[alumno.id]?.metodo === 'Mixto'} className="w-full border rounded-lg px-2 py-1 disabled:bg-slate-200" />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-600">Transf.</label>
-                    <input 
-                        type="number" 
-                        value={pagos[alumno.id]?.mixtoTransferencia || ""} 
-                        onChange={(e) => setPagos(prev => {
-                            const efectivo = parseFloat(prev[alumno.id]?.mixtoEfectivo || 0);
-                            const transferencia = parseFloat(e.target.value || 0);
-                            return {...prev, [alumno.id]: {...prev[alumno.id], mixtoTransferencia: e.target.value, monto: (efectivo + transferencia).toFixed(2)}}
-                        })} 
-                        className="w-full rounded-lg px-2 py-1 border" 
-                    />
+                    <label className="text-xs text-slate-600">Método</label>
+                    <select value={pagos[alumno.id]?.metodo || 'Pendiente'} onChange={(e) => handlePaymentChange(alumno.id, 'metodo', e.target.value)} className="w-full border rounded-lg px-2 py-1">
+                      {METODOS_PAGO.filter(m => m !== 'Mensual').map(m => <option key={m}>{m}</option>)}
+                    </select>
                   </div>
-                  <div className="col-span-2 text-xs text-slate-500">Total mixto: ${pagos[alumno.id]?.monto || "0.00"}</div>
+                  {/* AQUÍ ESTÁ LA LÓGICA CORREGIDA PARA EL PAGO MIXTO */}
+                  {pagos[alumno.id]?.metodo === 'Mixto' && (
+                    <div className="col-span-2 grid grid-cols-2 gap-2 mt-2 pt-2 border-t">
+                       <div>
+                         <label className="text-xs text-slate-600">Efectivo</label>
+                         <input type="number" value={pagos[alumno.id]?.mixtoEfectivo || ""} onChange={(e) => handleMixtoChange(alumno.id, e.target.value, pagos[alumno.id]?.mixtoTransferencia)} className="w-full rounded-lg px-2 py-1 border" />
+                       </div>
+                       <div>
+                         <label className="text-xs text-slate-600">Transferencia</label>
+                         <input type="number" value={pagos[alumno.id]?.mixtoTransferencia || ""} onChange={(e) => handleMixtoChange(alumno.id, pagos[alumno.id]?.mixtoEfectivo, e.target.value)} className="w-full rounded-lg px-2 py-1 border" />
+                       </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          </div>
-        ))} {/* <-- Aquí estaba el error de sintaxis ))} */}
-      </div> {/* <-- El div que sobraba fue eliminado de aquí */}
-    </div>
-  </Modal>
-);
+          ))}
+        </div>
+      </div>
+    </Modal>
+  );
 }
 // Pega esta nueva función en tu archivo
 function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) {
@@ -2116,6 +2246,107 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
         </Modal>
       );
     }
+    // Pega este nuevo componente en tu archivo
+function EditarPagoModal({ isOpen, pago, onCancel, onSave }) {
+  const [form, setForm] = useState(null);
+
+  useEffect(() => {
+    // Cuando se abre el modal, inicializamos el form con todos los campos necesarios
+    if (pago) {
+      setForm({
+        ...pago,
+        concepto: pago.concepto || "Pago General",
+        mixtoEfectivo: pago.detalleMixto?.efectivo?.toString() || "",
+        mixtoTransferencia: pago.detalleMixto?.transferencia?.toString() || ""
+      });
+    }
+  }, [pago]);
+
+  if (!isOpen || !form) return null;
+
+  const handleChange = (e) => {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+  
+  const handleMixtoChange = (efectivo, transferencia) => {
+      const ef = parseFloat(efectivo) || 0;
+      const tx = parseFloat(transferencia) || 0;
+      setForm(prev => ({...prev, mixtoEfectivo: efectivo, mixtoTransferencia: transferencia, monto: (ef + tx).toFixed(2)}));
+  }
+
+  return (
+    <Modal isOpen={isOpen} title={`Editar Pago`} onCancel={onCancel} onConfirm={() => onSave(form)} confirmText="Guardar Cambios">
+      <div className="grid gap-4">
+        <div>
+          <label className="text-sm text-slate-600">Concepto</label>
+          <input type="text" name="concepto" value={form.concepto} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 mt-1" />
+        </div>
+        <div>
+          <label className="text-sm text-slate-600">Monto Pagado</label>
+          <input type="number" name="monto" value={form.monto} onChange={handleChange} disabled={form.metodo === 'Mixto'} className="w-full border rounded-lg px-3 py-2 mt-1 disabled:bg-slate-100" />
+        </div>
+        <div>
+          <label className="text-sm text-slate-600">Método de Pago</label>
+          <select name="metodo" value={form.metodo} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 mt-1">
+            {METODOS_PAGO.filter(m => m !== 'Pendiente' && m !== 'Mensual').map(m => <option key={m}>{m}</option>)}
+          </select>
+        </div>
+        
+        {/* Lógica corregida para el pago mixto */}
+        {form.metodo === 'Mixto' && (
+          <div className="p-3 border rounded-lg grid grid-cols-2 gap-3 bg-slate-50">
+            <div>
+              <label className="text-xs text-slate-600">Efectivo</label>
+              <input type="number" value={form.mixtoEfectivo} onChange={(e) => handleMixtoChange(e.target.value, form.mixtoTransferencia)} className="w-full border rounded-lg px-2 py-1 mt-1" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">Transferencia</label>
+              <input type="number" value={form.mixtoTransferencia} onChange={(e) => handleMixtoChange(form.mixtoEfectivo, e.target.value)} className="w-full border rounded-lg px-2 py-1 mt-1" />
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="text-sm text-slate-600">Fecha de Pago</label>
+          <input type="date" name="fecha" value={form.fecha} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 mt-1" />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+function PlantillaModal({ isOpen, plantilla, onCancel, onSave }) {
+  const [form, setForm] = useState({ titulo: '', texto: '' });
+
+  useEffect(() => {
+    // Si pasamos una plantilla, es para editar. Si no, es para crear una nueva.
+    if (plantilla) {
+      setForm(plantilla);
+    } else {
+      setForm({ titulo: '', texto: '' });
+    }
+  }, [plantilla]);
+
+  if (!isOpen) return null;
+
+  const handleChange = (e) => {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  return (
+    <Modal isOpen={isOpen} title={form.id ? "Editar Plantilla" : "Nueva Plantilla"} onCancel={onCancel} onConfirm={() => onSave(form)} confirmText="Guardar">
+      <div className="grid gap-4">
+        <div>
+          <label className="text-sm text-slate-600">Título de la Plantilla</label>
+          <input type="text" name="titulo" value={form.titulo} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 mt-1" placeholder="Ej: Recordatorio de Clase" />
+        </div>
+        <div>
+          <label className="text-sm text-slate-600">Texto del Mensaje</label>
+          <textarea name="texto" value={form.texto} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 mt-1" rows={6} placeholder="Escribe tu mensaje aquí. Usa {nombre_alumno} para personalizarlo."></textarea>
+        </div>
+      </div>
+    </Modal>
+  );
+}
     
     function LoginScreen() {
         const [email, setEmail] = useState('');
@@ -2222,48 +2453,79 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
       const [toast, setToast] = useState("");
       const [deletingInfo, setDeletingInfo] = useState({ id: null, type: null, collection: null });
       const [payingClase, setPayingClase] = useState(null);
-            const [focusAlumnoId, setFocusAlumnoId] = useState(null);
-      const openPagoPendiente = (claseId, alumnoId) => {
-        const clase = (state.clases || []).find(c => c.id === claseId);
-        if (clase) { setPayingClase(clase); setFocusAlumnoId(alumnoId); }
-      };const [payingCuota, setPayingCuota] = useState({alumno: null, mes: null});
+      const [focusAlumnoId, setFocusAlumnoId] = useState(null);
+      const openPagoPendiente = (clase, alumnoId) => {
+    if (clase) { 
+        setPayingClase(clase); 
+        setFocusAlumnoId(alumnoId); 
+    }
+};
+      const [payingCuota, setPayingCuota] = useState({alumno: null, mes: null});
       const [goToClassForm, setGoToClassForm] = useState(false);
       const [claseParaEditar, setClaseParaEditar] = useState(null);
       const [nuevoAlumnoId, setNuevoAlumnoId] = useState(null);
       const openRegistrarClaseForAlumno = (alumnoId) => { setCurrent("clases"); setNuevoAlumnoId(alumnoId); };
       const [registrandoAbono, setRegistrandoAbono] = useState(null); // Guarda el alumno para el modal
+      const [pagoParaEditar, setPagoParaEditar] = useState(null);
+      const [clubActivoId, setClubActivoId] = useState(null); // Guardará el ID del club seleccionado
+      const [clubes, setClubes] = useState([]);
+
+      useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+
+    // Lógica nueva: determina si buscar en la raíz o dentro de un club
+    const baseRef = clubActivoId 
+        ? db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId)
+        : db.collection('users').doc(user.uid);
+
+    const collections = ['alumnos', 'clases', 'pagos', 'gastos', 'grupos'];
+    const unsubscribes = [];
+
+    collections.forEach(collectionName => {
+        const unsubscribe = baseRef.collection(collectionName).onSnapshot(snapshot => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setState(prevState => ({ ...prevState, [collectionName]: data }));
+        }, error => console.error(`Error fetching ${collectionName}: `, error));
+        unsubscribes.push(unsubscribe);
+    });
+
+    // El perfil sigue siendo global, no depende del club
+    const profileUnsubscribe = db.collection('users').doc(user.uid).collection('profile').doc('main').onSnapshot(doc => {
+        if (doc.exists) {
+            setState(prevState => ({ ...prevState, perfil: { ...initialState.perfil, ...doc.data()} }));
+        } else {
+             setState(prevState => ({ ...prevState, perfil: initialState.perfil }));
+        }
+        setLoading(false);
+    }, error => {
+        console.error("Error fetching profile: ", error);
+        setLoading(false);
+    });
+    unsubscribes.push(profileUnsubscribe);
+
+    return () => unsubscribes.forEach(unsub => unsub());
+}, [user, clubActivoId]); // <-- AHORA TAMBIÉN DEPENDE DE clubActivoId
 
       useEffect(() => {
         if (!user) return;
-        setLoading(true);
-        const collections = ['alumnos', 'clases', 'pagos', 'gastos'];
-        const unsubscribes = [];
-
-        collections.forEach(collectionName => {
-            const unsubscribe = db.collection('users').doc(user.uid).collection(collectionName).onSnapshot(snapshot => {
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setState(prevState => ({ ...prevState, [collectionName]: data }));
-            }, error => console.error(`Error fetching ${collectionName}: `, error));
-            unsubscribes.push(unsubscribe);
+        const clubsCollection = db.collection('users').doc(user.uid).collection('clubs');
+        const unsubscribe = clubsCollection.onSnapshot(snapshot => {
+          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setClubes(data);
         });
-
-        const profileUnsubscribe = db.collection('users').doc(user.uid).collection('profile').doc('main').onSnapshot(doc => {
-            if (doc.exists) {
-                setState(prevState => ({ ...prevState, perfil: { ...initialState.perfil, ...doc.data()} }));
-            } else {
-                 setState(prevState => ({ ...prevState, perfil: initialState.perfil }));
-            }
-            setLoading(false);
-        }, error => {
-            console.error("Error fetching profile: ", error);
-            setLoading(false);
-        });
-        unsubscribes.push(profileUnsubscribe);
-
-        return () => unsubscribes.forEach(unsub => unsub());
+        return () => unsubscribe();
       }, [user]);
 
-      const getCollection = (collectionName) => db.collection('users').doc(user.uid).collection(collectionName);
+      const getCollection = (collectionName) => {
+    if (clubActivoId) {
+        // Si hay un club activo, apunta a la sub-colección dentro de ese club
+        return db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId).collection(collectionName);
+    } else {
+        // Si no, apunta a las colecciones originales (modo "Independiente")
+        return db.collection('users').doc(user.uid).collection(collectionName);
+    }
+};
 
       const alumnoCrud = {
         create: async (data) => {
@@ -2277,7 +2539,6 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
 const pagoCrud = { 
         createPagosClase: async (pagosData) => { 
           const batch = db.batch();
-          
           pagosData.forEach(pago => {
             if (parseFloat(pago.monto) > 0 || pago.metodo === 'Pendiente') {
                 const docRef = getCollection('pagos').doc();
@@ -2285,31 +2546,36 @@ const pagoCrud = {
                     claseId: payingClase.id, 
                     alumnoId: pago.alumnoId, 
                     fecha: payingClase.fecha, 
+                    concepto: `Pago Clase ${payingClase.tipo}`, // Concepto automático
                     metodo: pago.metodo, 
                     monto: pago.monto 
                 };
-                if (pago.metodo === 'Mixto' && pago.detalleMixto) {
-                    payload.detalleMixto = pago.detalleMixto;
+                if (pago.metodo === 'Mixto') {
+                    payload.detalleMixto = {
+                        efectivo: parseFloat(pago.mixtoEfectivo) || 0,
+                        transferencia: parseFloat(pago.mixtoTransferencia) || 0
+                    };
                 }
                 batch.set(docRef, payload);
             }
           });
-await batch.commit();
+          await batch.commit();
           setToast("Pagos registrados"); 
           setPayingClase(null);
+          setFocusAlumnoId(null);
         },
 
         createAbono: (pagoData, alumno) => {
             const newPago = {
                 alumnoId: alumno.id,
                 fecha: pagoData.fechaPago,
-                concepto: `Abono Mensual - ${MESES_NOMBRES[pagoData.mes]}`,
+                concepto: pagoData.concepto || `Abono Mensual - ${MESES_NOMBRES[pagoData.mes]}`,
                 monto: pagoData.monto,
                 metodo: pagoData.metodo
             };
             getCollection('pagos').add(newPago).then(() => {
                 setToast("Pago de abono registrado con éxito");
-                setRegistrandoAbono(null); // Cierra el modal
+                setRegistrandoPago(null);
             });
         },
 
@@ -2322,8 +2588,27 @@ await batch.commit();
                 setToast("Pago de cuota registrado"); 
                 setPayingCuota({alumno: null, mes: null});
             });
+        },
+
+        // --- FUNCIÓN NUEVA PARA ACTUALIZAR PAGOS ---
+        update: ({ id, ...data }) => {
+            const dataToSave = { ...data };
+            if (data.metodo === 'Mixto') {
+                dataToSave.detalleMixto = {
+                    efectivo: parseFloat(data.mixtoEfectivo) || 0,
+                    transferencia: parseFloat(data.mixtoTransferencia) || 0
+                };
+            }
+            // Limpiamos los campos temporales antes de guardar
+            delete dataToSave.mixtoEfectivo;
+            delete dataToSave.mixtoTransferencia;
+
+            return getCollection('pagos').doc(id).update(dataToSave).then(() => {
+                setToast("Pago actualizado con éxito");
+                setPagoParaEditar(null); // Cierra el modal de edición
+            });
         }
-      }; // <-- LA LLAVE DE CIERRE IBA AQUÍ
+      };
       const claseCrud = { 
   create: async (c) => { 
       const claseData = {...c};
@@ -2429,17 +2714,27 @@ const goToEditClass = (clase) => {
           setClaseParaEditar(clase);
           setCurrent("clases");
       };
+
+const handleDeletePago = (pagoId) => {
+    setDeletingInfo({ id: pagoId, type: 'pago', collection: 'pagos' });
+};
       if (loading) {
         return <div className="min-h-screen flex items-center justify-center"><div className="loader"></div></div>;
       }
       
        return (
         <div className="min-h-screen bg-slate-50 font-sans">
-          <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} perfil={state.perfil} onChangeModo={(m)=> db.collection('users').doc(user.uid).collection('profile').doc('main').set({ modoTrabajo: m }, { merge: true })} />
+          <Topbar 
+  current={current} 
+  setCurrent={setCurrent} 
+  onLogout={onLogout}
+  clubes={clubes}
+  clubActivoId={clubActivoId}
+  onClubChange={setClubActivoId}
+/>
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
             {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
-            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente} />}
-            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
+            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente}  onEditarPago={(pago) => setPagoParaEditar(pago)} onDeletePago={handleDeletePago} />}            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
             {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
@@ -2467,6 +2762,12 @@ const goToEditClass = (clase) => {
 />
 
           <PagoMensualModal isOpen={!!payingCuota.alumno} alumno={payingCuota.alumno} mes={payingCuota.mes} onCancel={() => setPayingCuota({alumno: null, mes: null})} onSave={pagoCrud.createMensual} />
+            <EditarPagoModal 
+              isOpen={!!pagoParaEditar}
+              pago={pagoParaEditar}
+              onCancel={() => setPagoParaEditar(null)}
+              onSave={pagoCrud.update}
+          />
           <footer className="text-center text-xs text-slate-500 py-6">Coachex-Pro · Gestión de Profesores</footer>
         </div>
       );
