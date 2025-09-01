@@ -2396,71 +2396,107 @@ const goToEditClass = (clase) => {
       }
       
        return (
-        <div className="min-h-screen bg-slate-50 font-sans">
-          <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} perfil={state.perfil} onChangeModo={(m)=> db.collection('users').doc(user.uid).collection('profile').doc('main').set({ modoTrabajo: m }, { merge: true })} />
-          <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
-            {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
-            
-            {current === "alumnos" && (
-              <Alumnos
-                clases={state.clases}
-                pagos={state.pagos}
-                alumnos={state.alumnos}
-                onCreate={alumnoCrud.create}
-                onUpdate={alumnoCrud.update}
-                onDelete={alumnoCrud.delete}
-                onRegisterMonthlyPayment={handleRegisterMonthlyPayment}
-                onRegistrarClase={openRegistrarClaseForAlumno}
-                onPagarPendiente={openPagoPendiente}
-              />
-            )}
-{current === "clases" && (
-              <Clases
-                clases={state.clases}
-                alumnos={state.alumnos}
-                pagos={state.pagos}
-                perfil={state.perfil}
-                onCreate={claseCrud.create}
-                onUpdate={claseCrud.update}
-                onDelete={claseCrud.delete}
-                onPay={(clase) => setPayingClase(clase)}
-                user={user}
-                claseParaEditar={claseParaEditar}
-                setClaseParaEditar={setClaseParaEditar}
-                nuevoAlumnoId={nuevoAlumnoId}
-              />
-            )}
- alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) = /*removed_corrupt*/ nuevoAlumnoId={nuevoAlumnoId}> setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
-            {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
-            {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
-            {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
-            {current === "reportes" && <Reportes pagos={state.pagos} gastos={state.gastos} alumnos={state.alumnos} clases={state.clases} />}
-            {current === "perfil" && <Perfil perfil={state.perfil} alumnos={state.alumnos} onUpdate={perfilCrud.update} user={user} setToast={setToast} onExport={handleExportData} onImport={handleImportData} />}
-          </main>
-          <Toast msg={toast} onClose={() => setToast("")} />
-          <Modal isOpen={!!deletingInfo.id} title={`Eliminar ${deletingInfo.type}`} onConfirm={confirmDelete} onCancel={() => setDeletingInfo({ id: null, type: null, collection: null })} >
-            ¿Estás seguro? Esta acción no se puede deshacer.
-          </Modal>
-          <PagoGrupalModal 
-    isOpen={!!payingClase} 
-    clase={payingClase}
-    alumnos={state.alumnos}
-    onCancel={() => { setPayingClase(null); setFocusAlumnoId(null); }} 
-     focusAlumnoId={focusAlumnoId}onSave={pagoCrud.createPagosClase} 
-/>
-{/* 👇 PEGA EL NUEVO MODAL AQUÍ 👇 */}
-<RegistroPagoMensualModal 
-    isOpen={!!registrandoAbono}
-    alumno={registrandoAbono}
-    perfil={state.perfil}
-    onCancel={() => setRegistrandoAbono(null)}
-    onSave={(pagoData) => pagoCrud.createAbono(pagoData, registrandoAbono)}
-/>
+    <div className="min-h-screen bg-slate-100">
 
-          <PagoMensualModal isOpen={!!payingCuota.alumno} alumno={payingCuota.alumno} mes={payingCuota.mes} onCancel={() => setPayingCuota({alumno: null, mes: null})} onSave={pagoCrud.createMensual} />
-          <footer className="text-center text-xs text-slate-500 py-6">Coachex-Pro · Gestión de Profesores</footer>
+      <header className="bg-slate-900 text-white">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-bold">CoachEX</span>
+          </div>
+          <nav className="flex items-center gap-2">
+            <Button onClick={() => setCurrent('dashboard')} variant={current==='dashboard'?'primary':'ghost'}>Dashboard</Button>
+            <Button onClick={() => setCurrent('alumnos')} variant={current==='alumnos'?'primary':'ghost'}>Alumnos</Button>
+            <Button onClick={() => setCurrent('clases')} variant={current==='clases'?'primary':'ghost'}>Clases</Button>
+            <Button onClick={() => setCurrent('grupos')} variant={current==='grupos'?'primary':'ghost'}>Grupos</Button>
+            <Button onClick={() => setCurrent('pagos')} variant={current==='pagos'?'primary':'ghost'}>Pagos</Button>
+            <Button onClick={onLogout} variant="danger">Salir</Button>
+          </nav>
         </div>
-      );
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
+        {current === "dashboard" && (
+          <Dashboard
+            state={state}
+            goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }}
+            goToEditClass={goToEditClass}
+          />
+        )}
+
+        {current === "alumnos" && (
+          <Alumnos
+            clases={state.clases}
+            pagos={state.pagos}
+            alumnos={state.alumnos}
+            onCreate={alumnoCrud.create}
+            onUpdate={alumnoCrud.update}
+            onDelete={alumnoCrud.delete}
+            onRegisterMonthlyPayment={handleRegisterMonthlyPayment}
+            onRegistrarClase={openRegistrarClaseForAlumno}
+            onPagarPendiente={openPagoPendiente}
+          />
+        )}
+
+        {current === "clases" && (
+          <Clases
+            clases={state.clases}
+            alumnos={state.alumnos}
+            pagos={state.pagos}
+            perfil={state.perfil}
+            onCreate={claseCrud.create}
+            onUpdate={claseCrud.update}
+            onDelete={claseCrud.delete}
+            onPay={(clase) => setPayingClase(clase)}
+            user={user}
+            claseParaEditar={claseParaEditar}
+            setClaseParaEditar={setClaseParaEditar}
+            nuevoAlumnoId={nuevoAlumnoId}
+          />
+        )}
+
+        {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
+
+        {current === "pagos" && (
+          <Pagos
+            pagos={state.pagos}
+            alumnos={state.alumnos}
+            clases={state.clases}
+            perfil={state.perfil}
+            onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})}
+          />
+        )}
+      </main>
+
+      <PagoGrupalModal
+        isOpen={!!payingClase}
+        clase={payingClase}
+        alumnos={state.alumnos}
+        onClose={() => setPayingClase(null)}
+        onSave={pagoCrud.createPagosClase}
+      />
+
+      <PagoMensualModal
+        isOpen={!!payingCuota}
+        alumno={payingCuota?.alumno}
+        mes={payingCuota?.mes}
+        onClose={() => setPayingCuota(null)}
+        onSave={pagoCrud.createPagoMensual}
+      />
+
+      <AlumnoFichaModal
+        key={(state.pagos||[]).length}
+        alumno={alumnoFicha}
+        clases={state.clases}
+        pagos={state.pagos}
+        alumnos={state.alumnos}
+        onPagarPendiente={onPagarPendiente}
+        onClose={() => setAlumnoFicha(null)}
+      />
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+    
+    </div>
+  );
     }
 
     // ------------------------------ APP WRAPPER WITH AUTH ------------------------------
