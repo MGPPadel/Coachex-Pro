@@ -405,13 +405,22 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
   const [editing, setEditing] = useState(null);
   
   
-  const [alumnoFicha, setAlumnoFicha] = useState(null);
+  
+  const [busqueda, setBusqueda] = useState("");
+const [alumnoFicha, setAlumnoFicha] = useState(null);
 
 const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", deporte: "Pádel", estado: "activo", plan: "porClase", frecuencia: "1xSemana", notas: "", horarios: [] };
   
   const sortedAlumnos = useMemo(() => {
-    return [...alumnos].sort((a, b) => getNombreCompleto(a).localeCompare(getNombreCompleto(b)));
-  }, [alumnos]);
+  const q = (busqueda || "").toLowerCase().trim();
+  const fil = (alumnos || []).filter(a => {
+    const n1 = (a.nombre || "").toLowerCase();
+    const n2 = (a.apellido || "").toLowerCase();
+    const nc = (getNombreCompleto(a) || "").toLowerCase();
+    return !q || n1.includes(q) || n2.includes(q) || nc.includes(q);
+  });
+  return fil.sort((a,b)=> getNombreCompleto(a).localeCompare(getNombreCompleto(b), "es", {sensitivity:"base"}));
+}, [alumnos, busqueda]);
 
   const filtered = useMemo(() => { 
     const s = q.trim().toLowerCase(); 
@@ -473,6 +482,15 @@ const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", d
 function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, onClose }) {
   if (!alumno) return null;
   const alumnoMap = useMemo(() => {
+  const [periodo, setPeriodo] = useState("mes");
+  const rango = useMemo(() => {
+    const now = new Date();
+    let from = new Date(0);
+    if (periodo==="mes") { from = new Date(now.getFullYear(), now.getMonth(), 1); }
+    else if (periodo==="tres") { from = new Date(now); from.setMonth(from.getMonth()-3); }
+    else if (periodo==="doce") { from = new Date(now); from.setMonth(from.getMonth()-12); }
+    return { from };
+  }, [periodo]);
   const m = new Map();
   (alumnos || []).forEach(a => m.set(a.id, getNombreCompleto(a)));
   return m;
@@ -480,7 +498,7 @@ function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, on
 const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id)), [clases, alumno]);
   
   // ensure filtered list is defined for stats/render
-  const clasesFiltradas = clasesDelAlumno;
+  const clasesFiltradas = (clasesDelAlumno || []).filter(c => { try { const f = new Date(c.fecha); return !isNaN(f) ? f >= rango.from : true; } catch { return true; } });
 const pagosDelAlumno  = useMemo(() => (pagos  || []).filter(p => p.alumnoId === alumno.id), [pagos, alumno]);
   const pagosPorClase = useMemo(() => {
     const map = new Map();
@@ -650,8 +668,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
         if (nuevoAlumnoId) {
           setShowForm(true);
           setForm(prev => ({ ...prev, alumnoIds: [nuevoAlumnoId], estado: prev.estado || 'realizada' }));
-          setFormStep(2);
-        }
+          setFormStep(1);}
       }, [nuevoAlumnoId]);
 
 
