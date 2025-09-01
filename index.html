@@ -491,7 +491,37 @@ function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, on
   }, [periodo]);
   const alumnoMap = useMemo(() => { const m = new Map(); (alumnos||[]).forEach(a => m.set(a.id, getNombreCompleto(a))); return m; }, [alumnos]);
   const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno?.id)), [clases, alumno]);
-  const clasesFiltradas = useMemo(() => (clasesDelAlumno || []).filter(c => { const d = new Date(c.fecha); return isNaN(d) ? true : d >= rango.from; }), [clasesDelAlumno, rango]);
+  const clasesFiltradas = useMemo(() => (clasesDelAlumno || []).filter(c => { const d = new Date(c.fecha); 
+  const stats = useMemo(() => {
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+    let realizadasMes = 0, deuda = 0, pagadoEf = 0, pagadoTx = 0, pagadoMixto = 0, pagadoMensual = 0;
+
+    (clasesFiltradas || []).forEach(c => {
+      const f = new Date(c.fecha);
+      const enMes = f.getMonth() === thisMonth && f.getFullYear() === thisYear;
+      const tam = (c.alumnoIds || []).length || 1;
+      const precioClase = parseFloat(c.precio || 0) || 0;
+      const unit = tam > 0 ? (precioClase / tam) : precioClase;
+
+      const pagosClase = (pagos || []).filter(p => p.claseId === c.id && p.alumnoId === (alumno?.id));
+      const hayPendiente = pagosClase.length === 0 || pagosClase.some(p => p.metodo === "Pendiente");
+      if (hayPendiente) deuda += unit;
+
+      pagosClase.forEach(p => {
+        if (p.metodo === "Efectivo") pagadoEf += parseFloat(p.monto || 0);
+        if (p.metodo === "Transferencia") pagadoTx += parseFloat(p.monto || 0);
+        if (p.metodo === "Mixto") pagadoMixto += (parseFloat(p.detalleMixto?.efectivo || 0) + parseFloat(p.detalleMixto?.transferencia || 0));
+        if (p.metodo === "Mensual") pagadoMensual += parseFloat(p.monto || 0);
+      });
+
+      if ((c.estado || "realizada") === "realizada" && enMes) realizadasMes += 1;
+    });
+
+    return { realizadasMes, deuda, pagadoEf, pagadoTx, pagadoMixto, pagadoMensual };
+  }, [clasesFiltradas, pagos, alumno]);
+return isNaN(d) ? true : d >= rango.from; }), [clasesDelAlumno, rango]);
   if (!alumno) return null;
     return (
 <Modal isOpen={!!alumno} title={"Ficha de " + getNombreCompleto(alumno)} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar">
