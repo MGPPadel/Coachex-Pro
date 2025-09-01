@@ -2298,6 +2298,7 @@ function AlumnoVista({ alumno, clases, pagos, onClose, onRegistrarClase, onPagar
 }
 
 function MainApp(props){
+  const { user, onLogout } = props;
   const [alumnoVista, setAlumnoVista] = useState(null);
         const [current, setCurrent] = useState("dashboard");
       const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
