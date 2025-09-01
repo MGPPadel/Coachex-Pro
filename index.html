@@ -340,6 +340,14 @@ const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekSta
 
     function AlumnoForm({ initialData, onSubmit, onCancel, onRegisterMonthlyPayment, studentBeingEdited }) {
       const [form, setForm] = useState(initialData);
+  useEffect(() => {
+    if (nuevoAlumnoId) {
+      setShowForm(true);
+      setForm(prev => ({ ...prev, alumnoIds: [nuevoAlumnoId], estado: prev.estado || "realizada" }));
+      setFormStep(1);
+    }
+  }, [nuevoAlumnoId]);
+
       
       useEffect(() => {
         const t = form.tipo || "";
@@ -539,7 +547,7 @@ function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, on
   const nombre = getNombreCompleto(alumno);
 
   return (
-    <Modal isOpen={!!alumno} title={`Ficha de ${nombre}`} onCancel={onClose}>
+    <Modal isOpen={!!alumno} title={`Ficha de ${nombre}`} onCancel={onClose} onConfirm={onClose}>
       <div className="space-y-4">
         <div className="flex justify-end">
           <select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs">
@@ -2202,7 +2210,21 @@ const pagoCrud = {
             }
           });
 await batch.commit();
-          setToast("Pagos registrados"); 
+          
+          // UI: actualizar inmediatamente state.pagos para que la ficha refleje el pago
+          try {
+            const nuevos = pagosData.map(p => ({
+              id: "tmp_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+              claseId: payingClase.id,
+              alumnoId: p.alumnoId,
+              fecha: payingClase.fecha,
+              metodo: p.metodo,
+              monto: (p.metodo === "Mixto" && p.detalleMixto) ? String((parseFloat(p.detalleMixto.efectivo||0) + parseFloat(p.detalleMixto.transferencia||0)).toFixed(2)) : p.monto,
+              detalleMixto: p.detalleMixto || null
+            }));
+            setState(prev => ({ ...prev, pagos: [...(prev.pagos||[]), ...nuevos] }));
+          } catch {}
+        setToast("Pagos registrados"); 
           setPayingClase(null);
         },
 
@@ -2346,7 +2368,7 @@ const goToEditClass = (clase) => {
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
             {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
             {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente}  onPagarPendiente={openPagoPendiente}  onRegistrarClase={openRegistrarClaseForAlumno} />}
-            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
+            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) = nuevoAlumnoId={nuevoAlumnoId}> setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
             {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
