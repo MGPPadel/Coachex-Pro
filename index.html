@@ -2004,49 +2004,10 @@ const handleSavePlantilla = (plantillaData) => {
 
       {/* --- COLUMNA DERECHA --- */}
       <div className="flex flex-col gap-6">
-          <Card title="Configuración General">
-                <div className="grid gap-4">
-                     <div>
-                        <h4 className="text-md font-semibold text-slate-700 mb-2">Modalidad de Cobro Principal</h4>
-                        <select name="metodoCobro" value={form.metodoCobro} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">
-                          <option value="porClase">Por Clase</option>
-                          <option value="mensual">Mensual</option>
-                        </select>
-                     </div>
-                     <div>
-                        <h4 className="text-md font-semibold text-slate-700 mb-2">Canchas / Ubicaciones</h4>
-                        <textarea name="canchas" value={form.canchas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" rows={4} placeholder="Una ubicación por línea..."></textarea>
-                     </div>
-                </div>
-          </Card>
-          <Card title="Precios por Clase">
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-sm text-slate-600">Individual</label><input type="number" name="individual" value={form.precios.individual} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div><label className="text-sm text-slate-600">Dupla</label><input type="number" name="dupla" value={form.precios.dupla} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div><label className="text-sm text-slate-600">Trío</label><input type="number" name="trio" value={form.precios.trio} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div><label className="text-sm text-slate-600">Cuarteto</label><input type="number" name="cuarteto" value={form.precios.cuarteto} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div className="col-span-2"><label className="text-sm text-slate-600">Escuelita</label><input type="number" name="escuelita" value={form.precios.escuelita} onChange={handlePrecioChange} className="w-full border rounded-lg px-3 py-2" /></div>
-            </div>
-        </Card>
-         <Card title="Precios Mensuales">
-             <div className="grid md:grid-cols-2 gap-3">
-                {FRECUENCIAS_MENSUALES.map(f => (
-                    <div key={f.value}><label className="text-sm text-slate-600">{f.label}</label><input type="number" name={f.value} value={form.preciosMensuales[f.value]} onChange={handlePrecioMensualChange} className="w-full border rounded-lg px-3 py-2" /></div>
-                ))}
-            </div>
-        </Card>
-          <Card title="Horario Laboral General">
-              <div className="space-y-3">
-                  {(form.horarioLaboral || []).map((item, index) => (
-                      <div key={item.dia} className="grid grid-cols-[80px_1fr_1fr_auto] items-center gap-3">
-                          <label htmlFor={`activo-${index}`} className="font-semibold text-sm flex items-center">{item.dia}</label>
-                          <input type="time" value={item.desde} onChange={(e) => handleHorarioChange(index, 'desde', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
-                          <input type="time" value={item.hasta} onChange={(e) => handleHorarioChange(index, 'hasta', e.target.value)} disabled={!item.activo} className="border rounded-lg px-2 py-1.5 disabled:bg-slate-100" />
-                          <input type="checkbox" id={`activo-${index}`} checked={item.activo} onChange={(e) => handleHorarioChange(index, 'activo', e.target.checked)} className="form-checkbox h-5 w-5" />
-                      </div>
-                  ))}
-              </div>
-          </Card>
+          
+          
+         
+          
           <div className="mt-6 flex justify-end">
             <button type="submit" className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold">Guardar Todos los Cambios</button>
           </div>
