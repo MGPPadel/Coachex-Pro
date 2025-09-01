@@ -340,6 +340,27 @@ const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekSta
 
     function AlumnoForm({ initialData, onSubmit, onCancel, onRegisterMonthlyPayment, studentBeingEdited }) {
       const [form, setForm] = useState(initialData);
+  // Horarios fijos del primer alumno seleccionado -> chips de autocompletado
+  const horariosChips = useMemo(() => {
+    const id = (form.alumnoIds && form.alumnoIds[0]);
+    const a = (alumnos || []).find(x => x.id === id);
+    if (!a || !a.horarios) return [];
+    return (a.horarios || []).map(h => ({
+      dia: h.dia || h.day,
+      hora: h.hora || h.time
+    })).filter(x => x.dia && x.hora);
+  }, [form.alumnoIds, alumnos]);
+
+  const proximaFechaDe = (diaNombre) => {
+    const dias = { "Domingo":0, "Lunes":1, "Martes":2, "Miércoles":3, "Miercoles":3, "Jueves":4, "Viernes":5, "Sábado":6, "Sabado":6 };
+    const target = dias[diaNombre] ?? 0;
+    const hoy = new Date();
+    const actual = hoy.getDay();
+    const diff = (target - actual + 7) % 7 || 7;
+    const d = new Date(hoy); d.setDate(hoy.getDate() + diff);
+    return formatDate(d);
+  };
+
   useEffect(() => {
     if (nuevoAlumnoId) {
       setShowForm(true);
@@ -476,13 +497,13 @@ const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", d
         )}
       </Card>
       <Card title="Listado de alumnos" right={<input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar" className="border rounded-xl px-3 py-1.5 text-sm" />}>
-        <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Nombre Completo</th><th className="p-2">Teléfono</th><th className="p-2">Plan de Pago</th><th className="p-2">Estado</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>{filtered.length === 0 && (<tr><td colSpan={5} className="text-center py-6 text-slate-400">No hay alumnos</td></tr>)}{filtered.map((a) => (<tr key={a.id} className="border-t"><td className="p-2 font-semibold">{getNombreCompleto(a)}</td><td className="p-2"><div className="flex items-center gap-2"><span>{a.telefono || "-"}</span>{a.telefono && (<a href={waLink(a.telefono, a.nombre)} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-0.5 text-xs rounded-full border text-green-700 bg-green-50 hover:bg-green-100">WhatsApp</a>)}</div></td><td className="p-2">{a.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</td><td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${a.estado === 'espera' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{a.estado === 'espera' ? 'Espera' : 'Activo'}</span></td><td className="p-2 text-right"><div className="inline-flex gap-2"><button type="button" onClick={() => setAlumnoFicha(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">👁️ Ver ficha</button>
+        <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Nombre Completo</th><th className="p-2">Teléfono</th><th className="p-2">Plan de Pago</th><th className="p-2">Estado</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>{filtered.length === 0 && (<tr><td colSpan={5} className="text-center py-6 text-slate-400">No hay alumnos</td></tr>)}{filtered.map((a) => (<tr key={a.id} className="border-t cursor-pointer hover:bg-slate-50" onClick={() => setAlumnoFicha(a)}><td className="p-2 font-semibold">{getNombreCompleto(a)}</td><td className="p-2"><div className="flex items-center gap-2"><span>{a.telefono || "-"}</span>{a.telefono && (<a href={waLink(a.telefono, a.nombre)} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-0.5 text-xs rounded-full border text-green-700 bg-green-50 hover:bg-green-100">WhatsApp</a>)}</div></td><td className="p-2">{a.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</td><td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${a.estado === 'espera' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{a.estado === 'espera' ? 'Espera' : 'Activo'}</span></td><td className="p-2 text-right"><div className="inline-flex gap-2"><button type="button" onClick={() => setAlumnoFicha(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">👁️ Ver ficha</button>
             <button type="button" onClick={() => onRegistrarClase && onRegistrarClase(a.id)} className="px-2 py-1 text-xs rounded-lg border bg-emerald-50 text-emerald-700 hover:bg-emerald-100">🟢 Registrar clase</button>
             <button onClick={() => openEdit(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button><button type="button" onClick={() => onDelete(a.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button></div></td></tr>))}</tbody></table></div>
       </Card>
     </div>
   
-      <AlumnoFichaModal alumno={alumnoFicha} clases={clases} pagos={pagos} alumnos={alumnos} onPagarPendiente={onPagarPendiente} onClose={() => setAlumnoFicha(null)} />
+      <AlumnoFichaModal alumno={alumnoFicha} clases={clases} pagos={pagos} alumnos={alumnos} onPagarPendiente={onPagarPendiente} onClose={() = key={(pagos||[]).length}> setAlumnoFicha(null)} />
     </>);
 }
     
@@ -922,7 +943,17 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
                                 ))}
                             </div>
                             <div className="md:col-span-2"><label className="text-sm text-slate-600">Ubicación / Cancha</label><select name="cancha" value={form.cancha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{canchasDisponibles.map(c => <option key={c}>{c}</option>)}</select></div>
-                            <div><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
+                            <div><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required />
+      <div className="mt-2 flex flex-wrap gap-2">
+        {horariosChips.map((h, idx) => (
+          <button type="button" key={idx}
+            onClick={() => setForm(prev => ({ ...prev, fecha: proximaFechaDe(h.dia), hora: h.hora }))}
+            className="text-xs px-2 py-1 rounded-full border hover:bg-slate-100">
+            {h.dia} {h.hora}
+          </button>
+        ))}
+      </div>
+    </div>
                             <div><label className="text-sm text-slate-600">Hora</label><input type="time" name="hora" value={form.hora} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
                             <div><label className="text-sm text-slate-600">Tipo de Clase</label><select name="tipo" value={form.tipo} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}</select></div>
                             <div><label className="text-sm text-slate-600">Precio</label><input type="number" name="precio" value={esMensual ? "0" : form.precio} onChange={handleFormChange} className={`w-full border rounded-lg px-3 py-2 ${esMensual ? 'bg-slate-100' : ''}`} placeholder="0" disabled={esMensual} /></div>
@@ -1285,7 +1316,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
                 <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Alumno</th><th className="p-2">Plan</th><th className="p-2">Monto Cuota</th><th className="p-2">Monto Pagado</th><th className="p-2">Estado</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>
                     {statusMensual.length === 0 && (<tr><td colSpan={6} className="text-center py-6 text-slate-400">No hay alumnos con plan mensual</td></tr>)}
                     {statusMensual.map(a => (
-                        <tr key={a.id} className="border-t">
+                        <tr key={a.id} className="border-t cursor-pointer hover:bg-slate-50" onClick={() => setAlumnoFicha(a)}>
                             <td className="p-2">{`${a.apellido || ''} ${a.nombre || ''}`.trim()}</td>
                             <td className="p-2">{FRECUENCIAS_MENSUALES.find(f => f.value === a.frecuencia)?.label}</td>
                             <td className="p-2">${a.cuota.toFixed(2)}</td>
@@ -2131,7 +2162,9 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
     }
     
     function MainApp({ user, onLogout }) {
-        const [current, setCurrent] = useState("dashboard");
+        var clase; // guard
+var clase; // guard
+const [current, setCurrent] = useState("dashboard");
       const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
       const [loading, setLoading] = useState(true);
       const [toast, setToast] = useState("");
