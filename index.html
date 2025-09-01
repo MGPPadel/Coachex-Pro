@@ -2346,7 +2346,7 @@ const goToEditClass = (clase) => {
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
             {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
             {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente}  onPagarPendiente={openPagoPendiente}  onRegistrarClase={openRegistrarClaseForAlumno} />}
-            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
+            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} / nuevoAlumnoId={nuevoAlumnoId} />nuevoAlumnoId={nuevoAlumnoId} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
             {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
@@ -2362,7 +2362,7 @@ const goToEditClass = (clase) => {
     clase={payingClase}
     alumnos={state.alumnos}
     onCancel={() => { setPayingClase(null); setFocusAlumnoId(null); }} 
-     focusAlumnoId={focusAlumnoId}onSave={pagoCrud.createPagosClase} 
+     focusAlumnoId={focusAlumnoId} onSave={async (pagosNuevos) => { await pagoCrud.createPagosClase(pagosNuevos); const toAppend = (pagosNuevos || []).map(p => ({   id: "tmp_"+Date.now()+Math.random().toString(36).slice(2),   claseId: payingClase?.id,   fecha: payingClase?.fecha,   alumnoId: p.alumnoId,   metodo: p.metodo,   monto: p.monto ? String(p.monto) : (p.detalleMixto ? String((p.detalleMixto.efectivo||0)+(p.detalleMixto.transferencia||0)) : "0"),   detalleMixto: p.detalleMixto || null })); setState(prev => ({...prev, pagos: [...prev.pagos, ...toAppend]})); setPayingClase(null); setFocusAlumnoId(null); setToast("Pago registrado"); }} 
 />
 {/* 👇 PEGA EL NUEVO MODAL AQUÍ 👇 */}
 <RegistroPagoMensualModal 
