@@ -478,7 +478,10 @@ function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, on
   return m;
 }, [alumnos]);
 const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id)), [clases, alumno]);
-  const pagosDelAlumno  = useMemo(() => (pagos  || []).filter(p => p.alumnoId === alumno.id), [pagos, alumno]);
+  
+  // ensure filtered list is defined for stats/render
+  const clasesFiltradas = clasesDelAlumno;
+const pagosDelAlumno  = useMemo(() => (pagos  || []).filter(p => p.alumnoId === alumno.id), [pagos, alumno]);
   const pagosPorClase = useMemo(() => {
     const map = new Map();
     pagosDelAlumno.forEach(p => {
