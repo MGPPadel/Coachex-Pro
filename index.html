@@ -480,61 +480,23 @@ const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", d
     
 
 function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, onClose }) {
-  if (!alumno) return null;
-  const alumnoMap = useMemo(() => {
   const [periodo, setPeriodo] = useState("mes");
   const rango = useMemo(() => {
     const now = new Date();
     let from = new Date(0);
-    if (periodo==="mes") { from = new Date(now.getFullYear(), now.getMonth(), 1); }
-    else if (periodo==="tres") { from = new Date(now); from.setMonth(from.getMonth()-3); }
-    else if (periodo==="doce") { from = new Date(now); from.setMonth(from.getMonth()-12); }
+    if (periodo === "mes") { from = new Date(now.getFullYear(), now.getMonth(), 1); }
+    else if (periodo === "tres") { from = new Date(now); from.setMonth(from.getMonth()-3); }
+    else if (periodo === "doce") { from = new Date(now); from.setMonth(from.getMonth()-12); }
     return { from };
   }, [periodo]);
-  const m = new Map();
-  (alumnos || []).forEach(a => m.set(a.id, getNombreCompleto(a)));
-  return m;
-}, [alumnos]);
-const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id)), [clases, alumno]);
-  
-  // ensure filtered list is defined for stats/render
-  const clasesFiltradas = (clasesDelAlumno || []).filter(c => { try { const f = new Date(c.fecha); return !isNaN(f) ? f >= rango.from : true; } catch { return true; } });
-const pagosDelAlumno  = useMemo(() => (pagos  || []).filter(p => p.alumnoId === alumno.id), [pagos, alumno]);
-  const pagosPorClase = useMemo(() => {
-    const map = new Map();
-    pagosDelAlumno.forEach(p => {
-      const arr = map.get(p.claseId) || [];
-      arr.push(p);
-      map.set(p.claseId, arr);
-    });
-    return map;
-  }, [pagosDelAlumno]);
-  const stats = useMemo(() => {
-    const ahora = new Date();
-    const mes = ahora.getMonth(), anio = ahora.getFullYear();
-    let realizadasMes = 0, deuda = 0, pagadoEf = 0, pagadoTx = 0, pagadoMixto = 0, pagadoMensual = 0;
-    clasesFiltradas.forEach(c => {
-      const f = new Date(c.fecha);
-      const esMes = f.getMonth()===mes && f.getFullYear()===anio;
-      if (c.estado === "realizada" && esMes) realizadasMes++;
-      const pagosClase = pagosPorClase.get(c.id) || [];
-      const pagadoClase = pagosClase.reduce((acc,p)=> acc + (p.metodo==="Mixto" ? (parseFloat(p.detalleMixto?.efectivo||0)+parseFloat(p.detalleMixto?.transferencia||0)) : (p.metodo==="Pendiente" ? 0 : parseFloat(p.monto||0))), 0);
-      const pendiente = (c.estado==="realizada") && pagadoClase<=0;
-      if (pendiente) deuda += (parseFloat(c.montoPagado||0) || parseFloat(c.precioSugerido||0) || 0); // fallback
-      pagosClase.forEach(p => {
-        if (p.metodo==="Efectivo") pagadoEf += parseFloat(p.monto||0);
-        if (p.metodo==="Transferencia") pagadoTx += parseFloat(p.monto||0);
-        if (p.metodo==="Mixto") pagadoMixto += (parseFloat(p.detalleMixto?.efectivo||0)+parseFloat(p.detalleMixto?.transferencia||0));
-        if (p.metodo==="Mensual") pagadoMensual += parseFloat(p.monto||0);
-      });
-    });
-    return { realizadasMes, deuda, pagadoEf, pagadoTx, pagadoMixto };
-  }, [clasesDelAlumno, pagosPorClase]);
-  return (
-    <Modal isOpen={!!alumno} title={"Ficha de " + getNombreCompleto(alumno)} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar">
+  const alumnoMap = useMemo(() => { const m = new Map(); (alumnos||[]).forEach(a => m.set(a.id, getNombreCompleto(a))); return m; }, [alumnos]);
+  const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds || []).includes(alumno?.id)), [clases, alumno]);
+  const clasesFiltradas = useMemo(() => (clasesDelAlumno || []).filter(c => { const d = new Date(c.fecha); return isNaN(d) ? true : d >= rango.from; }), [clasesDelAlumno, rango]);
+  if (!alumno) return null;
+  <Modal isOpen={!!alumno} title={"Ficha de " + getNombreCompleto(alumno)} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar">
       <div className="grid gap-4">
         <Card title="Resumen del mes">
-          <div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option></select></div><div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option><option value="todo">Todo</option></select></div><div className="grid grid-cols-3 gap-3 text-center">
+          <div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option></select></div><div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option></select></div><div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option><option value="todo">Todo</option></select></div><div className="grid grid-cols-3 gap-3 text-center">
             <div className="bg-emerald-50 p-3 rounded-xl"><p className="text-xs text-emerald-700">Clases realizadas</p><p className="text-xl font-bold">{stats.realizadasMes}</p></div>
             <div className="bg-amber-50 p-3 rounded-xl"><p className="text-xs text-amber-700">Deuda estimada</p><p className="text-xl font-bold">${stats.deuda.toFixed(2)}</p></div>
             <div className="bg-slate-50 p-3 rounded-xl"><p className="text-xs text-slate-600">Pagado</p><p className="text-sm">Ef: $${stats.pagadoEf.toFixed(2)} · Tx: $${stats.pagadoTx.toFixed(2)} · Mix: $${stats.pagadoMixto.toFixed(2)} · Men: $${stats.pagadoMensual.toFixed(2)}</p></div>
@@ -664,7 +626,13 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
             setClaseParaEditar(null);
         }
       }, [claseParaEditar]);
-      useEffect(() => { if (nuevoAlumnoId) { setShowForm(true); setForm(prev => ({ ...prev, alumnoIds: [nuevoAlumnoId], estado: prev.estado || "realizada" })); setFormStep(1); } }, [nuevoAlumnoId]);
+      useEffect(() => {
+        if (nuevoAlumnoId) {
+          setShowForm(true);
+          setForm(prev => ({ ...prev, alumnoIds: [nuevoAlumnoId], estado: prev.estado || "realizada" }));
+          setFormStep(1);
+        }
+      }, [nuevoAlumnoId]);
 
 
       const alumnosActivos = useMemo(() => alumnos.filter(a => a.estado === 'activo'), [alumnos]);
@@ -2320,7 +2288,7 @@ const goToEditClass = (clase) => {
           <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} perfil={state.perfil} onChangeModo={(m)=> db.collection('users').doc(user.uid).collection('profile').doc('main').set({ modoTrabajo: m }, { merge: true })} />
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
             {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
-            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente}  onPagarPendiente={openPagoPendiente} />}
+            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente}  onPagarPendiente={openPagoPendiente}  onRegistrarClase={openRegistrarClaseForAlumno} />}
             {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
