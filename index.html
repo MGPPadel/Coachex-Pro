@@ -521,29 +521,32 @@ const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds ||
               .slice()
               .sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora))
               .map(c => {
-                const pagosClase = pagosPorClase.get(c.id) || [];
-                const pago = pagosClase[0]; // si hay varios, mostramos el primero como referencia
+                const pagosClase = (pagos || []).filter(p => p.claseId === c.id && p.alumnoId === alumno.id);
+                const pago = pagosClase[0];
                 const status = pago ? (pago.metodo==="Pendiente" ? "Pendiente" : "Pagado") : "Pendiente";
                 const cls = status==="Pagado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700";
-                const tam = (c.alumnoIds||[]).length || (TIPOS_CLASE.includes(c.tipo) ? parseInt(c.tipo.replace('x','')) : 1);
+                const tam = (c.alumnoIds||[]).length || 1;
                 return (
                   <li key={c.id} className="p-2 border rounded-lg flex items-center justify-between">
                     <div>
                       <p className="font-semibold">{c.fecha} {c.hora} · {tam} persona(s)</p>
-                      <p className="text-xs text-slate-500">{(c.alumnoIds||[]).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')}</p>
+                      <p className="text-xs text-slate-500">{(c.alumnoIds||[]).map(id => (alumnos||[]).find(a=>a.id===id)).filter(Boolean).map(a => getNombreCompleto(a)).join(', ')}</p>
                     </div>
-                    <span className={"text-[11px] px-2 py-0.5 rounded-full " + cls}>{status}</span>{status==="Pendiente" && onPagarPendiente && (
-                      <button type="button"
-                              onClick={() => onPagarPendiente(c.id, alumno.id)}
-                              className="ml-2 text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 hover:bg-amber-100">
-                        Registrar pago
-                      </button>
-                    )}
+                    <div className="flex items-center">
+                      <span className={"text-[11px] px-2 py-0.5 rounded-full " + cls}>{status}</span>
+                      {status==="Pendiente" && onPagarPendiente && (
+                        <button type="button"
+                                onClick={() => onPagarPendiente(c.id, alumno.id)}
+                                className="ml-2 text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 hover:bg-amber-100">
+                          Registrar pago
+                        </button>
+                      )}
+                    </div>
                   </li>
                 );
               })}
           </ul>
-        </Card>
+    </Card>
       </div>
     </Modal>
   
@@ -2298,7 +2301,7 @@ const goToEditClass = (clase) => {
           <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} perfil={state.perfil} onChangeModo={(m)=> db.collection('users').doc(user.uid).collection('profile').doc('main').set({ modoTrabajo: m }, { merge: true })} />
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
             {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
-            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente} />}
+            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente}  onPagarPendiente={openPagoPendiente} />}
             {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
