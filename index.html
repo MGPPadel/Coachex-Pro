@@ -117,7 +117,7 @@
     const TIPOS_CLASE_MAP = { Individual: 1, Dupla: 2, Trio: 3, Cuarteto: 4, Escuelita: 1 };
     const TIPOS_CLASE = Object.keys(TIPOS_CLASE_MAP);
     const TIPOS_CLASE_NOMBRES = { Individual: "Individual", Dupla: "Clase para 2", Trio: "Clase para 3", Cuarteto: "Clase para 4", Escuelita: "Escuelita" };
-    const METODOS_PAGO = ["Efectivo", "Transferencia", "Mixto", "Pendiente"];
+    const METODOS_PAGO = ["Efectivo", "Transferencia", "Mixto", "Mensual","Pendiente"];
     const CATEGORIAS_GASTO = ["Alquiler", "Equipamiento", "Servicios", "Varios"];
     const PLANES_PAGO = [{value: "porClase", label: "Por Clase"}, {value: "mensual", label: "Mensual"}];
     const FRECUENCIAS_MENSUALES = [{value: "1xSemana", label: "1 vez por semana"}, {value: "2xSemana", label: "2 veces por semana"}, {value: "3xSemana", label: "3 veces por semana"}, {value: "libre", label: "Libre"}];
@@ -487,7 +487,7 @@ const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds ||
   const stats = useMemo(() => {
     const ahora = new Date();
     const mes = ahora.getMonth(), anio = ahora.getFullYear();
-    let realizadasMes = 0, deuda = 0, pagadoEf = 0, pagadoTx = 0, pagadoMixto = 0;
+    let realizadasMes = 0, deuda = 0, pagadoEf = 0, pagadoTx = 0, pagadoMixto = 0, pagadoMensual = 0;
     clasesFiltradas.forEach(c => {
       const f = new Date(c.fecha);
       const esMes = f.getMonth()===mes && f.getFullYear()===anio;
@@ -500,6 +500,7 @@ const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds ||
         if (p.metodo==="Efectivo") pagadoEf += parseFloat(p.monto||0);
         if (p.metodo==="Transferencia") pagadoTx += parseFloat(p.monto||0);
         if (p.metodo==="Mixto") pagadoMixto += (parseFloat(p.detalleMixto?.efectivo||0)+parseFloat(p.detalleMixto?.transferencia||0));
+        if (p.metodo==="Mensual") pagadoMensual += parseFloat(p.monto||0);
       });
     });
     return { realizadasMes, deuda, pagadoEf, pagadoTx, pagadoMixto };
@@ -511,7 +512,7 @@ const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds ||
           <div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option><option value="todo">Todo</option></select></div><div className="grid grid-cols-3 gap-3 text-center">
             <div className="bg-emerald-50 p-3 rounded-xl"><p className="text-xs text-emerald-700">Clases realizadas</p><p className="text-xl font-bold">{stats.realizadasMes}</p></div>
             <div className="bg-amber-50 p-3 rounded-xl"><p className="text-xs text-amber-700">Deuda estimada</p><p className="text-xl font-bold">${stats.deuda.toFixed(2)}</p></div>
-            <div className="bg-slate-50 p-3 rounded-xl"><p className="text-xs text-slate-600">Pagado</p><p className="text-sm">Ef: ${stats.pagadoEf.toFixed(2)} · Tx: ${stats.pagadoTx.toFixed(2)} · Mix: ${stats.pagadoMixto.toFixed(2)}</p></div>
+            <div className="bg-slate-50 p-3 rounded-xl"><p className="text-xs text-slate-600">Pagado</p><p className="text-sm">Ef: $${stats.pagadoEf.toFixed(2)} · Tx: $${stats.pagadoTx.toFixed(2)} · Mix: $${stats.pagadoMixto.toFixed(2)} · Men: $${stats.pagadoMensual.toFixed(2)}</p></div>
           </div>
         </Card>
         <Card title="Clases del alumno (últimas)">
@@ -685,7 +686,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
             if (name === "tipo") {
                 const primerAlumno = alumnoMap.get(prev.alumnoIds[0]);
                 const esPlanMensual = primerAlumno?.plan === 'mensual';
-                newState.precio = esPlanMensual ? "0" : (perfil.precios[val.toLowerCase()] || "");
+                newState.precio = (perfil.precios[val.toLowerCase()] || "");
                 const numAlumnos = TIPOS_CLASE_MAP[val] || 1;
                 newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
             }
@@ -1783,15 +1784,14 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
 useEffect(() => {
     if (clase) {
       const alumnosQuePagan = alumnosDeClase.filter(a => a.plan !== 'mensual');
-      const precioPorAlumno = alumnosQuePagan.length > 0 ? (parseFloat(clase.precio) / alumnosQuePagan.length) : 0;
+      const precioPorAlumno = (clase.alumnoIds?.length || 1) > 0 ? (parseFloat(clase.precio) / (clase.alumnoIds?.length || 1)) : 0;
 
       const initialState = {};
       alumnosDeClase.forEach(alumno => {
         const esMensual = alumno.plan === 'mensual';
         initialState[alumno.id] = {
-          monto: esMensual ? "0" : precioPorAlumno.toFixed(2),
-          metodo: esMensual ? "Transferencia" : "Pendiente",
-          // Puedes poner el método por defecto que prefieras,
+          monto: precioPorAlumno.toFixed(2),
+          metodo: esMensual ? "Mensual" : "Pendiente",
           mixtoEfectivo: "0",
           mixtoTransferencia: "0"
         };
@@ -1834,10 +1834,7 @@ useEffect(() => {
             {visibles.map(alumno => (
                 <div key={alumno.id} className="p-2 border rounded-lg">
                     <p className="font-semibold">{getNombreCompleto(alumno)}</p>
-                    {alumno.plan === 'mensual' ? (
-                        <p className="text-sm text-emerald-700">Plan Mensual (no se cobra)</p>
-                    ) : (
-                        <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div className="grid grid-cols-2 gap-2 mt-1"><div className="col-span-2 text-xs text-emerald-700">Plan Mensual activo</div>
                             <div>
                                 <label className="text-xs text-slate-600">Monto</label>
                                 <input 
