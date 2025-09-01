@@ -534,7 +534,7 @@ const pagosDelAlumno  = useMemo(() => (pagos  || []).filter(p => p.alumnoId === 
     <Modal isOpen={!!alumno} title={"Ficha de " + getNombreCompleto(alumno)} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar">
       <div className="grid gap-4">
         <Card title="Resumen del mes">
-          <div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option><option value="todo">Todo</option></select></div><div className="grid grid-cols-3 gap-3 text-center">
+          <div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option></select></div><div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option><option value="todo">Todo</option></select></div><div className="grid grid-cols-3 gap-3 text-center">
             <div className="bg-emerald-50 p-3 rounded-xl"><p className="text-xs text-emerald-700">Clases realizadas</p><p className="text-xl font-bold">{stats.realizadasMes}</p></div>
             <div className="bg-amber-50 p-3 rounded-xl"><p className="text-xs text-amber-700">Deuda estimada</p><p className="text-xl font-bold">${stats.deuda.toFixed(2)}</p></div>
             <div className="bg-slate-50 p-3 rounded-xl"><p className="text-xs text-slate-600">Pagado</p><p className="text-sm">Ef: $${stats.pagadoEf.toFixed(2)} · Tx: $${stats.pagadoTx.toFixed(2)} · Mix: $${stats.pagadoMixto.toFixed(2)} · Men: $${stats.pagadoMensual.toFixed(2)}</p></div>
@@ -664,12 +664,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
             setClaseParaEditar(null);
         }
       }, [claseParaEditar]);
-      useEffect(() => {
-        if (nuevoAlumnoId) {
-          setShowForm(true);
-          setForm(prev => ({ ...prev, alumnoIds: [nuevoAlumnoId], estado: prev.estado || 'realizada' }));
-          setFormStep(1);}
-      }, [nuevoAlumnoId]);
+      useEffect(() => { if (nuevoAlumnoId) { setShowForm(true); setForm(prev => ({ ...prev, alumnoIds: [nuevoAlumnoId], estado: prev.estado || "realizada" })); setFormStep(1); } }, [nuevoAlumnoId]);
 
 
       const alumnosActivos = useMemo(() => alumnos.filter(a => a.estado === 'activo'), [alumnos]);
