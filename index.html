@@ -340,7 +340,23 @@ const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekSta
 
     function AlumnoForm({ initialData, onSubmit, onCancel, onRegisterMonthlyPayment, studentBeingEdited }) {
       const [form, setForm] = useState(initialData);
-      const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, [name]: value })); };
+      
+      useEffect(() => {
+        const t = form.tipo || "";
+        let size = 1;
+        if (/^\d+x$/.test(t)) size = parseInt(t);
+        if (/^Indiv/.test(t)) size = 1;
+        if (/^Dupla|2x/.test(t)) size = 2;
+        if (/^Trio|3x/.test(t)) size = 3;
+        if (/^Cuart|4x/.test(t)) size = 4;
+        if (/Escuelita/i.test(t)) size = 4;
+        const base = (form.alumnoIds && form.alumnoIds[0]) || "";
+        const ids = Array.from({length: size}, (_, i) => (i===0 ? base : (form.alumnoIds && form.alumnoIds[i]) || ""));
+        if (!form.alumnoIds || form.alumnoIds.length !== size) {
+          setForm(prev => ({ ...prev, alumnoIds: ids }));
+        }
+      }, [form.tipo]);
+    const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, [name]: value })); };
       const addHorario = () => setForm(f => ({ ...f, horarios: [...(f.horarios || []), { dia: "Lunes", hora: "18:00" }] }));
       const delHorario = (idx) => setForm(f => ({ ...f, horarios: f.horarios.filter((_, i) => i !== idx) }));
       const setHorario = (idx, key, val) => setForm(f => ({ ...f, horarios: f.horarios.map((h, i) => i === idx ? { ...h, [key]: val } : h) }));
@@ -383,7 +399,7 @@ const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekSta
       );
     }
     
-function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment , clases, pagos, onRegistrarClase}) { // <-- 1. AQUÍ ACEPTAMOS LA NUEVA FUNCIÓN
+function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment , clases, pagos, onRegistrarClase, onPagarPendiente}) { // <-- 1. AQUÍ ACEPTAMOS LA NUEVA FUNCIÓN
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -445,12 +461,12 @@ const emptyForm = { nombre: "", apellido: "", telefono: "", contactoPadre: "", d
       </Card>
     </div>
   
-      <AlumnoFichaModal alumno={alumnoFicha} clases={clases} pagos={pagos} alumnos={alumnos} onClose={() => setAlumnoFicha(null)} />
+      <AlumnoFichaModal alumno={alumnoFicha} clases={clases} pagos={pagos} alumnos={alumnos} onPagarPendiente={onPagarPendiente} onClose={() => setAlumnoFicha(null)} />
     </>);
 }
     
 
-function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onClose }) {
+function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, onClose }) {
   if (!alumno) return null;
   const alumnoMap = useMemo(() => {
   const m = new Map();
@@ -472,7 +488,7 @@ const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds ||
     const ahora = new Date();
     const mes = ahora.getMonth(), anio = ahora.getFullYear();
     let realizadasMes = 0, deuda = 0, pagadoEf = 0, pagadoTx = 0, pagadoMixto = 0;
-    clasesDelAlumno.forEach(c => {
+    clasesFiltradas.forEach(c => {
       const f = new Date(c.fecha);
       const esMes = f.getMonth()===mes && f.getFullYear()===anio;
       if (c.estado === "realizada" && esMes) realizadasMes++;
@@ -492,7 +508,7 @@ const clasesDelAlumno = useMemo(() => (clases || []).filter(c => (c.alumnoIds ||
     <Modal isOpen={!!alumno} title={"Ficha de " + getNombreCompleto(alumno)} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar">
       <div className="grid gap-4">
         <Card title="Resumen del mes">
-          <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="flex justify-end mb-2"><select value={periodo} onChange={(e)=> setPeriodo(e.target.value)} className="border rounded px-2 py-1 text-xs"><option value="mes">Mes actual</option><option value="tres">Últimos 3 meses</option><option value="doce">Últimos 12 meses</option><option value="todo">Todo</option></select></div><div className="grid grid-cols-3 gap-3 text-center">
             <div className="bg-emerald-50 p-3 rounded-xl"><p className="text-xs text-emerald-700">Clases realizadas</p><p className="text-xl font-bold">{stats.realizadasMes}</p></div>
             <div className="bg-amber-50 p-3 rounded-xl"><p className="text-xs text-amber-700">Deuda estimada</p><p className="text-xl font-bold">${stats.deuda.toFixed(2)}</p></div>
             <div className="bg-slate-50 p-3 rounded-xl"><p className="text-xs text-slate-600">Pagado</p><p className="text-sm">Ef: ${stats.pagadoEf.toFixed(2)} · Tx: ${stats.pagadoTx.toFixed(2)} · Mix: ${stats.pagadoMixto.toFixed(2)}</p></div>
@@ -898,7 +914,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
                     {clasesFiltradas.map((c) => (
                     <tr key={c.id} className="border-t">
                         <td className="p-2">{c.fecha} {c.hora}</td>
-                        <td className="p-2">{c.nombresAlumnos}</td>
+                        <td className="p-2">{c.nombresAlumnos}<div className="flex flex-wrap gap-1 mt-1">{(c.alumnoIds || []).map(id => { const pago = (pagos || []).find(p => p.claseId === c.id && p.alumnoId === id); const status = pago ? (pago.metodo === "Pendiente" ? "Pendiente" : "Pagado") : "Pendiente"; const cls = status==="Pagado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"; const alumno = (alumnos||[]).find(a=>a.id===id); const nombre = alumno ? getNombreCompleto(alumno).split(" ")[0] : "Alumno"; return <span key={id} className={`text-[11px] px-2 py-0.5 rounded-full ${cls}`}>{nombre}: {status}</span>; })}</div></td>
                         <td className="p-2">{c.cancha}</td>
                         <td className="p-2">
                         <select value={c.estado} onChange={(e) => handleStatusChange(c, e.target.value)} className="w-full border rounded-lg px-2 py-1 bg-white">
@@ -1756,12 +1772,13 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   );
 }
 
-    function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave }) {
+    function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave, focusAlumnoId }) {
   const [pagos, setPagos] = useState({});
 
   useEffect(() => {
     if (clase) {
       const alumnosDeClase = clase.alumnoIds.map(id => alumnos.find(a => a.id === id)).filter(Boolean);
+  const visibles = focusAlumnoId ? alumnosDeClase.filter(a => a.id === focusAlumnoId) : alumnosDeClase;
       const alumnosQuePagan = alumnosDeClase.filter(a => a.plan !== 'mensual');
       const precioPorAlumno = alumnosQuePagan.length > 0 ? (parseFloat(clase.precio) / alumnosQuePagan.length) : 0;
 
@@ -1813,7 +1830,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
       <div className="grid gap-4">
         <p className="text-sm text-center border-b pb-2">Clase del {clase.fecha} a las {clase.hora}. Precio total: ${clase.precio}</p>
         <div className="space-y-4 max-h-64 overflow-y-auto pr-2">
-            {alumnosDeClase.map(alumno => (
+            {visibles.map(alumno => (
                 <div key={alumno.id} className="p-2 border rounded-lg">
                     <p className="font-semibold">{getNombreCompleto(alumno)}</p>
                     {alumno.plan === 'mensual' ? (
@@ -2061,7 +2078,11 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
       const [toast, setToast] = useState("");
       const [deletingInfo, setDeletingInfo] = useState({ id: null, type: null, collection: null });
       const [payingClase, setPayingClase] = useState(null);
-      const [payingCuota, setPayingCuota] = useState({alumno: null, mes: null});
+            const [focusAlumnoId, setFocusAlumnoId] = useState(null);
+      const openPagoPendiente = (claseId, alumnoId) => {
+        const clase = (state.clases || []).find(c => c.id === claseId);
+        if (clase) { setPayingClase(clase); setFocusAlumnoId(alumnoId); }
+      };const [payingCuota, setPayingCuota] = useState({alumno: null, mes: null});
       const [goToClassForm, setGoToClassForm] = useState(false);
       const [claseParaEditar, setClaseParaEditar] = useState(null);
       const [nuevoAlumnoId, setNuevoAlumnoId] = useState(null);
@@ -2273,7 +2294,7 @@ const goToEditClass = (clase) => {
           <Topbar current={current} setCurrent={setCurrent} onLogout={onLogout} perfil={state.perfil} onChangeModo={(m)=> db.collection('users').doc(user.uid).collection('profile').doc('main').set({ modoTrabajo: m }, { merge: true })} />
           <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
             {current === "dashboard" && <Dashboard state={state} goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} goToEditClass={goToEditClass} />}
-            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno} />}
+            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente} />}
             {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} />}
             {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
             {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} />}
@@ -2289,8 +2310,8 @@ const goToEditClass = (clase) => {
     isOpen={!!payingClase} 
     clase={payingClase}
     alumnos={state.alumnos}
-    onCancel={() => setPayingClase(null)} 
-    onSave={pagoCrud.createPagosClase} 
+    onCancel={() => { setPayingClase(null); setFocusAlumnoId(null); }} 
+     focusAlumnoId={focusAlumnoId}onSave={pagoCrud.createPagosClase} 
 />
 {/* 👇 PEGA EL NUEVO MODAL AQUÍ 👇 */}
 <RegistroPagoMensualModal 
