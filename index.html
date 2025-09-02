@@ -637,34 +637,33 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   
   const esHoraLaboral = (fecha, hora) => {
     if (!horarioLaboral || horarioLaboral.length !== 7) return true;
-    const diaIndex = new Date(fecha).getDay();
+    // --- CORRECCIÓN AQUÍ ---
+    const diaIndex = new Date(`${fecha}T00:00:00`).getDay();
     const diaSemana = horarioLaboral[diaIndex === 0 ? 6 : diaIndex - 1];
     if (!diaSemana.activo) return false;
     return hora >= diaSemana.desde && hora < diaSemana.hasta;
   };
 
-  // --- LÓGICA NUEVA PARA FILTRAR LAS HORAS ---
   const horasParaMostrar = useMemo(() => {
     if (!mostrarSoloHorarioLaboral || !horarioLaboral) {
-      return HORAS; // Vista completa: devuelve todas las horas
+      return HORAS;
     }
     
     const horasActivas = horarioLaboral.filter(d => d.activo).flatMap(d => [d.desde, d.hasta]);
-    if (horasActivas.length === 0) return HORAS; // Si no hay horario laboral definido, muestra todo
+    if (horasActivas.length === 0) return HORAS;
 
     const minHora = horasActivas.reduce((a, b) => a < b ? a : b);
     const maxHora = horasActivas.reduce((a, b) => a > b ? a : b);
 
     return HORAS.filter(h => h >= minHora && h < maxHora);
   }, [mostrarSoloHorarioLaboral, horarioLaboral]);
-  // --- FIN DE LA LÓGICA NUEVA ---
 
   return (
     <div className="grid grid-cols-[auto_repeat(7,1fr)] gap-px bg-slate-200 border border-slate-200">
       <div className="bg-white p-2"></div>
-      {week.map(day => (<div key={day} className="bg-white p-2 text-center font-semibold text-sm"><div>{DIAS_SEMANA_NOMBRES[new Date(day).getDay() === 0 ? 6 : new Date(day).getDay() - 1]}</div><div className="text-xs text-slate-500">{formatDate(new Date(day), 'dd/mm')}</div></div>))}
+      {/* --- CORRECCIÓN AQUÍ --- */}
+      {week.map(day => (<div key={day} className="bg-white p-2 text-center font-semibold text-sm"><div>{DIAS_SEMANA_NOMBRES[new Date(`${day}T00:00:00`).getDay() === 0 ? 6 : new Date(`${day}T00:00:00`).getDay() - 1]}</div><div className="text-xs text-slate-500">{formatDate(new Date(`${day}T00:00:00`), 'dd/mm')}</div></div>))}
       
-      {/* AHORA MAPEAMOS SOBRE LAS HORAS FILTRADAS */}
       {horasParaMostrar.map(hora => (
         <React.Fragment key={hora}>
           <div className="bg-white text-center text-xs p-2">{hora}</div>
@@ -1655,21 +1654,16 @@ function GestionClubes({ user }) {
       alert("El reparto debe sumar 100%");
       return;
     }
-    await clubsCollection.doc(activoId).set({
-      ...form,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    await clubsCollection.doc(activoId).set({ ...form, updatedAt: new Date().toISOString() }, { merge: true });
     alert("Configuración del club guardada");
   }
 
   // UI helpers
   const dias = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
   function addUbicacion() { setField('ubicaciones', [...(form.ubicaciones||[]), ""]); }
   function updUbicacion(i, val) { const u=[...(form.ubicaciones||[])]; u[i]=val; setField('ubicaciones', u); }
   function delUbicacion(i) { const u=[...(form.ubicaciones||[])]; u.splice(i,1); setField('ubicaciones', u); }
-
   function addBloque() { setField('horarioLaboral', { bloques: [ ...(form.horarioLaboral?.bloques||[]), { dia:"Lunes", desde:"08:00", hasta:"12:00" } ]}); }
   function updBloque(i, patch) { const b=[...(form.horarioLaboral?.bloques||[])]; b[i]={...b[i], ...patch}; setField('horarioLaboral', { bloques: b }); }
   function delBloque(i) { const b=[...(form.horarioLaboral?.bloques||[])]; b.splice(i,1); setField('horarioLaboral', { bloques: b }); }
@@ -1689,19 +1683,18 @@ function GestionClubes({ user }) {
         <button className="px-3 py-2 rounded-xl bg-black text-white" onClick={guardarClub}>Guardar cambios</button>
       </div>
 
-      {/* Config General */}
+      {/* --- NUEVA ESTRUCTURA HORIZONTAL --- */}
       <div className="grid md:grid-cols-2 gap-6">
+        {/* Columna Izquierda de Configuración */}
         <div className="space-y-4 p-4 border rounded-2xl bg-white">
           <h3 className="font-semibold">Configuración General</h3>
           <label className="block text-sm">Nombre del Club</label>
           <input className="w-full border rounded-xl px-3 py-2" value={form.nombre} onChange={e=>setField('nombre', e.target.value)} />
-
           <label className="block text-sm mt-3">Modalidad de Cobro Principal</label>
           <select className="w-full border rounded-xl px-3 py-2" value={form.modalidadPrincipal} onChange={e=>setField('modalidadPrincipal', e.target.value)}>
             <option value="por_clase">Por Clase</option>
             <option value="mensual">Mensual</option>
           </select>
-
           <div className="grid grid-cols-2 gap-3 mt-3">
             <div>
               <label className="block text-sm">Reparto % (Coach)</label>
@@ -1711,34 +1704,24 @@ function GestionClubes({ user }) {
               <label className="block text-sm">Reparto % (Club)</label>
               <input type="number" className="w-full border rounded-xl px-3 py-2" value={form.reparto.club} onChange={e=>setField('reparto', { coach:Number(form.reparto.coach||0), club: Number(e.target.value)||0 })} />
             </div>
-            <div className="col-span-2 text-xs opacity-70">
-              Debe sumar 100%. Actual: {(Number(form.reparto.coach||0)+Number(form.reparto.club||0))}%
-            </div>
+            <div className="col-span-2 text-xs opacity-70">Debe sumar 100%. Actual: {(Number(form.reparto.coach||0)+Number(form.reparto.club||0))}%</div>
           </div>
-
           <div className="mt-3">
             <label className="block text-sm">Canchas / Ubicaciones</label>
             <div className="space-y-2">
-              {(form.ubicaciones||[]).map((u,i)=>(
-                <div key={i} className="flex gap-2">
-                  <input className="flex-1 border rounded-xl px-3 py-2" value={u} onChange={e=>updUbicacion(i, e.target.value)} />
-                  <button className="px-3 py-2 rounded-xl border" onClick={()=>delUbicacion(i)}>Quitar</button>
-                </div>
-              ))}
+              {(form.ubicaciones||[]).map((u,i)=>(<div key={i} className="flex gap-2"><input className="flex-1 border rounded-xl px-3 py-2" value={u} onChange={e=>updUbicacion(i, e.target.value)} /><button className="px-3 py-2 rounded-xl border" onClick={()=>delUbicacion(i)}>Quitar</button></div>))}
             </div>
             <button className="mt-2 px-3 py-2 rounded-xl border" onClick={addUbicacion}>Agregar ubicación</button>
           </div>
         </div>
 
-        {/* Horario laboral por club */}
+        {/* Columna Derecha de Horarios */}
         <div className="space-y-4 p-4 border rounded-2xl bg-white">
           <h3 className="font-semibold">Horario Laboral (por club)</h3>
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
             {(form.horarioLaboral?.bloques||[]).map((b,i)=>(
               <div key={i} className="grid grid-cols-4 gap-2 items-center">
-                <select className="border rounded-xl px-3 py-2" value={b.dia} onChange={e=>updBloque(i,{dia:e.target.value})}>
-                  {dias.map(d=><option key={d} value={d}>{d}</option>)}
-                </select>
+                <select className="border rounded-xl px-3 py-2" value={b.dia} onChange={e=>updBloque(i,{dia:e.target.value})}>{dias.map(d=><option key={d} value={d}>{d}</option>)}</select>
                 <input type="time" className="border rounded-xl px-3 py-2" value={b.desde} onChange={e=>updBloque(i,{desde:e.target.value})}/>
                 <input type="time" className="border rounded-xl px-3 py-2" value={b.hasta} onChange={e=>updBloque(i,{hasta:e.target.value})}/>
                 <button className="px-3 py-2 rounded-xl border" onClick={()=>delBloque(i)}>Quitar</button>
@@ -1749,26 +1732,16 @@ function GestionClubes({ user }) {
         </div>
       </div>
 
-      {/* Precios por Clase */}
-      <div className="p-4 border rounded-2xl space-y-3 bg-white">
-        <h3 className="font-semibold">Precios por Clase</h3>
-        {["individual","dupla","trio","cuarteto","escuelita"].map(k=>(
-          <div key={k} className="grid grid-cols-2 md:grid-cols-3 gap-2 items-center">
-            <div className="text-sm capitalize">{k}</div>
-            <input type="number" className="border rounded-xl px-3 py-2" value={form.preciosClase[k] ?? 0} onChange={e=>setField('preciosClase', { ...(form.preciosClase||{}), [k]: Number(e.target.value)||0 })} />
-          </div>
-        ))}
-      </div>
-
-      {/* Precios Mensuales */}
-      <div className="p-4 border rounded-2xl space-y-3 bg-white">
-        <h3 className="font-semibold">Precios Mensuales</h3>
-        {[["1xSemana","1 vez por semana"],["2xSemana","2 veces por semana"],["3xSemana","3 veces por semana"],["libre","Libre"]].map(([key,label])=>(
-          <div key={key} className="grid grid-cols-2 md:grid-cols-3 gap-2 items-center">
-            <div className="text-sm">{label}</div>
-            <input type="number" className="border rounded-xl px-3 py-2" value={form.preciosMensuales[key] ?? 0} onChange={e=>setField('preciosMensuales', { ...(form.preciosMensuales||{}), [key]: Number(e.target.value)||0 })} />
-          </div>
-        ))}
+      {/* --- SECCIÓN DE PRECIOS A TODO LO ANCHO --- */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="p-4 border rounded-2xl space-y-3 bg-white">
+          <h3 className="font-semibold">Precios por Clase</h3>
+          {["individual","dupla","trio","cuarteto","escuelita"].map(k=>(<div key={k} className="grid grid-cols-2 gap-2 items-center"><div className="text-sm capitalize">{k}</div><input type="number" className="border rounded-xl px-3 py-2" value={form.preciosClase[k] ?? 0} onChange={e=>setField('preciosClase', { ...(form.preciosClase||{}), [k]: Number(e.target.value)||0 })} /></div>))}
+        </div>
+        <div className="p-4 border rounded-2xl space-y-3 bg-white">
+          <h3 className="font-semibold">Precios Mensuales</h3>
+          {[["1xSemana","1 vez por semana"],["2xSemana","2 veces por semana"],["3xSemana","3 veces por semana"],["libre","Libre"]].map(([key,label])=>(<div key={key} className="grid grid-cols-2 gap-2 items-center"><div className="text-sm">{label}</div><input type="number" className="border rounded-xl px-3 py-2" value={form.preciosMensuales[key] ?? 0} onChange={e=>setField('preciosMensuales', { ...(form.preciosMensuales||{}), [key]: Number(e.target.value)||0 })} /></div>))}
+        </div>
       </div>
     </div>
   );
@@ -1917,103 +1890,112 @@ const handleSavePlantilla = (plantillaData) => {
             .catch((error) => setToast(`Error: ${error.message}`));
     }
   };
+return (
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
 
-  return (
-    <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
-      {/* --- COLUMNA IZQUIERDA --- */}
-      <div className="flex flex-col gap-6">
-        <Card title="Perfil y Configuración">
-            <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
-            <div className="grid gap-3">
-              <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-              <div><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
-            </div>
-            <div className="mt-6 border-t pt-6">
-                <h4 className="text-md font-semibold text-slate-700 mb-2">Cuenta</h4>
-                <div className="grid gap-3">
-                  <div>
-                    <label className="text-sm text-slate-600">Email de la cuenta</label>
-                    <p className="w-full bg-slate-100 rounded-lg px-3 py-2 text-slate-700">{user?.email}</p>
+      {/* --- PRIMERA FILA: PERFIL Y DATOS BANCARIOS --- */}
+      
+      <Card title="Perfil y Configuración">
+          <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
+          <div className="grid gap-3">
+            <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+            <div><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+            <div><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
+          </div>
+          <div className="mt-6 border-t pt-6">
+              <h4 className="text-md font-semibold text-slate-700 mb-2">Cuenta</h4>
+              <div className="grid gap-3">
+                <div>
+                  <label className="text-sm text-slate-600">Email de la cuenta</label>
+                  <p className="w-full bg-slate-100 rounded-lg px-3 py-2 text-slate-700">{user?.email}</p>
+                </div>
+                <div><button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">Restablecer Contraseña</button></div>
+              </div>
+          </div>
+      </Card>
+      
+      <Card title="Datos Bancarios para Transferencias">
+          <div className="grid gap-4">
+              {['alias', 'cbu', 'banco', 'titular'].map(field => (
+                  <div key={field}>
+                      <label className="text-sm font-medium text-slate-600 capitalize">{field}</label>
+                      <div className="flex gap-2 mt-1">
+                          <input type="text" name={field} value={form.datosBancarios[field]} onChange={handleDatosBancariosChange} className="w-full border rounded-lg px-3 py-2" />
+                          <button type="button" onClick={() => handleCopyToClipboard(form.datosBancarios[field])} className="px-3 py-2 rounded-lg border text-sm hover:bg-slate-100">Copiar</button>
+                      </div>
                   </div>
-                  <div><button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">Restablecer Contraseña</button></div>
+              ))}
+          </div>
+      </Card>
+
+      {/* --- SEGUNDA FILA: CENTRO DE COMUNICACIONES (ANCHO COMPLETO) --- */}
+
+      <div className="md:col-span-2">
+        <Card title="Centro de Comunicaciones">
+            <div className="grid gap-4">
+                <div>
+                    <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
+                    <div className="flex gap-2 mt-1">
+                        <select className="w-full border rounded-lg px-3 py-2" value={plantillaSeleccionada ? plantillaSeleccionada.id : ""} onChange={(e) => { const p = plantillas.find(p => p.id === e.target.value); setPlantillaSeleccionada(p || null); setMensajePersonalizado(p ? p.texto : ""); }}>
+                            <option value="">Seleccionar plantilla...</option>
+                            {plantillas.map(p => (<option key={p.id} value={p.id}>{p.titulo}</option>))}
+                        </select>
+                        <button type="button" onClick={() => setEditingPlantilla({})} className="px-3 py-2 text-sm rounded-lg bg-emerald-600 text-white whitespace-nowrap">+ Nueva</button>
+                        <button type="button" onClick={() => plantillaSeleccionada && setEditingPlantilla(plantillaSeleccionada)} disabled={!plantillaSeleccionada} className="px-3 py-2 text-sm rounded-lg border disabled:opacity-50">Editar</button>
+                        <button type="button" onClick={handleDeletePlantilla} disabled={!plantillaSeleccionada} className="px-3 py-2 text-sm rounded-lg border text-red-600 disabled:opacity-50">Eliminar</button>
+                    </div>
+                    <textarea value={mensajePersonalizado} onChange={(e) => setMensajePersonalizado(e.target.value)} className="w-full mt-2 border rounded-lg px-3 py-2" rows={5} placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar." />
+                </div>
+                <div className="relative">
+                    <label className="text-sm font-medium text-slate-600">2. Selecciona los destinatarios</label>
+                    <input type="text" value={busquedaAlumno} onChange={(e) => { setBusquedaAlumno(e.target.value); setListaBusquedaAbierta(true); }} onBlur={() => setTimeout(() => setListaBusquedaAbierta(false), 200)} placeholder="Escribe para buscar alumnos..." className="w-full mt-1 border rounded-lg px-3 py-2" />
+                    {listaBusquedaAbierta && busquedaAlumno && (
+                        <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
+                            {alumnosFiltrados.length > 0 ? alumnosFiltrados.map(a => (<li key={a.id} onMouseDown={() => handleAgregarDestinatario(a)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">{getNombreCompleto(a)}</li>)) : <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>}
+                        </ul>
+                    )}
+                    <div className="mt-2">
+                        <p className="text-xs font-semibold text-slate-500">Destinatarios ({destinatarios.length}):</p>
+                        {destinatarios.length > 0 && (<div className="flex flex-wrap gap-2 mt-1 p-2 border rounded-lg bg-slate-50">{destinatarios.map(d => (<span key={d.id} className="flex items-center gap-2 bg-sky-100 text-sky-800 text-sm rounded-full px-2 py-1">{getNombreCompleto(d)}<button type="button" onClick={() => handleQuitarDestinatario(d.id)} className="w-4 h-4 rounded-full bg-sky-200 text-sky-800 flex items-center justify-center font-bold text-xs">x</button></span>))}</div>)}
+                    </div>
+                </div>
+                <div>
+                    <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
+                    <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2 max-h-48 overflow-y-auto">{destinatarios.length > 0 ? (destinatarios.map(destinatario => (<button key={destinatario.id} type="button" onClick={() => handleSendMessage(destinatario)} className="w-full flex justify-between items-center text-left px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"><span>Enviar a: <strong>{getNombreCompleto(destinatario)}</strong></span><span role="img" aria-label="send">💬</span></button>))) : (<p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>)}</div>
                 </div>
             </div>
+            <PlantillaModal isOpen={editingPlantilla !== null} plantilla={editingPlantilla?.id ? editingPlantilla : null} onCancel={() => setEditingPlantilla(null)} onSave={handleSavePlantilla} />
         </Card>
+      </div>
+      
+      {/* --- TERCERA FILA: CLUBES Y GESTIÓN DE DATOS --- */}
+      
+      <div className="md:col-span-2">
         <Card title="Mis Clubes">
             <GestionClubes user={user} />
         </Card>
-        
-        <Card title="Datos Bancarios para Transferencias">
-            <div className="grid gap-4">
-                {['alias', 'cbu', 'banco', 'titular'].map(field => (
-                    <div key={field}>
-                        <label className="text-sm font-medium text-slate-600 capitalize">{field}</label>
-                        <div className="flex gap-2 mt-1">
-                            <input type="text" name={field} value={form.datosBancarios[field]} onChange={handleDatosBancariosChange} className="w-full border rounded-lg px-3 py-2" />
-                            <button type="button" onClick={() => handleCopyToClipboard(form.datosBancarios[field])} className="px-3 py-2 rounded-lg border text-sm hover:bg-slate-100">Copiar</button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </Card>
-        
-        <Card title="Centro de Comunicaciones">
-    <div className="grid gap-4">
-        {/* Sección 1: Selector de Plantilla y Editor */}
-        <div>
-            <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
-            <div className="flex gap-2 mt-1">
-                <select 
-                    className="w-full border rounded-lg px-3 py-2"
-                    value={plantillaSeleccionada ? plantillaSeleccionada.id : ""}
-                    onChange={(e) => { /* ... (código sin cambios) ... */ }}
-                >
-                    <option value="">Seleccionar plantilla...</option>
-                    {plantillas.map(p => (<option key={p.id} value={p.id}>{p.titulo}</option>))}
-                </select>
-                {/* --- 👇 BOTONES NUEVOS 👇 --- */}
-                <button onClick={() => setEditingPlantilla({})} className="px-3 py-2 text-sm rounded-lg bg-emerald-600 text-white whitespace-nowrap">+ Nueva</button>
-                <button onClick={() => plantillaSeleccionada && setEditingPlantilla(plantillaSeleccionada)} disabled={!plantillaSeleccionada} className="px-3 py-2 text-sm rounded-lg border disabled:opacity-50">Editar</button>
-                <button onClick={handleDeletePlantilla} disabled={!plantillaSeleccionada} className="px-3 py-2 text-sm rounded-lg border text-red-600 disabled:opacity-50">Eliminar</button>
-            </div>
-            <textarea value={mensajePersonalizado} onChange={(e) => setMensajePersonalizado(e.target.value)} className="w-full mt-2 border rounded-lg px-3 py-2" rows={5} placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar." />
-        </div>
+      </div>
 
-        {/* ... (Sección 2 y 3 no cambian) ... */}
-
-    </div>
-    {/* --- 👇 RENDERIZAMOS EL MODAL AQUÍ 👇 --- */}
-    <PlantillaModal
-        isOpen={editingPlantilla !== null}
-        plantilla={editingPlantilla?.id ? editingPlantilla : null}
-        onCancel={() => setEditingPlantilla(null)}
-        onSave={handleSavePlantilla}
-    />
-</Card>
-        
+      <div className="md:col-span-2">
         <Card title="Gestión de Datos">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button onClick={onExport} className="w-full px-4 py-2 rounded-lg border bg-blue-600 text-white hover:bg-blue-700">Exportar Datos (Backup)</button>
-                <button onClick={() => fileInputRef.current.click()} className="w-full px-4 py-2 rounded-lg border bg-amber-600 text-white hover:bg-amber-700">Importar Datos</button>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button type="button" onClick={onExport} className="w-full px-4 py-2 rounded-lg border bg-blue-600 text-white hover:bg-blue-700">Exportar Datos (Backup)</button>
+                <button type="button" onClick={() => fileInputRef.current.click()} className="w-full px-4 py-2 rounded-lg border bg-amber-600 text-white hover:bg-amber-700">Importar Datos</button>
                 <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={onImport} />
             </div>
-            <p className="text-xs text-slate-500 mt-3">**Atención:** La importación de datos reemplazará toda la información existente.</p>
+            <p className="text-xs text-slate-500 mt-3"><strong>Atención:</strong> La importación de datos reemplazará toda la información existente.</p>
         </Card>
       </div>
+      
+      {/* --- BOTÓN FINAL --- */}
 
-      {/* --- COLUMNA DERECHA --- */}
-      <div className="flex flex-col gap-6">
-          
-          
-         
-          
-          <div className="mt-6 flex justify-end">
-            <button type="submit" className="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold">Guardar Todos los Cambios</button>
-          </div>
+      <div className="md:col-span-2 flex justify-end">
+         <button type="submit" className="px-6 py-3 rounded-xl bg-emerald-600 text-white font-semibold">Guardar Todos los Cambios</button>
       </div>
     </form>
-  );
+);
+    
+  
 }
 
     // Reemplaza tu PagoGrupalModal completo con este código
