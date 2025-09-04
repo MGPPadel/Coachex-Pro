@@ -146,14 +146,20 @@
       return result;
     };
     const formatDate = (date, format = 'yyyy-mm-dd') => {
-      if (!date) return '';
-      const d = new Date(date);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      if (format === 'dd/mm') return `${day}/${month}`;
-      return `${year}-${month}-${day}`;
-    };
+  if (!date) return '';
+  // Si la fecha ya es un objeto Date, usarlo directamente.
+  // Si es una cadena, asumir que ya está en formato YYYY-MM-DD y convertirla a un objeto Date.
+  const d = typeof date === 'string' ? new Date(`${date}T00:00:00`) : date;
+  
+  // Utiliza los métodos getUTC para asegurar que la fecha no se altere por la zona horaria local.
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  
+  if (format === 'dd/mm') return `${day}/${month}`;
+  if (format === 'dd/mm/yyyy') return `${day}/${month}/${year}`;
+  return `${year}-${month}-${day}`;
+};
     const getNombreCompleto = (a) => a ? `${a.apellido || ''} ${a.nombre || ''}`.trim() : 'Alumno eliminado';
     const formatCurrency = (value) => {
       const number = parseFloat(value);
@@ -189,40 +195,38 @@
     </div>
   ); 
 }    
-function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubChange, showIndependentOption }) { 
-      const tabs = [ { id: "dashboard", label: "Dashboard" }, { id: "alumnos", label: "Alumnos" }, { id: "clases", label: "Clases" },{ id: "grupos", label: "Grupos" }, { id: "pagos", label: "Pagos" }, { id: "gastos", label: "Gastos" }, { id: "reportes", label: "Reportes" }, { id: "perfil", label: "Perfil" } ]; 
-      return (
-        <header className="w-full bg-slate-900 text-white">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img src="logo flaticon.png" alt="Logo Circular" className="w-10 h-10 rounded-full"/>
-              <div>
-                <img src="logo_coachex N.png" alt="Coachex-Pro Logo" style={{ height: '24px' }}/>
-                 <p className="text-xs opacity-80 -mt-0.5">Gestión de Profesores</p>
-              </div>
-            </div>
-            <nav className="hidden md:flex items-center gap-3">
-              <select 
-                value={clubActivoId || "general"} 
-                onChange={(e) => onClubChange(e.target.value === "general" ? null : e.target.value)} 
-                className="text-sm px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 focus:ring-2 focus:ring-white max-w-[200px]" 
-                title="Seleccionar Modo de Trabajo"
-              >
-                {showIndependentOption && <option value="general">Modo: Independiente</option>}
-                {clubes.map(club => (
-                    <option key={club.id} value={club.id}>{club.nombre}</option>
-                ))}
-              </select>
-              {tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-1.5 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"}`}>{t.label}</button>))}
-              {/* --- BOTÓN ACTUALIZADO --- */}
-              <button onClick={onLogout} className="px-2 py-1 rounded-lg text-sm transition bg-red-600 hover:bg-red-700 text-white ml-4">Cerrar Sesión</button>
-            </nav>
+function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubChange, showIndependentOption }) {
+  const tabs = [ { id: "dashboard", label: "Dashboard" }, { id: "alumnos", label: "Alumnos" }, { id: "clases", label: "Clases" },{ id: "grupos", label: "Grupos" }, { id: "pagos", label: "Pagos" }, { id: "gastos", label: "Gastos" }, { id: "reportes", label: "Reportes" }, { id: "perfil", label: "Perfil" } ];
+  return (
+    <header className="w-full bg-slate-900 text-white">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <img src="logo flaticon.png" alt="Logo Circular" className="w-10 h-10 rounded-full"/>
+          <div>
+            <img src="logo_coachex N.png" alt="Coachex-Pro Logo" style={{ height: '24px' }}/>
+            <p className="text-xs opacity-80 -mt-0.5">Gestión de Profesores</p>
           </div>
-          <div className="md:hidden px-3 pb-3 grid grid-cols-3 sm:grid-cols-5 gap-2">{tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-2 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "bg-slate-800 text-white"}`}>{t.label}</button>))}</div>
-          <div className="md:hidden px-3 pb-3"><button onClick={onLogout} className="w-full px-3 py-1.5 rounded-lg text-sm transition bg-red-600 hover:bg-red-700 text-white mt-2">Cerrar Sesión</button></div>
-        </header>
-      );
-    }
+        </div>
+        <nav className="hidden md:flex items-center gap-3">
+          <select 
+            value={clubActivoId || ""} // Valor por defecto ahora es cadena vacía
+            onChange={(e) => onClubChange(e.target.value)}
+            className="text-sm px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 focus:ring-2 focus:ring-white max-w-[200px]"
+            title="Seleccionar Club de Trabajo"
+          >
+            {clubes.map(club => (
+              <option key={club.id} value={club.id}>{club.nombre}</option>
+            ))}
+          </select>
+          {tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-1.5 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"}`}>{t.label}</button>))}
+          <button onClick={onLogout} className="px-2 py-1 rounded-lg text-sm transition bg-red-600 hover:bg-red-700 text-white ml-4">Cerrar Sesión</button>
+        </nav>
+      </div>
+      <div className="md:hidden px-3 pb-3 grid grid-cols-3 sm:grid-cols-5 gap-2">{tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-2 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "bg-slate-800 text-white"}`}>{t.label}</button>))}</div>
+      <div className="md:hidden px-3 pb-3"><button onClick={onLogout} className="w-full px-3 py-1.5 rounded-lg text-sm transition bg-red-600 hover:bg-red-700 text-white mt-2">Cerrar Sesión</button></div>
+    </header>
+  );
+}
     
     function ClasesPorTamanoMes({ clases }) {
         const resumen = useMemo(() => {
@@ -497,7 +501,7 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
       );
     }
     
-function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment, clases, pagos, onRegistrarClase, onPagarPendiente, onEditarPago, onDeletePago }) {
+function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment, clases, pagos, onRegistrarClase, onPagarPendiente, onEditarPago, onDeletePago, onOpenRecurrente }) {
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -594,135 +598,239 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
         onClose={() => setAlumnoFicha(null)} 
         onRegistrarPago={onRegisterMonthlyPayment} 
         onEditarPago={onEditarPago} 
-        onDeletePago={onDeletePago} 
+        onDeletePago={onDeletePago}
+        onOpenRecurrente={onOpenRecurrente}
     />
   </>);
 }
     
-function AlumnoFichaModal({ alumno, clases, pagos, alumnos, onPagarPendiente, onClose, onRegistrarPago, onEditarPago, onDeletePago }) {
-  const [activeTab, setActiveTab] = useState('cuenta');
-
-  const estadoDeCuenta = useMemo(() => {
-    if (!alumno || !clases || !pagos) return { movimientos: [], saldoFinal: 0 };
-    const safeParseFloat = (value) => parseFloat(value) || 0;
-    const debitos = (clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id) && (c.estado === 'Realizada' || c.estado === 'Ausente')).map(c => {
-        const totalAlumnosEnClase = (c.alumnoIds || []).length || 1;
-        const precioClase = safeParseFloat(c.precio);
-        const precioPorAlumno = precioClase / totalAlumnosEnClase;
-        return { fecha: new Date(`${c.fecha}T${c.hora || '00:00'}`), concepto: `Clase de ${c.tipo || 'desconocido'}`, debe: precioPorAlumno, haber: 0, claseOriginal: c, tipoMovimiento: 'clase' };
-      });
-    const creditos = (pagos || []).filter(p => p.alumnoId === alumno.id && p.metodo !== 'Pendiente').map(p => ({ fecha: new Date(`${p.fecha}T23:59:59`), concepto: p.concepto || `Pago de clase`, debe: 0, haber: safeParseFloat(p.monto), pagoOriginal: p, tipoMovimiento: 'pago' }));
-    const movimientos = [...debitos, ...creditos].sort((a, b) => a.fecha - b.fecha);
-    let saldoAcumulado = 0;
-    const movimientosConSaldo = movimientos.map(mov => {
-      saldoAcumulado = saldoAcumulado + mov.debe - mov.haber;
-      return { ...mov, saldo: saldoAcumulado };
-    });
-    return { movimientos: movimientosConSaldo, saldoFinal: saldoAcumulado };
-  }, [alumno, clases, pagos]);
-
-  if (!alumno) return null;
-
-  const nombre = getNombreCompleto(alumno);
-  const TabButton = ({ tabId, children }) => ( <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-semibold rounded-t-lg ${activeTab === tabId ? 'bg-white border-b-white -mb-px border-l border-r border-t' : 'bg-slate-100 text-slate-600 border'}`}> {children} </button> );
-
-  return (
-    <Modal isOpen={!!alumno} title={`Ficha de ${nombre}`} onCancel={onClose} onConfirm={onClose} confirmText="Cerrar" size="4xl">
-      <div className="space-y-4">
-        <div className="flex border-b">
-          <TabButton tabId="cuenta">Estado de Cuenta</TabButton>
-          <TabButton tabId="clases">Historial de Clases</TabButton>
-          <TabButton tabId="datos">Datos Personales</TabButton>
-        </div>
-        <div className="p-4 border-x border-b rounded-b-lg bg-white min-h-[300px]">
-          {/* --- Pestaña de Estado de Cuenta --- */}
-          {activeTab === 'cuenta' && (
-            <div>
-              <div className="flex justify-between items-center mb-4 p-3 bg-slate-50 rounded-lg">
-                <div>
-                  <h4 className="text-sm text-slate-600">{estadoDeCuenta.saldoFinal > 0 ? 'Deuda Total' : 'Saldo a Favor'}</h4>
-                  <p className={`text-2xl font-bold ${estadoDeCuenta.saldoFinal > 0 ? 'text-red-600' : 'text-emerald-600'}`}>${Math.abs(estadoDeCuenta.saldoFinal).toFixed(2)}</p>
-                </div>
-                <button onClick={() => onRegistrarPago(alumno)} className="px-4 py-2 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">[+] Acreditar Pago / Abono</button>
-              </div>
-              <div className="overflow-y-auto max-h-[300px]">
-                <table className="min-w-full text-sm text-left">
-                  <thead className="sticky top-0 bg-white"><tr><th className="p-2 border-b">Fecha</th><th className="p-2 border-b">Concepto</th><th className="p-2 border-b text-right">Debe</th><th className="p-2 border-b text-right">Haber</th><th className="p-2 border-b text-right">Saldo</th><th className="p-2 border-b text-right">Acciones</th></tr></thead>
-                  <tbody>
-                    {estadoDeCuenta.movimientos.slice().reverse().map((mov, index) => (
-                      <tr key={index} className={`border-t ${mov.tipoMovimiento === 'pago' ? 'hover:bg-sky-50' : ''}`}>
-                        <td className="p-2">{formatDate(mov.fecha, 'dd/mm/yyyy')}</td>
-                        <td className="p-2">{mov.concepto}</td>
-                        <td className="p-2 text-right text-red-600">{mov.debe > 0 ? `$${mov.debe.toFixed(2)}` : ''}</td>
-                        <td className="p-2 text-right text-emerald-600">{mov.haber > 0 ? `$${mov.haber.toFixed(2)}` : ''}</td>
-                        <td className="p-2 text-right font-semibold">${mov.saldo.toFixed(2)}</td>
-                        <td className="p-2 text-right">
-                          {mov.tipoMovimiento === 'pago' && (
-                            <div className="flex justify-end gap-2">
-                              <button onClick={() => onEditarPago(mov.pagoOriginal)} className="text-xs text-blue-600 hover:underline">Editar</button>
-                              <button onClick={() => onDeletePago(mov.pagoOriginal.id)} className="text-xs text-red-600 hover:underline">Eliminar</button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {estadoDeCuenta.movimientos.length === 0 && <p className="text-center text-slate-400 py-4">No hay movimientos.</p>}
-              </div>
-            </div>
-          )}
-          {/* --- Pestaña de Historial de Clases --- */}
-          {activeTab === 'clases' && (
-            <div>
-              <h3 className="font-bold text-lg mb-2">Historial de Clases</h3>
-              <ul className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-                  {(clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id)).sort((a, b) => new Date(b.fecha + 'T' + b.hora) - new Date(a.fecha + 'T' + a.hora)).map(clase => {
-                      const pagosDeLaClase = (pagos || []).filter(p => p.claseId === clase.id && p.alumnoId === alumno.id);
-                      const estaPagado = pagosDeLaClase.some(p => p.metodo !== 'Pendiente');
-                      const estadoPago = estaPagado ? 'Pagado' : 'Pendiente';
-                      const mostrarBotonPagar = (clase.estado === 'Realizada' || clase.estado === 'Ausente') && !estaPagado;
-                      return (
-                          <li key={clase.id} className="p-3 border rounded-lg flex justify-between items-center hover:bg-slate-50">
-                              <div>
-                                  <p className="font-semibold">{formatDate(clase.fecha, 'dd/mm/yyyy')} - {clase.hora} - {clase.tipo}</p>
-                                  <p className="text-xs text-slate-500">{clase.cancha || 'Sin ubicación'}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                  {mostrarBotonPagar ? (
-                                      <button onClick={() => onPagarPendiente(clase, alumno.id)} className="px-3 py-1 text-xs bg-white border border-emerald-600 text-emerald-600 rounded-lg hover:bg-emerald-50">💳 Pagar</button>
-                                  ) : (
-                                      <span className={`text-xs px-2 py-1 rounded-full ${estadoPago === 'Pagado' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>{estadoPago}</span>
-                                  )}
-                              </div>
-                          </li>
-                      );
-                  })}
-              </ul>
-              {(clases || []).filter(c => (c.alumnoIds || []).includes(alumno.id)).length === 0 && (<p className="text-center text-slate-400 py-4">Este alumno aún no tiene clases registradas.</p>)}
-            </div>
-          )}
-          {/* --- Pestaña de Datos Personales --- */}
-          {activeTab === 'datos' && (
-            <div>
-              <h3 className="font-bold text-lg mb-2">Datos y Configuración del Alumno</h3>
-              <div className="space-y-3 text-sm max-h-[400px] overflow-y-auto pr-2">
-                  <div className="p-2 border-b"><p className="text-xs text-slate-500">Nombre Completo</p><p className="font-semibold text-slate-800">{getNombreCompleto(alumno)}</p></div>
-                  <div className="p-2 border-b"><p className="text-xs text-slate-500">Teléfono</p><p className="font-semibold text-slate-800">{alumno.telefono || "No especificado"}</p></div>
-                  <div className="p-2 border-b"><p className="text-xs text-slate-500">Plan de Pago</p><p className="font-semibold text-slate-800">{alumno.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</p></div>
-                  {alumno.plan === 'mensual' && (<div className="p-2 border-b"><p className="text-xs text-slate-500">Frecuencia</p><p className="font-semibold text-slate-800">{(FRECUENCIAS_MENSUALES.find(f => f.value === alumno.frecuencia) || {}).label || 'No especificada'}</p></div>)}
-                  <div className="p-2 border-b">
-                      <p className="text-xs text-slate-500">Horarios Fijos</p>
-                      {alumno.horarios && alumno.horarios.length > 0 ? (<div className="flex flex-wrap gap-2 mt-1">{alumno.horarios.map((h, i) => (<span key={i} className="px-2 py-1 bg-sky-100 text-sky-800 rounded-full text-xs">{h.dia} {h.hora}</span>))}</div>) : (<p className="font-semibold text-slate-800">No tiene horarios fijos</p>)}
-                  </div>
-                  <div className="p-2"><p className="text-xs text-slate-500">Notas</p><p className="font-semibold text-slate-800 whitespace-pre-wrap">{alumno.notas || "Sin notas"}</p></div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </Modal>
+function AlumnoFichaModal({
+  alumno,
+  onClose,
+  clases,
+  pagos,
+  alumnos,
+  onPagarPendiente,
+  onRegistrarPago,
+  onEditarPago,
+  onDeletePago,
+  onOpenRecurrente
+}) {
+  // Alumno "en vivo" (rehidratado desde la lista completa)
+  const alumnoLive = useMemo(
+    () => (alumnos || []).find(a => a.id === (alumno?.id)) || alumno,
+    [alumnos, alumno]
   );
+
+  // ---- Helper: estado de pago por ALUMNO para una clase ----
+  function isClasePagadaPorAlumno(clase, alumno, pagos) {
+    try {
+      const pagosLista = (pagos || []).filter(
+        p => p && p.claseId === (clase?.id) && p.alumnoId === (alumno?.id)
+      );
+      // Plan mensual: se considera pagado para ese alumno
+      if (pagosLista.some(p => p.metodo === 'Mensual')) return true;
+
+      const precioClase = parseFloat(clase?.precio ?? 0) || 0;
+      const cant = (clase?.alumnoIds?.length || 1);
+      const precioPorAlumno = cant > 0 ? (precioClase / cant) : precioClase;
+
+      const totalAlumno = pagosLista.reduce(
+        (acc, p) => acc + (parseFloat(p.monto || 0) || 0),
+        0
+      );
+      return totalAlumno >= precioPorAlumno;
+    } catch (e) {
+      console.error('isClasePagadaPorAlumno error:', e);
+      // Fallback: usa la bandera global si existiera
+      return !!(clase && clase.pagada);
+    }
+  }
+
+  const [tab, setTab] = useState("clases");
+
+    const clasesDelAlumno = useMemo(() => {
+        if (!alumno || !clases) return [];
+        return clases.filter(c => (c.alumnoIds || []).includes(alumno.id));
+    }, [alumno, clases]);
+    
+    const pagosDelAlumno = useMemo(() => {
+        if (!alumno || !pagos) return [];
+        return pagos.filter(p => p.alumnoId === alumno.id).sort((a, b) => b.fecha.localeCompare(a.fecha));
+    }, [alumno, pagos]);
+    
+    if (!alumno) return null;
+
+    const clasesPendientes = clasesDelAlumno.filter(c => !c.pagada);
+    const clasesPagadas = clasesDelAlumno.filter(c => c.pagada);
+    const totalPagos = pagosDelAlumno.reduce((sum, p) => sum + parseFloat(p.monto), 0);
+    const totalPendiente = clasesPendientes.reduce((sum, c) => sum + c.precio || 0, 0);
+
+    const handleOpenRecurrente = () => {
+      onOpenRecurrente(alumno);
+      onClose();
+    };
+
+    return (
+        <Modal isOpen={!!alumno} onClose={onClose} title={`Ficha de ${getNombreCompleto(alumno)}`} size="5xl" confirmText="Cerrar" onConfirm={onClose}>
+            <div className="flex flex-col md:flex-row gap-6">
+                <div className="md:w-1/3 p-4 bg-slate-50 rounded-xl space-y-4">
+                    <h3 className="text-xl font-bold text-[#34745B]">{getNombreCompleto(alumno)}</h3>
+                    <div className="text-sm space-y-2 text-slate-700">
+                        {alumno.telefono && <p>📞 Teléfono: <a href={waLink(alumno.telefono, alumno.nombre)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{alumno.telefono}</a></p>}
+                        {alumno.contactoPadre && <p>👪 Contacto Padre/Madre: {alumno.contactoPadre}</p>}
+                        <p>⛳ Deporte: {alumno.deporte || 'Pádel'}</p>
+                        <p>✅ Estado: <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${alumno.estado === 'espera' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{alumno.estado === 'espera' ? 'En Espera' : 'Activo'}</span></p>
+                        <p>💵 Plan de Pago: {alumno.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</p>
+                        {alumno.notas && <p>✍️ Notas: <span className="italic">{alumno.notas}</span></p>}
+                        {alumno.precios && (
+                            <div>
+                                <h4 className="font-semibold mt-2">Precios Personalizados:</h4>
+                                <ul className="list-disc pl-5 text-xs">
+                                    {Object.entries(alumno.precios).map(([tipo, precio]) => (
+                                        <li key={tipo}>{TIPO_CLASE_PRECIO[tipo]}: ${precio}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="md:w-2/3">
+                    <div className="border-b border-slate-200">
+                        <nav className="-mb-px flex space-x-8 text-sm">
+                            <button onClick={() => setTab("clases")} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${tab === 'clases' ? 'border-[#34745B] text-[#34745B]' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`}>Clases ({clasesDelAlumno.length})</button>
+                            <button onClick={() => setTab("pagos")} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${tab === 'pagos' ? 'border-[#34745B] text-[#34745B]' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`}>Pagos ({pagosDelAlumno.length})</button>
+                            <button onClick={() => onOpenRecurrente(alumno)} className="whitespace-nowrap py-4 px-1 border-b-2 font-medium border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">Clases Recurrentes</button>
+                        </nav>
+                    </div>
+
+                    {tab === "clases" && (
+                        <div className="mt-4">
+                            <h4 className="font-bold text-lg text-slate-800 mb-2">Historial de Clases</h4>
+                            <table className="min-w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-slate-600">
+                                        <th className="p-2">Fecha</th>
+                                        <th className="p-2">Tipo</th>
+                                        <th className="p-2">Precio</th>
+                                        <th className="p-2">Estado</th>
+                                        <th className="p-2 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {clasesDelAlumno.length === 0 ? (
+                                        <tr><td colSpan="5" className="text-center py-4 text-slate-400">No hay clases registradas.</td></tr>
+                                    ) : (
+                                        clasesDelAlumno.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).map(clase => (
+                                            <tr key={clase.id} className="border-t">
+                                                <td className="p-2">{formatDate(clase.fecha, 'dd/mm/yyyy')}</td>
+                                                <td className="p-2">{clase.tipo}</td>
+                                                <td className="p-2">${clase.precio || 0}</td>
+                                                <td className="p-2">
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${isClasePagadaPorAlumno(clase, alumno, pagos) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                        {isClasePagadaPorAlumno(clase, alumno, pagos) ? 'Pagada' : 'Pendiente'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-2 text-right">
+                                                    {!isClasePagadaPorAlumno(clase, alumno, pagos) && <button onClick={() => onPagarPendiente(clase, alumno.id)} className="px-2 py-1 text-xs rounded-lg border bg-green-50 text-green-800 hover:bg-green-100">Registrar Pago</button>}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        {/* Recurrentes del alumno: vista rápida dentro de la ficha */}
+                        {alumno?.clasesRecurrentes && Array.isArray(alumno.clasesRecurrentes) && alumno.clasesRecurrentes.length > 0 && (
+                          <div className="mt-4">
+                            <h4 className="font-bold text-lg text-slate-800 mb-2">Recurrentes</h4>
+                            <div className="space-y-1">
+                              {alumno.clasesRecurrentes.map((serie, i) => {
+                                try {
+                                  const d = new Date();
+                                  const nombres = (typeof DIAS_SEMANA_NOMBRES !== 'undefined' && DIAS_SEMANA_NOMBRES) ? DIAS_SEMANA_NOMBRES : ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                                  const target = nombres.indexOf(serie.dia);
+                                  const current = d.getDay();
+                                  let diff = target - current;
+                                  if (diff <= 0) diff += 7;
+                                  const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+                                  const dd = String(next.getDate()).padStart(2,'0');
+                                  const mm = String(next.getMonth()+1).padStart(2,'0');
+                                  const yyyy = next.getFullYear();
+                                  const fechaPreview = `${dd}/${mm}/${yyyy}`;
+                                  return (
+                                    <div key={i} className="p-2 border rounded-lg bg-white text-xs">
+                                      {serie.dia} {serie.hora} · {serie.tipo} · ${serie.precio || 0}
+                                      <span className="ml-2 text-slate-500">Próxima: {fechaPreview}</span>
+                                    
+      <div className="mt-2 flex items-center gap-2">
+        <input type="date" className="border rounded-lg px-2 py-1 text-xs"
+          value={omitDate[i] || ""}
+          onChange={e => setOmitDate(prev => ({ ...prev, [i]: e.target.value }))}
+        />
+        <button className="px-2 py-1 rounded-lg bg-amber-600 text-white text-xs"
+          onClick={async () => {
+            const f = (omitDate[i] || "").trim();
+            if (!f) { setToast("Elegí una fecha para omitir."); return; }
+            await claseCrud.onOmitirOcurrencia(alumno.id, serie, f);
+          }}
+        >Omitir fecha</button>
+        <button className="px-2 py-1 rounded-lg bg-red-600 text-white text-xs"
+          onClick={async () => {
+            if (confirm('Eliminar esta serie (borra clases FUTURAS)?')) {
+              await claseCrud.onDeleteRecurrente(alumno.id, serie);
+            }
+          }}
+        >Eliminar serie</button>
+      </div>
+    </div>
+                                  );
+                                } catch (e) {
+                                  return <div key={i} className="text-xs text-slate-500">Recurrente: {serie?.dia} {serie?.hora} · {serie?.tipo}</div>
+                                }
+                              })}
+                            </div>
+                          </div>
+                        )}
+        
+                        </div>
+                    )}
+                    
+                    {tab === "pagos" && (
+                        <div className="mt-4">
+                            <h4 className="font-bold text-lg text-slate-800 mb-2">Historial de Pagos</h4>
+                            <table className="min-w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-slate-600">
+                                        <th className="p-2">Fecha</th>
+                                        <th className="p-2">Concepto</th>
+                                        <th className="p-2">Monto</th>
+                                        <th className="p-2">Método</th>
+                                        <th className="p-2 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pagosDelAlumno.length === 0 ? (
+                                        <tr><td colSpan="5" className="text-center py-4 text-slate-400">No hay pagos registrados.</td></tr>
+                                    ) : (
+                                        pagosDelAlumno.map(pago => (
+                                            <tr key={pago.id} className="border-t">
+                                                <td className="p-2">{formatDate(pago.fecha, 'dd/mm/yyyy')}</td>
+                                                <td className="p-2">{pago.concepto}</td>
+                                                <td className="p-2">${pago.monto}</td>
+                                                <td className="p-2">{pago.metodo}</td>
+                                                <td className="p-2 text-right"><button onClick={() => onEditarPago({ id: pago.id, ...pago })} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button></td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </Modal>
+    );
 }
 
 function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHorarioLaboral }) {
@@ -777,7 +885,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
     if (horasActivas.length === 0) return HORAS;
     const minHora = horasActivas.reduce((a, b) => a < b ? a : b);
     const maxHora = horasActivas.reduce((a, b) => a > b ? a : b);
-
+    
     return HORAS.filter(h => h >= minHora && h < maxHora);
   }, [mostrarSoloHorarioLaboral, horarioLaboral]);
 
@@ -820,329 +928,408 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   );
 }
     
-   function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar, nuevoAlumnoId, setNuevoAlumnoId }) {
-      const [showForm, setShowForm] = useState(false);
-      const [editing, setEditing] = useState(null);
-      const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
-      const [form, setForm] = useState(emptyForm);
-      const [formStep, setFormStep] = useState(1);
-      const [alumnoSearchQuery, setAlumnoSearchQuery] = useState("");
-      const [isAlumnosListOpen, setIsAlumnosListOpen] = useState(false);
-      const [grupos, setGrupos] = useState([]);
-      const [filtroAlumno, setFiltroAlumno] = useState(""); 
-      const [filtroEstado, setFiltroEstado] = useState(""); 
-      const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
-      const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
+function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar, nuevoAlumnoId, setNuevoAlumnoId, onOpenRecurrentesModal }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
+  const [form, setForm] = useState(emptyForm);
+  const [formStep, setFormStep] = useState(1);
+  const [alumnoSearchQuery, setAlumnoSearchQuery] = useState("");
+  const [isAlumnosListOpen, setIsAlumnosListOpen] = useState(false);
+  const [grupos, setGrupos] = useState([]);
+  const [filtroAlumno, setFiltroAlumno] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState("");
+  const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
+  const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
 
-      useEffect(() => {
-        if (!user) return;
-        const unsub = db.collection('users').doc(user.uid).collection('grupos').onSnapshot(snapshot => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setGrupos(data);
-        });
-        return () => unsub();
-      }, [user]);
-      
-      useEffect(() => {
-        if (claseParaEditar) {
-            openEdit(claseParaEditar);
-            setClaseParaEditar(null);
-        }
-      }, [claseParaEditar]);
+  useEffect(() => {
+    if (!user) return;
+    const unsub = db.collection('users').doc(user.uid).collection('grupos').onSnapshot(snapshot => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setGrupos(data);
+    });
+    return () => unsub();
+  }, [user]);
 
-      useEffect(() => {
-        if (nuevoAlumnoId) {
-          setShowForm(true);
-          const alumnoSeleccionado = alumnoMap.get(nuevoAlumnoId);
-          if (!alumnoSeleccionado) {
-            setNuevoAlumnoId(null);
-            return;
-          }
-          setForm({ 
-            ...emptyForm, 
-            alumnoIds: [nuevoAlumnoId],
-          });
-          if (alumnoSeleccionado.horarios && alumnoSeleccionado.horarios.length > 0) {
-            setFormStep(2);
-          } else {
-            setFormStep(3);
-          }
-          setNuevoAlumnoId(null);
-        }
-      }, [nuevoAlumnoId, alumnoMap, emptyForm, setNuevoAlumnoId]);
-
-      const alumnosActivos = useMemo(() => (alumnos || []).filter(a => a.estado === 'activo'), [alumnos]);
-      const alumnoMap = useMemo(() => new Map((alumnos || []).map(a => [a.id, a])), [alumnos]);
-      const alumnosFiltrados = useMemo(() => {
-        if (!alumnoSearchQuery) { return alumnosActivos; }
-        return alumnosActivos.filter(alumno => getNombreCompleto(alumno).toLowerCase().includes(alumnoSearchQuery.toLowerCase()));
-      }, [alumnoSearchQuery, alumnosActivos]);
-      const pagosPorClase = useMemo(() => {
-        const map = new Map();
-        (pagos || []).forEach(p => {
-          if (!map.has(p.claseId)) map.set(p.claseId, []);
-          map.get(p.claseId).push(p);
-        });
-        return map;
-      }, [pagos]);
-      const clasesConDatos = useMemo(() => (clases || []).map(c => ({ 
-        ...c, 
-        nombresAlumnos: (c.alumnoIds || []).map(id => getNombreCompleto(alumnoMap.get(id))).filter(Boolean).join(', '), 
-        pagos: pagosPorClase.get(c.id) || [] 
-      })), [clases, alumnoMap, pagosPorClase]);
-      const clasesFiltradas = useMemo(() => {
-        return (clasesConDatos || []).filter(c => {
-            const pasaFiltroAlumno = !filtroAlumno || (c.alumnoIds || []).includes(filtroAlumno);
-            const pasaFiltroEstado = !filtroEstado || c.estado === filtroEstado;
-            const pasaFiltroFechaDesde = !filtroFechaDesde || c.fecha >= filtroFechaDesde;
-            const pasaFiltroFechaHasta = !filtroFechaHasta || c.fecha <= filtroFechaHasta;
-            return pasaFiltroAlumno && pasaFiltroEstado && pasaFiltroFechaDesde && pasaFiltroFechaHasta;
-        });
-      }, [clasesConDatos, filtroAlumno, filtroEstado, filtroFechaDesde, filtroFechaHasta]);
-      const canchasDisponibles = useMemo(() => (perfil.canchas || '').split('\n').filter(c => c.trim() !== ''), [perfil.canchas]);
-      
-      function handleFormChange(e) {
-        const { name, value, type, checked } = e.target;
-        const val = type === 'checkbox' ? checked : value;
-        setForm(prev => {
-            const newState = { ...prev, [name]: val };
-            if (name === "tipo") {
-                const primerAlumno = alumnoMap.get(prev.alumnoIds[0]);
-                const esPlanMensual = primerAlumno?.plan === 'mensual';
-                newState.precio = (perfil.precios[val.toLowerCase()] || "");
-                const numAlumnos = TIPOS_CLASE_MAP[val] || 1;
-                newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
-            }
-            return newState;
-        });
-      }
-      function handleAlumnoChange(index, newId) {
-        setForm(prev => {
-            const newAlumnoIds = [...(prev.alumnoIds || [])];
-            newAlumnoIds[index] = newId;
-            const primerAlumno = alumnoMap.get(newAlumnoIds[0]);
-            const esPlanMensual = primerAlumno?.plan === 'mensual';
-            const nuevoPrecio = esPlanMensual ? "0" : (perfil.precios[(prev.tipo || '').toLowerCase()] || "");
-            return { ...prev, alumnoIds: newAlumnoIds, precio: nuevoPrecio };
-        });
-        if (index === 0 && newId) { 
-            const alumnoSeleccionado = alumnoMap.get(newId);
-            if (alumnoSeleccionado && alumnoSeleccionado.horarios && alumnoSeleccionado.horarios.length > 0) {
-                setFormStep(2);
-            } else {
-                setFormStep(3);
-            }
-        }
-      }
-      function handleSelectAlumno(alumno) {
-        setAlumnoSearchQuery(getNombreCompleto(alumno));
-        setIsAlumnosListOpen(false);
-        handleAlumnoChange(0, alumno.id);
-      }
-      const getNextDateForDay = (dayName) => {
-        const today = new Date();
-        const todayDayIndex = today.getDay();
-        const targetDayIndex = (DIAS_SEMANA_NOMBRES.indexOf(dayName) + 1) % 7;
-        let dayDifference = targetDayIndex - todayDayIndex;
-        if (dayDifference <= 0) {
-            dayDifference += 7;
-        }
-        const resultDate = new Date(today.getTime());
-        resultDate.setDate(today.getDate() + dayDifference);
-        return resultDate;
-      };
-      function handleScheduleSelect(horario) {
-        const proximaFecha = getNextDateForDay(horario.dia);
-        setForm(prev => ({ ...prev, fecha: formatDate(proximaFecha), hora: horario.hora }));
-        setFormStep(3);
-      }
-      function openNew() { 
-        setEditing(null); 
-        setForm(emptyForm);
-        setAlumnoSearchQuery("");
-        setFormStep(1); 
-        setShowForm(true); 
-        window.scrollTo({ top: 0, behavior: "smooth" }); 
-      }
-      function openEdit(c) { 
-        setEditing(c); 
-        setForm({ ...emptyForm, ...c, recurrente: false }); 
-        setFormStep(3);
-        setShowForm(true); 
-        window.scrollTo({ top: 0, behavior: "smooth" }); 
-      }
-      function cancel() { 
-        setShowForm(false); 
-        setEditing(null); 
-        setForm(emptyForm);
-        setFormStep(1);
-      }
-      function submit(e) { 
-        e.preventDefault(); 
-        const validAlumnos = (form.alumnoIds || []).filter(id => id); 
-        if (validAlumnos.length === 0) return alert("Seleccioná al menos un alumno"); 
-        const finalForm = {...form, alumnoIds: validAlumnos}; 
-        if (editing) { 
-            onUpdate({ ...finalForm, id: editing.id }); 
-        } else { 
-            onCreate(finalForm); 
-        } 
-        cancel(); 
-      }
-      function handleStatusChange(clase, newStatus) {
-        onUpdate({ ...clase, estado: newStatus, pagos: clase.pagos });
-      }
-      const primerAlumnoId = form.alumnoIds ? form.alumnoIds[0] : null;
-      const esMensual = alumnoMap.get(primerAlumnoId)?.plan === 'mensual';
-      
-      return (
-        <div className="grid gap-4">
-          <Card title={<span className="text-[#34745B]">{editing ? "Editar clase" : "Nueva clase"}</span>} right={!showForm && <button id="nueva-clase-btn" onClick={openNew} className="bg-[#34745B] hover:bg-green-800 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
-            {showForm ? (
-                <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
-                    {(formStep === 1) && (
-                        <div className="md:col-span-6 relative">
-                            <label className="text-sm text-slate-600 font-semibold">Selecciona Alumno/a</label>
-                            <input type="text" value={alumnoSearchQuery} onChange={(e) => { setAlumnoSearchQuery(e.target.value); setIsAlumnosListOpen(true); }} onFocus={() => setIsAlumnosListOpen(true)} onBlur={() => setTimeout(() => setIsAlumnosListOpen(false), 200)} placeholder="Escribe para buscar..." className="w-full mt-1 border rounded-lg px-3 py-2" />
-                            {isAlumnosListOpen && (
-                                <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
-                                    {alumnosFiltrados.length > 0 ? (
-                                        alumnosFiltrados.map(alumno => (<li key={alumno.id} onClick={() => handleSelectAlumno(alumno)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">{getNombreCompleto(alumno)}</li>))
-                                    ) : ( <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li> )}
-                                </ul>
-                            )}
-                        </div>
-                    )}
-                    {(formStep === 2 && alumnoMap.get(form.alumnoIds[0])) && (
-                        <div className="md:col-span-6">
-                            <p className="text-sm text-slate-700 mb-2"><span className="font-bold">{getNombreCompleto(alumnoMap.get(form.alumnoIds[0]))}</span> tiene horarios fijos guardados.</p>
-                            <p className="text-sm font-semibold text-slate-600">¿Quieres agendar una clase en uno de sus horarios habituales?</p>
-                            <div className="flex flex-wrap gap-2 my-3">
-                                {(alumnoMap.get(form.alumnoIds[0]).horarios || []).map(horario => (
-                                    <button type="button" key={`${horario.dia}-${horario.hora}`} onClick={() => handleScheduleSelect(horario)} className="px-3 py-2 text-sm rounded-lg border bg-sky-50 text-sky-800 hover:bg-sky-100">{horario.dia} {horario.hora}</button>
-                                ))}
-                            </div>
-                            <div className="border-t pt-3 mt-3">
-                                <button type="button" onClick={() => setFormStep(3)} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-100">O agendar una clase personalizada en otro horario</button>
-                            </div>
-                        </div>
-                    )}
-                    {(formStep === 3) && (
-                        <>
-                            <div className="md:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {(form.alumnoIds || [""]).map((alumnoId, index) => (
-                                    <div key={index}>
-                                        <label className="text-sm text-slate-600">Alumno {index + 1}</label>
-                                        <select value={alumnoId} onChange={(e) => handleAlumnoChange(index, e.target.value)} className="w-full border rounded-lg px-3 py-2" required>
-                                            <option value="">Seleccionar...</option>
-                                            {alumnosActivos.filter(a => !(form.alumnoIds || []).includes(a.id) || a.id === alumnoId).map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
-                                        </select>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className="text-sm text-slate-600">Ubicación / Cancha</label>
-                                <select name="cancha" value={form.cancha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">
-                                    <option value="">Seleccionar cancha...</option>
-                                    {canchasDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                            </div>
-                            <div><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
-                            <div><label className="text-sm text-slate-600">Hora</label><input type="time" name="hora" value={form.hora} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
-                            <div><label className="text-sm text-slate-600">Tipo de Clase</label><select name="tipo" value={form.tipo} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}</select></div>
-                            <div><label className="text-sm text-slate-600">Precio</label><input type="number" name="precio" value={esMensual ? "0" : form.precio} onChange={handleFormChange} className={`w-full border rounded-lg px-3 py-2 ${esMensual ? 'bg-slate-100' : ''}`} placeholder="0" disabled={esMensual} /></div>
-                            <div className="md:col-span-2"><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}</select></div>
-                            <div className="md:col-span-6"><label className="text-sm text-slate-600">Notas</label><textarea name="notas" value={form.notas} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" rows={2} placeholder="Comentarios sobre la clase" /></div>
-                            {!editing && <div className="md:col-span-6 flex items-center gap-2"><input type="checkbox" name="recurrente" id="recurrente" checked={form.recurrente} onChange={handleFormChange} /><label htmlFor="recurrente" className="text-sm text-slate-600 mr-2">Repetir semanalmente por</label>{form.recurrente && <select name="mesesRecurrencia" value={form.mesesRecurrencia} onChange={handleFormChange} className="border rounded-lg px-3 py-2">{MESES_RECURRENCIA.map(m => <option key={m} value={m}>{m} mes{m > 1 ? 'es' : ''}</option>)}</select>}</div>}
-                        </>
-                    )}
-                    <div className="md:col-span-6 flex gap-2 justify-end">
-                        <button type="button" onClick={() => { cancel(); setFormStep(1); }} className="px-3 py-2 rounded-lg border">Cancelar</button>
-                        {formStep === 3 && <button type="submit" className="px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white">Guardar</button>}
-                    </div>
-                </form>
-            ) : ( <p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p> )}
-          </Card>
-          
-          <div> 
-            {(() => {
-                const [semanaVisible, setSemanaVisible] = useState(getWeekStartDate(new Date()));
-                const cambiarSemana = (dias) => setSemanaVisible(prev => addDays(prev, dias));
-                const hoyString = formatDate(new Date());
-                const semanaActualStrings = Array.from({ length: 7 }, (_, i) => formatDate(addDays(semanaVisible, i)));
-                const clasesDeLaSemana = clasesFiltradas.filter(c => semanaActualStrings.includes(c.fecha));
-                const clasesDeHoy = clasesFiltradas.filter(c => c.fecha === hoyString);
-                const clasesAgrupadas = clasesDeLaSemana.reduce((acc, clase) => {
-                    if (clase.fecha !== hoyString) {
-                        if (!acc[clase.fecha]) acc[clase.fecha] = [];
-                        acc[clase.fecha].push(clase);
-                    }
-                    return acc;
-                }, {});
-                const diasLaborales = (perfil.horarioLaboral || []).filter(d => d.activo).map(d => d.dia);
-                const ClaseItem = ({ clase }) => (
-                    <div 
-                      onClick={() => openEdit(clase)}
-                      className="p-3 bg-white rounded-lg shadow-sm border border-slate-200 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
-                    >
-                        <p className="font-semibold text-slate-800">{clase.hora} - {clase.nombresAlumnos}</p>
-                        <p className="text-xs text-slate-500 mt-1">{clase.tipo}{clase.cancha ? ` en ${clase.cancha}` : ''}</p>
-                    </div>
-                );
-                const DiaGroup = ({ fecha, clasesDelDia = [] }) => {
-                    const d = new Date(`${fecha}T00:00:00`);
-                    const diaNombre = DIAS_SEMANA_NOMBRES[d.getDay() === 0 ? 6 : d.getDay() - 1];
-                    const diaNumero = d.getDate();
-                    return (
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 min-h-[120px]">
-                            <h3 className="font-bold text-slate-700">{diaNombre}, {diaNumero}</h3>
-                            <div className="space-y-2 mt-2">
-                                {clasesDelDia.length > 0 ? (
-                                    clasesDelDia.sort((a,b) => a.hora.localeCompare(b.hora)).map(c => <ClaseItem key={c.id} clase={c} />)
-                                ) : (
-                                    <p className="text-sm text-slate-400 pt-2">No hay clases.</p>
-                                )}
-                            </div>
-                        </div>
-                    );
-                };
-                return (
-                    <div className="space-y-6">
-                        <div>
-                            <h2 className="text-xl font-bold text-[#34745B] mb-2">Agenda de Hoy</h2>
-                            <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
-                                {clasesDeHoy.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {clasesDeHoy.sort((a,b) => a.hora.localeCompare(b.hora)).map(c => <ClaseItem key={c.id} clase={c} />)}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
-                                )}
-                            </div>
-                        </div>
-                        <div>
-                            <div className="flex justify-between items-center mb-3">
-                                <button onClick={() => cambiarSemana(-7)} className="px-4 py-2 text-sm rounded-lg border bg-white shadow-sm hover:bg-slate-50">‹ Sem. Anterior</button>
-                                <p className="font-semibold text-slate-600">Semana del {formatDate(semanaVisible, 'dd/mm')} al {formatDate(addDays(semanaVisible, 6), 'dd/mm')}</p>
-                                <button onClick={() => cambiarSemana(7)} className="px-4 py-2 text-sm rounded-lg border bg-white shadow-sm hover:bg-slate-50">Sem. Siguiente ›</button>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {semanaActualStrings.map((fechaString, index) => {
-                                    const diaNombre = DIAS_SEMANA_NOMBRES[index];
-                                    if (diasLaborales.includes(diaNombre) && fechaString !== hoyString) {
-                                        return <DiaGroup key={fechaString} fecha={fechaString} clasesDelDia={clasesAgrupadas[fechaString] || []} />;
-                                    }
-                                    return null;
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                );
-            })()}
-          </div>
-        </div>
-      );
+  useEffect(() => {
+    if (claseParaEditar) {
+      openEdit(claseParaEditar);
+      setClaseParaEditar(null);
     }
+  }, [claseParaEditar]);
+
+  useEffect(() => {
+    if (nuevoAlumnoId) {
+      setShowForm(true);
+      const alumnoSeleccionado = alumnoMap.get(nuevoAlumnoId);
+      if (!alumnoSeleccionado) {
+        setNuevoAlumnoId(null);
+        return;
+      }
+      setForm({
+        ...emptyForm,
+        alumnoIds: [nuevoAlumnoId],
+      });
+      if (alumnoSeleccionado.horarios && alumnoSeleccionado.horarios.length > 0) {
+        setFormStep(2);
+      } else {
+        setFormStep(3);
+      }
+      setNuevoAlumnoId(null);
+    }
+  }, [nuevoAlumnoId, alumnoMap, emptyForm, setNuevoAlumnoId]);
+
+  const alumnosActivos = useMemo(() => (alumnos || []).filter(a => a.estado === 'activo'), [alumnos]);
+  const alumnoMap = useMemo(() => new Map((alumnos || []).map(a => [a.id, a])), [alumnos]);
+  const alumnosFiltrados = useMemo(() => {
+    if (!alumnoSearchQuery) { return alumnosActivos; }
+    return alumnosActivos.filter(alumno => getNombreCompleto(alumno).toLowerCase().includes(alumnoSearchQuery.toLowerCase()));
+  }, [alumnoSearchQuery, alumnosActivos]);
+  const pagosPorClase = useMemo(() => {
+    const map = new Map();
+    (pagos || []).forEach(p => {
+      if (!map.has(p.claseId)) map.set(p.claseId, []);
+      map.get(p.claseId).push(p);
+    });
+    return map;
+  }, [pagos]);
+  const clasesConDatos = useMemo(() => (clases || []).map(c => ({
+    ...c,
+    nombresAlumnos: (c.alumnoIds || []).map(id => getNombreCompleto(alumnoMap.get(id))).filter(Boolean).join(', '),
+    pagos: pagosPorClase.get(c.id) || []
+  })), [clases, alumnoMap, pagosPorClase]);
+  const clasesFiltradas = useMemo(() => {
+    return (clasesConDatos || []).filter(c => {
+      const pasaFiltroAlumno = !filtroAlumno || (c.alumnoIds || []).includes(filtroAlumno);
+      const pasaFiltroEstado = !filtroEstado || c.estado === filtroEstado;
+      const pasaFiltroFechaDesde = !filtroFechaDesde || c.fecha >= filtroFechaDesde;
+      const pasaFiltroFechaHasta = !filtroFechaHasta || c.fecha <= filtroFechaHasta;
+      return pasaFiltroAlumno && pasaFiltroEstado && pasaFiltroFechaDesde && pasaFiltroFechaHasta;
+    });
+  }, [clasesConDatos, filtroAlumno, filtroEstado, filtroFechaDesde, filtroFechaHasta]);
+  const canchasDisponibles = useMemo(() => (perfil.canchas || '').split('\n').filter(c => c.trim() !== ''), [perfil.canchas]);
+  
+
+  function handleFormChange(e) {
+    const { name, value, type, checked } = e.target;
+    const val = type === 'checkbox' ? checked : value;
+    setForm(prev => {
+      const newState = { ...prev, [name]: val };
+      if (name === "tipo") {
+        const primerAlumno = alumnoMap.get(prev.alumnoIds[0]);
+        const esPlanMensual = primerAlumno?.plan === 'mensual';
+        newState.precio = (perfil.precios[val.toLowerCase()] || "");
+        const numAlumnos = TIPOS_CLASE_MAP[val] || 1;
+        newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
+      }
+      return newState;
+    });
+  }
+  function handleAlumnoChange(index, newId) {
+    setForm(prev => {
+      const newAlumnoIds = [...(prev.alumnoIds || [])];
+      newAlumnoIds[index] = newId;
+      const primerAlumno = alumnoMap.get(newAlumnoIds[0]);
+      const esMensual = primerAlumno?.plan === 'mensual';
+      const nuevoPrecio = esMensual ? "0" : (perfil.precios[(prev.tipo || '').toLowerCase()] || "");
+      return { ...prev, alumnoIds: newAlumnoIds, precio: nuevoPrecio };
+    });
+    if (index === 0 && newId) {
+      const alumnoSeleccionado = alumnoMap.get(newId);
+      if (alumnoSeleccionado && alumnoSeleccionado.horarios && alumnoSeleccionado.horarios.length > 0) {
+        setFormStep(2);
+      } else {
+        setFormStep(3);
+      }
+    }
+  }
+  function handleSelectAlumno(alumno) {
+    setAlumnoSearchQuery(getNombreCompleto(alumno));
+    setIsAlumnosListOpen(false);
+    handleAlumnoChange(0, alumno.id);
+  }
+  
+  const getNextDateForDay = (dayName) => {
+    const today = new Date();
+    const todayDayIndex = today.getDay(); // 0=domingo, 1=lunes, etc.
+    const targetDayIndex = DIAS_SEMANA_NOMBRES.indexOf(dayName); // 0=lunes, 1=martes, etc.
+
+    let correctedTargetIndex = targetDayIndex + 1;
+    if (correctedTargetIndex === 7) {
+        correctedTargetIndex = 0;
+    }
+
+    let dayDifference = correctedTargetIndex - todayDayIndex;
+    if (dayDifference <= 0) {
+      dayDifference += 7;
+    }
+    const resultDate = new Date(today.getTime());
+    resultDate.setDate(today.getDate() + dayDifference);
+    return resultDate;
+  };
+  
+  function handleScheduleSelect(horario) {
+    const proximaFecha = getNextDateForDay(horario.dia);
+    setForm(prev => ({ ...prev, fecha: formatDate(proximaFecha), hora: horario.hora }));
+    setFormStep(3);
+  }
+  function openNew() {
+    setEditing(null);
+    setForm(emptyForm);
+    setAlumnoSearchQuery("");
+    setFormStep(1);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function openEdit(c) {
+    setEditing(c);
+    setForm({ ...emptyForm, ...c, recurrente: false });
+    setFormStep(3);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function cancel() {
+    setShowForm(false);
+    setEditing(null);
+    setForm(emptyForm);
+    setFormStep(1);
+  }
+  function submit(e) {
+    e.preventDefault();
+    const validAlumnos = (form.alumnoIds || []).filter(id => id);
+    if (validAlumnos.length === 0) return alert("Seleccioná al menos un alumno");
+    const finalForm = { ...form, alumnoIds: validAlumnos };
+    
+    const shouldOpenPayModal = finalForm.estado === 'Realizada' || finalForm.estado === 'Ausente';
+    
+    let claseToPay = null;
+
+    if (editing) {
+      onUpdate({ ...finalForm, id: editing.id });
+      if (shouldOpenPayModal) {
+          claseToPay = { ...finalForm, id: editing.id };
+      }
+    } else {
+      onCreate(finalForm);
+      if (shouldOpenPayModal) {
+          claseToPay = finalForm;
+      }
+    }
+
+    if (claseToPay) {
+      onPay(claseToPay);
+    }
+    
+    cancel();
+  }
+  
+  const primerAlumnoId = form.alumnoIds ? form.alumnoIds[0] : null;
+  const esMensual = alumnoMap.get(primerAlumnoId)?.plan === 'mensual';
+
+  // --- Funciones para clases recurrentes ---
+function getProximaClaseFecha(diaNombre) {
+  const hoy = new Date();
+  const diaHoy = hoy.getDay(); // 0 (Domingo) - 6 (Sábado)
+  const diaObjetivo = DIAS_SEMANA_NOMBRES.indexOf(diaNombre) + 1; // 1 (Lunes) - 7 (Domingo)
+  const diferencia = (diaObjetivo - diaHoy + 7) % 7;
+  const proximaFecha = new Date(hoy);
+  proximaFecha.setDate(hoy.getDate() + diferencia);
+  return formatDate(proximaFecha, 'dd/mm/yyyy');
+}
+
+function handleCrearInstancias(alumnoId, serie) {
+  const batch = db.batch();
+  const collectionRef = getCollection('clases');
+  const alumno = alumnos.find(a => a.id === alumnoId);
+
+  const fechaInicio = new Date(serie.desde);
+  const fechaFin = new Date(serie.hasta);
+
+  const targetDayIndex = DIAS_SEMANA_NOMBRES.indexOf(serie.dia);
+
+  let currentDate = new Date(fechaInicio);
+
+  while (currentDate <= fechaFin) {
+    if (currentDate.getDay() === targetDayIndex) {
+      const docRef = collectionRef.doc();
+      batch.set(docRef, {
+        alumnoIds: serie.coAlumnoIds ? [alumnoId, ...serie.coAlumnoIds] : [alumnoId],
+        cancha: serie.cancha || "",
+        fecha: formatDate(currentDate),
+        hora: serie.hora,
+        tipo: serie.tipo,
+        precio: serie.precio,
+        estado: "Programada",
+        notas: ""
+      });
+    }
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  batch.commit().then(() => {
+    setToast("Clases recurrentes creadas exitosamente.");
+  }).catch(error => {
+    console.error("Error al crear clases recurrentes:", error);
+    setToast("Error al crear clases. Revisa la consola.");
+  });
+}
+
+  const alumnosConRecurrentes = useMemo(() => {
+  return (alumnos || []).filter(a => a.clasesRecurrentes && a.clasesRecurrentes.length > 0);
+}, [alumnos]);
+
+  return (
+    <div className="grid gap-4">
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <h2 className="text-xl font-bold text-[#34745B]">Clases</h2>
+      </div>
+      
+      <Card title={<span className="text-[#34745B]">{editing ? "Editar clase" : "Nueva clase"}</span>} right={!showForm && <button id="nueva-clase-btn" onClick={openNew} className="bg-[#34745B] hover:bg-green-800 text-white text-sm px-3 py-1.5 rounded-xl">+ Nueva</button>}>
+        {showForm ? (
+          <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
+            {(formStep === 1) && (
+              <div className="md:col-span-6 relative">
+                <label className="text-sm text-slate-600 font-semibold">Selecciona Alumno/a</label>
+                <input type="text" value={alumnoSearchQuery} onChange={(e) => { setAlumnoSearchQuery(e.target.value); setIsAlumnosListOpen(true); }} onFocus={() => setIsAlumnosListOpen(true)} onBlur={() => setTimeout(() => setIsAlumnosListOpen(false), 200)} placeholder="Escribe para buscar..." className="w-full mt-1 border rounded-lg px-3 py-2" />
+                {isAlumnosListOpen && (
+                  <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
+                    {alumnosFiltrados.length > 0 ? (
+                      alumnosFiltrados.map(alumno => (<li key={alumno.id} onMouseDown={() => handleSelectAlumno(alumno)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">{getNombreCompleto(alumno)}</li>))
+                    ) : (<li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
+            {(formStep === 2 && alumnoMap.get(form.alumnoIds[0])) && (
+              <div className="md:col-span-6">
+                <p className="text-sm text-slate-700 mb-2"><span className="font-bold">{getNombreCompleto(alumnoMap.get(form.alumnoIds[0]))}</span> tiene horarios fijos guardados.</p>
+                <p className="text-sm font-semibold text-slate-600">¿Quieres agendar una clase en uno de sus horarios habituales?</p>
+                <div className="flex flex-wrap gap-2 my-3">
+                  {(alumnoMap.get(form.alumnoIds[0]).horarios || []).map(horario => (
+                    <button type="button" key={`${horario.dia}-${horario.hora}`} onClick={() => handleScheduleSelect(horario)} className="px-3 py-2 text-sm rounded-lg border bg-sky-50 text-sky-800 hover:bg-sky-100">{horario.dia} {horario.hora}</button>
+                  ))}
+                </div>
+                <div className="border-t pt-3 mt-3">
+                  <button type="button" onClick={() => setFormStep(3)} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-100">O agendar una clase personalizada en otro horario</button>
+                </div>
+              </div>
+            )}
+            {(formStep === 3) && (
+              <>
+                <div className="md:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(form.alumnoIds || [""]).map((alumnoId, index) => (
+                    <div key={index}>
+                      <label className="text-sm text-slate-600">Alumno {index + 1}</label>
+                      <select value={alumnoId} onChange={(e) => handleAlumnoChange(index, e.target.value)} className="w-full border rounded-lg px-3 py-2" required>
+                        <option value="">Seleccionar...</option>
+                        {alumnosActivos.filter(a => !(form.alumnoIds || []).includes(a.id) || a.id === alumnoId).map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-sm text-slate-600">Ubicación / Cancha</label>
+                  <select name="cancha" value={form.cancha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">
+                    <option value="">Seleccionar cancha...</option>
+                    {canchasDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
+                <div><label className="text-sm text-slate-600">Hora</label><input type="time" name="hora" value={form.hora} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" required /></div>
+                <div><label className="text-sm text-slate-600">Tipo de Clase</label><select name="tipo" value={form.tipo} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}</select></div>
+                <div><label className="text-sm text-slate-600">Precio</label><input type="number" name="precio" value={esMensual ? "0" : form.precio} onChange={handleFormChange} className={`w-full border rounded-lg px-3 py-2 ${esMensual ? 'bg-slate-100' : ''}`} placeholder="0" disabled={esMensual} /></div>
+                <div className="md:col-span-2"><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_CLASE.map(e => <option key={e}>{e}</option>)}</select></div>
+                <div className="md:col-span-6"><label className="text-sm text-slate-600">Notas</label><textarea name="notas" value={form.notas} onChange={handleFormChange} className="w-full border rounded-lg px-3 py-2" rows={2} placeholder="Comentarios sobre la clase" /></div>
+              </>
+            )}
+            <div className="md:col-span-6 flex gap-2 justify-end">
+              <button type="button" onClick={() => { cancel(); setFormStep(1); }} className="px-3 py-2 rounded-lg border">Cancelar</button>
+              {editing && <button type="button" onClick={() => onDelete(editing.id)} className="px-3 py-2 rounded-lg text-red-600 border border-red-300 hover:bg-red-50">🗑️ Eliminar</button>}
+              {formStep === 3 && <button type="submit" className="px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white">Guardar</button>}
+            </div>
+          </form>
+        ) : (<p className="text-sm text-slate-500">Hacé clic en <b>+ Nueva</b> para programar una clase.</p>)}
+      </Card>
+
+      <div>
+        {(() => {
+          const [semanaVisible, setSemanaVisible] = useState(getWeekStartDate(new Date()));
+          const cambiarSemana = (dias) => setSemanaVisible(prev => addDays(prev, dias));
+          const hoyString = formatDate(new Date());
+          const semanaActualStrings = Array.from({ length: 7 }, (_, i) => formatDate(addDays(semanaVisible, i)));
+          const clasesDeLaSemana = clasesFiltradas.filter(c => semanaActualStrings.includes(c.fecha));
+          const clasesDeHoy = clasesFiltradas.filter(c => c.fecha === hoyString);
+          const clasesAgrupadas = clasesDeLaSemana.reduce((acc, clase) => {
+            if (clase.fecha !== hoyString) {
+              if (!acc[clase.fecha]) acc[clase.fecha] = [];
+              acc[clase.fecha].push(clase);
+            }
+            return acc;
+          }, {});
+          const diasLaborales = (perfil.horarioLaboral || []).filter(d => d.activo).map(d => d.dia);
+          const ClaseItem = ({ clase }) => (
+            <div
+              onClick={() => openEdit(clase)}
+              className="p-3 bg-white rounded-lg shadow-sm border border-slate-200 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
+            >
+              <p className="font-semibold text-slate-800">{clase.hora} - {clase.nombresAlumnos}</p>
+              <p className="text-xs text-slate-500 mt-1">{clase.tipo}{clase.cancha ? ` en ${clase.cancha}` : ''}</p>
+            </div>
+          );
+          const DiaGroup = ({ fecha, clasesDelDia = [] }) => {
+            const d = new Date(`${fecha}T00:00:00`);
+            const diaNombre = DIAS_SEMANA_NOMBRES[d.getDay() === 0 ? 6 : d.getDay() - 1];
+            const diaNumero = d.getDate();
+            return (
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 min-h-[120px]">
+                <h3 className="font-bold text-slate-700">{diaNombre}, {diaNumero}</h3>
+                <div className="space-y-2 mt-2">
+                  {clasesDelDia.length > 0 ? (
+                    clasesDelDia.sort((a, b) => a.hora.localeCompare(b.hora)).map(c => <ClaseItem key={c.id} clase={c} />)
+                  ) : (
+                    <p className="text-sm text-slate-400 pt-2">No hay clases.</p>
+                  )}
+                </div>
+              </div>
+            );
+          };
+          return (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-[#34745B] mb-2">Agenda de Hoy</h2>
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
+                  {clasesDeHoy.length > 0 ? (
+                    <div className="space-y-2">
+                      {clasesDeHoy.sort((a, b) => a.hora.localeCompare(b.hora)).map(c => <ClaseItem key={c.id} clase={c} />)}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <button onClick={() => cambiarSemana(-7)} className="px-4 py-2 text-sm rounded-lg border bg-white shadow-sm hover:bg-slate-50">‹ Sem. Anterior</button>
+                  <p className="font-semibold text-slate-600">Semana del {formatDate(semanaVisible, 'dd/mm')} al {formatDate(addDays(semanaVisible, 6), 'dd/mm')}</p>
+                  <button onClick={() => cambiarSemana(7)} className="px-4 py-2 text-sm rounded-lg border bg-white shadow-sm hover:bg-slate-50">Sem. Siguiente ›</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {semanaActualStrings.map((fechaString, index) => {
+                    const diaNombre = DIAS_SEMANA_NOMBRES[index];
+                    if (diasLaborales.includes(diaNombre) && fechaString !== hoyString) {
+                      return <DiaGroup key={fechaString} fecha={fechaString} clasesDelDia={clasesAgrupadas[fechaString] || []} />;
+                    }
+                    return null;
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
        function Grupos({ alumnos, user }) {
       // --- Estados del Componente ---
       const [grupos, setGrupos] = useState([]);
@@ -2118,6 +2305,8 @@ function GestionClubes({ user }) {
 function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user, setToast, getCollection, perfilCrud }) {
       const fileInputRef = React.useRef(null);
       const [form, setForm] = useState(perfil);
+  const [omitDate, setOmitDate] = useState({});
+
       const [pinInput, setPinInput] = useState({ newPin: "", confirmPin: "" });
       const [plantillas, setPlantillas] = useState([]);
       const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
@@ -2530,7 +2719,7 @@ function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave, focusAlumno
       alumnosDeClase.forEach(alumno => {
         initialState[alumno.id] = {
           monto: alumno.plan === 'mensual' ? '0' : precioPorAlumno.toFixed(2),
-          metodo: alumno.plan === 'mensual' ? "Mensual" : "Pendiente",
+          metodo: alumno.plan === 'mensual' ? "Mensual" : 'Efectivo',
           mixtoEfectivo: "",
           mixtoTransferencia: ""
         };
@@ -2905,42 +3094,399 @@ function PlantillaModal({ isOpen, plantilla, onCancel, onSave }) {
             </div>
         );
     }
-    
-    function MainApp({ user, onLogout }) {
-        const [current, setCurrent] = useState("dashboard");
-      const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
-      const [loading, setLoading] = useState(true);
-      const [toast, setToast] = useState("");
-      const [deletingInfo, setDeletingInfo] = useState({ id: null, type: null, collection: null });
-      const [payingClase, setPayingClase] = useState(null);
-      const [focusAlumnoId, setFocusAlumnoId] = useState(null);
-      const openPagoPendiente = (clase, alumnoId) => {
-    if (clase) { 
-        setPayingClase(clase); 
-        setFocusAlumnoId(alumnoId); 
-    }
-};
-      const [payingCuota, setPayingCuota] = useState({alumno: null, mes: null});
-      const [goToClassForm, setGoToClassForm] = useState(false);
-      const [claseParaEditar, setClaseParaEditar] = useState(null);
-      const [nuevoAlumnoId, setNuevoAlumnoId] = useState(null);
-      const openRegistrarClaseForAlumno = (alumnoId) => { setCurrent("clases"); setNuevoAlumnoId(alumnoId); };
-      const [registrandoAbono, setRegistrandoAbono] = useState(null); // Guarda el alumno para el modal
-      const [pagoParaEditar, setPagoParaEditar] = useState(null);
-      const [clubActivoId, setClubActivoId] = useState(null); // Guardará el ID del club seleccionado
-      const [clubes, setClubes] = useState([]);
 
-      useEffect(() => {
+function OnboardingClubSetup({ user, setHasClubs, onLogout }) {
+  // Mostrar días completos pero manejar código corto internamente
+  const DIAS = [
+    { label: "Lunes",     code: "Lu" },
+    { label: "Martes",    code: "Ma" },
+    { label: "Miércoles", code: "Mi" },
+    { label: "Jueves",    code: "Ju" },
+    { label: "Viernes",   code: "Vi" },
+    { label: "Sábado",    code: "Sa" },
+    { label: "Domingo",   code: "Do" },
+  ];
+  const getLabelByCode = (code) => DIAS.find(d => d.code === code)?.label || code;
+
+  // ---- State
+  const [nombre, setNombre] = React.useState("");
+  const [modalidad, setModalidad] = React.useState("Por Clase");
+  const [repProfesor, setRepProfesor] = React.useState(60); // editás este
+  const repClub = Math.max(0, Math.min(100, 100 - Number(repProfesor || 0))); // se calcula solo
+
+  const [horario, setHorario] = React.useState([
+    { id: cryptoRandomId(), diaCode: "Lu", desde: "08:00", hasta: "12:00" },
+  ]);
+
+  const [preciosClase, setPreciosClase] = React.useState({ p1: 0, p2: 0, p3: 0, p4: 0, escuelita: 0 });
+  const [preciosMensual, setPreciosMensual] = React.useState({ x1: 0, x2: 0, x3: 0, libre: 0 });
+
+  // ---- Validación
+  const profesorValid = Number.isFinite(Number(repProfesor)) && Number(repProfesor) >= 0 && Number(repProfesor) <= 100;
+  const invalidIds = horario.filter(b => !isBlockValid(b)).map(b => b.id);
+  const horariosValidos = invalidIds.length === 0;
+  const canSave = user && nombre.trim().length > 0 && profesorValid && horariosValidos;
+
+  // ---- Helpers
+  function cryptoRandomId() { return Math.random().toString(36).slice(2, 10); }
+  function toMinutes(hhmm) { if (!hhmm || typeof hhmm !== "string") return NaN; const [h, m] = hhmm.split(":").map(Number); return h * 60 + (m || 0); }
+  function isBlockValid(b) { const d = toMinutes(b.desde); const h = toMinutes(b.hasta); return Number.isFinite(d) && Number.isFinite(h) && d < h; }
+
+  const addBloque    = () => setHorario(h => [...h, { id: cryptoRandomId(), diaCode: "Lu", desde: "08:00", hasta: "12:00" }]);
+  const removeBloque = (id) => setHorario(h => h.filter(b => b.id !== id));
+  const updateBloque = (id, patch) => setHorario(h => h.map(b => b.id === id ? { ...b, ...patch } : b));
+
+  const onChangeMoney = (objSetter) => (key) => (e) => {
+    const raw = (e.target.value || "").replace(",", ".");
+    const n = raw === "" ? "" : Number(raw);
+    objSetter(prev => ({ ...prev, [key]: isNaN(n) ? 0 : n }));
+  };
+
+  const guardar = async () => {
+    try {
+      const ref = db.collection("users").doc(user.uid).collection("clubs").doc();
+      const doc = {
+        nombre,
+        modalidadCobroPrincipal: modalidad,
+        reparto: { profesor: Number(repProfesor)||0, club: repClub },
+        // Guardamos tanto el code como el label para facilitar lecturas futuras
+        horarioLaboral: horario.map(b => ({
+          diaCode: b.diaCode,
+          diaLabel: getLabelByCode(b.diaCode),
+          desde: b.desde,
+          hasta: b.hasta
+        })),
+        precios: {
+          porClase: {
+            "1": Number(preciosClase.p1)||0,
+            "2": Number(preciosClase.p2)||0,
+            "3": Number(preciosClase.p3)||0,
+            "4": Number(preciosClase.p4)||0,
+            escuelita: Number(preciosClase.escuelita)||0
+          },
+          mensuales: {
+            x1: Number(preciosMensual.x1)||0,
+            x2: Number(prezosMensual?.x2 ?? preciosMensual.x2)||0, // tolerante si refactor
+            x3: Number(preciosMensual.x3)||0,
+            libre: Number(preciosMensual.libre)||0
+          }
+        },
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      await ref.set(doc);
+      setHasClubs(true);
+    } catch (err) {
+      console.error("Error guardando club:", err);
+      alert("No se pudo guardar. Revisá la consola para más detalles.");
+    }
+  };
+
+  // ---- UI
+  return (
+    <div className="max-w-5xl mx-auto px-4">
+      {/* Header */}
+      <div className="pt-8 pb-6 text-center">
+        <img
+          src="coachexpro_logo.png"
+          alt="Coachex-Pro Logo"
+          className="h-10 mx-auto object-contain opacity-90"
+          onError={(e)=>{ e.currentTarget.style.display='none'; }}
+        />
+        <h1 className="mt-2 text-3xl font-bold text-slate-800">Bienvenido a Coachex-Pro</h1>
+        <p className="mt-2 text-slate-600 max-w-xl mx-auto">
+          Gestión integral para profesores de tenis y padel.
+        </p>
+        <p className="text-slate-600">Cargá la información del Club en donde trabajás.</p>
+      </div>
+
+      {/* Cards */}
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Configuración General */}
+        <SetupCard title="Configuración General">
+          <SetupLabel>Nombre del Club</SetupLabel>
+          <SetupInput value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Ej: Club Mad" />
+
+          <SetupLabel className="mt-4">Modalidad de Cobro Principal</SetupLabel>
+          <SetupSelect value={modalidad} onChange={e=>setModalidad(e.target.value)}>
+            <option>Por Clase</option>
+            <option>Mensual</option>
+          </SetupSelect>
+
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <SetupPercentField
+              label="Reparto % (Profesor)"
+              value={repProfesor}
+              onChange={e => {
+                const v = Math.max(0, Math.min(100, Number(e.target.value || 0)));
+                setRepProfesor(v);
+              }}
+            />
+            <SetupPercentField
+              label="Reparto % (Club)"
+              value={repClub}
+              readOnly
+              tooltip="Se calcula automáticamente como 100% - Profesor"
+            />
+          </div>
+          {!profesorValid && (
+            <p className="mt-2 text-xs text-red-600">El % del profesor debe estar entre 0 y 100.</p>
+          )}
+        </SetupCard>
+
+        {/* Horario Laboral */}
+        <SetupCard title="Horario Laboral">
+          <div className="space-y-3">
+            {horario.map(b => {
+              const invalid = !isBlockValid(b);
+              return (
+                <div key={b.id}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <SetupSelect
+                      value={b.diaCode}
+                      onChange={e=>updateBloque(b.id, { diaCode: e.target.value })}
+                      className="w-40"
+                    >
+                      {DIAS.map(d => (
+                        <option key={d.code} value={d.code}>{d.label}</option>
+                      ))}
+                    </SetupSelect>
+
+                    <SetupTimeField
+                      value={b.desde}
+                      onChange={e=>updateBloque(b.id, { desde: e.target.value })}
+                      invalid={invalid}
+                      aria-label="Desde"
+                    />
+                    <span className="text-slate-400 select-none">—</span>
+                    <SetupTimeField
+                      value={b.hasta}
+                      onChange={e=>updateBloque(b.id, { hasta: e.target.value })}
+                      invalid={invalid}
+                      aria-label="Hasta"
+                    />
+
+                    <button
+                      className="inline-flex items-center gap-1 rounded-full border border-red-200 text-red-600 px-3 py-1.5 text-sm hover:bg-red-50"
+                      onClick={()=>removeBloque(b.id)}
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                  {invalid && (
+                    <p className="mt-1 text-xs text-red-600">
+                      El horario no es válido. <span className="font-medium">“Desde”</span> debe ser menor que <span className="font-medium">“Hasta”</span>.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <button onClick={addBloque}
+                  className="mt-3 w-full border-2 border-dashed rounded-xl py-2 text-slate-500 hover:bg-slate-50">
+            + Agregar bloque
+          </button>
+
+          {!horariosValidos && (
+            <p className="mt-2 text-xs text-red-600">Revisá los bloques en rojo antes de continuar.</p>
+          )}
+        </SetupCard>
+
+        {/* Precios por Clase */}
+        <SetupCard title="Precios por Clase">
+          <div className="space-y-3">
+            <SetupMoneyField label="Clase para 1 persona" value={preciosClase.p1} onChange={onChangeMoney(setPreciosClase)("p1")} />
+            <SetupMoneyField label="Clase para 2 personas" value={preciosClase.p2} onChange={onChangeMoney(setPreciosClase)("p2")} />
+            <SetupMoneyField label="Clase para 3 personas" value={preciosClase.p3} onChange={onChangeMoney(setPreciosClase)("p3")} />
+            <SetupMoneyField label="Clase para 4 personas" value={preciosClase.p4} onChange={onChangeMoney(setPreciosClase)("p4")} />
+            <SetupMoneyField label="Escuelita" value={preciosClase.escuelita} onChange={onChangeMoney(setPreciosClase)("escuelita")} />
+          </div>
+        </SetupCard>
+
+        {/* Precios Mensuales */}
+        <SetupCard title="Precios Mensuales">
+          <div className="space-y-3">
+            <SetupMoneyField label="1 vez por semana" value={preciosMensual.x1} onChange={onChangeMoney(setPreciosMensual)("x1")} />
+            <SetupMoneyField label="2 veces por semana" value={preciosMensual.x2} onChange={onChangeMoney(setPreciosMensual)("x2")} />
+            <SetupMoneyField label="3 veces por semana" value={preciosMensual.x3} onChange={onChangeMoney(setPreciosMensual)("x3")} />
+            <SetupMoneyField label="Libre" value={preciosMensual.libre} onChange={onChangeMoney(setPreciosMensual)("libre")} />
+          </div>
+        </SetupCard>
+      </div>
+
+      {/* CTA */}
+      <div className="mt-8 text-center">
+        <button
+          className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-6 py-3 text-white font-semibold shadow hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={!canSave}
+          onClick={guardar}
+        >
+          Guardar y Comenzar
+        </button>
+        {!canSave && (
+          <p className="text-xs text-slate-500 mt-2">
+            Completá el nombre del club, un % de profesor válido y corregí los horarios en rojo.
+          </p>
+        )}
+      </div>
+      <div className="mt-4 text-center">
+  <button
+    onClick={onLogout}
+    className="inline-flex items-center justify-center rounded-xl border border-slate-300 px-6 py-2 text-slate-600 hover:bg-slate-100"
+  >
+    Volver al inicio de sesión
+  </button>
+</div>
+    </div>
+  );
+}
+
+/* ---------- UI helpers (prefijo Setup para evitar conflictos) ---------- */
+
+const SetupCard = ({ title, children }) => (
+  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+    <h3 className="text-lg font-semibold text-emerald-700 mb-3">{title}</h3>
+    {children}
+  </div>
+);
+
+const SetupLabel = ({ children, className="" }) => (
+  <label className={`block text-sm text-slate-600 mb-1 ${className}`}>{children}</label>
+);
+
+const SetupInput = (props) => (
+  <input
+    {...props}
+    className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-300 ${props.className||""}`}
+  />
+);
+
+const SetupSelect = (props) => (
+  <select
+    {...props}
+    className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-300 ${props.className||""}`}
+  />
+);
+
+const SetupPercentField = ({ label, value, onChange, readOnly=false, tooltip }) => (
+  <div>
+    <SetupLabel>{label}</SetupLabel>
+    <div className="relative">
+      <SetupInput value={value} onChange={onChange} inputMode="numeric" className="pr-12" readOnly={readOnly} title={tooltip}/>
+      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">%</span>
+    </div>
+  </div>
+);
+
+const SetupMoneyField = ({ label, value, onChange }) => (
+  <div>
+    <SetupLabel>{label}</SetupLabel>
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">ARS $</span>
+      <SetupInput value={value} onChange={onChange} inputMode="decimal" placeholder="0" className="pl-16" />
+    </div>
+  </div>
+);
+
+const SetupTimeField = ({ value, onChange, invalid=false, ...rest }) => (
+  <div className="relative">
+    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 select-none">🕑</span>
+    <input
+      type="time"
+      value={value}
+      onChange={onChange}
+      {...rest}
+      className={[
+        "w-[130px] rounded-xl border bg-white pl-8 pr-2 py-2 text-slate-800 focus:outline-none",
+        invalid ? "border-red-300 focus:ring-2 focus:ring-red-300" : "border-slate-200 focus:ring-2 focus:ring-emerald-300"
+      ].join(" ")}
+    />
+  </div>
+);
+
+    
+function MainApp({ user, onLogout }) {
+  const [current, setCurrent] = useState("dashboard");
+  const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState("");
+  const [deletingInfo, setDeletingInfo] = useState({ id: null, type: null, collection: null });
+  const [payingClase, setPayingClase] = useState(null);
+  const [focusAlumnoId, setFocusAlumnoId] = useState(null);
+  const openPagoPendiente = (clase, alumnoId) => {
+    if (clase) {
+      setPayingClase(clase);
+      setFocusAlumnoId(alumnoId);
+    }
+  };
+  const [payingCuota, setPayingCuota] = useState({ alumno: null, mes: null });
+  const [claseParaEditar, setClaseParaEditar] = useState(null);
+  const [nuevoAlumnoId, setNuevoAlumnoId] = useState(null);
+  const openRegistrarClaseForAlumno = (alumnoId) => { setCurrent("clases"); setNuevoAlumnoId(alumnoId); };
+  const [registrandoAbono, setRegistrandoAbono] = useState(null);
+  const [pagoParaEditar, setPagoParaEditar] = useState(null);
+  const [clubActivoId, setClubActivoId] = useState(null);
+  const [clubes, setClubes] = useState([]);
+  const [hasClubs, setHasClubs] = useState(false);
+  const [showRecurrentesModal, setShowRecurrentesModal] = useState(false);
+  const [editingRecurrente, setEditingRecurrente] = useState(null)
+
+  // Sync recurrente modal when alumnos list changes (rehydrate current alumno)
+useEffect(() => {
+    if (!editingRecurrente) return;
+    const list = (state?.alumnos || []);
+    const updated = list.find(a => a.id === editingRecurrente.id);
+    if (!updated) return;
+    const lenOld = (editingRecurrente.clasesRecurrentes || []).length;
+    const lenNew = (updated.clasesRecurrentes || []).length;
+    if (lenNew !== lenOld) {
+        setEditingRecurrente(updated);
+    }
+}, [state?.alumnos, editingRecurrente]);
+
+; // <--- NUEVO ESTADO
+
+  useEffect(() => {
     if (!user) return;
     setLoading(true);
 
-    // Lógica nueva: determina si buscar en la raíz o dentro de un club
-    const baseRef = clubActivoId 
-        ? db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId)
-        : db.collection('users').doc(user.uid);
+    const clubsRef = db.collection('users').doc(user.uid).collection('clubs');
+    const clubsUnsubscribe = clubsRef.onSnapshot(snapshot => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setClubes(data);
+      setHasClubs(data.length > 0);
+
+      if (data.length > 0) {
+        if (!clubActivoId) {
+          setClubActivoId(data[0].id);
+        }
+      } else {
+        setClubActivoId(null);
+      }
+      setLoading(false);
+    }, error => {
+      console.error("Error fetching clubs: ", error);
+      setLoading(false);
+    });
+
+    return () => clubsUnsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !clubActivoId) return;
+
+    const baseRef = db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId);
+    
+    const profileUnsubscribe = db.collection('users').doc(user.uid).collection('profile').doc('main').onSnapshot(doc => {
+      if (doc.exists) {
+          setState(prevState => ({ ...prevState, perfil: { ...initialState.perfil, ...doc.data()} }));
+      } else {
+          setState(prevState => ({ ...prevState, perfil: initialState.perfil }));
+      }
+    });
 
     const collections = ['alumnos', 'clases', 'pagos', 'gastos', 'grupos'];
-    const unsubscribes = [];
+    const unsubscribes = [profileUnsubscribe];
 
     collections.forEach(collectionName => {
         const unsubscribe = baseRef.collection(collectionName).onSnapshot(snapshot => {
@@ -2950,312 +3496,1108 @@ function PlantillaModal({ isOpen, plantilla, onCancel, onSave }) {
         unsubscribes.push(unsubscribe);
     });
 
-    // El perfil sigue siendo global, no depende del club
-    const profileUnsubscribe = db.collection('users').doc(user.uid).collection('profile').doc('main').onSnapshot(doc => {
-        if (doc.exists) {
-            setState(prevState => ({ ...prevState, perfil: { ...initialState.perfil, ...doc.data()} }));
-        } else {
-             setState(prevState => ({ ...prevState, perfil: initialState.perfil }));
-        }
-        setLoading(false);
-    }, error => {
-        console.error("Error fetching profile: ", error);
-        setLoading(false);
-    });
-    unsubscribes.push(profileUnsubscribe);
-
     return () => unsubscribes.forEach(unsub => unsub());
-}, [user, clubActivoId]); // <-- AHORA TAMBIÉN DEPENDE DE clubActivoId
+  }, [user, clubActivoId]);
 
-      useEffect(() => {
-        if (!user) return;
-        const clubsCollection = db.collection('users').doc(user.uid).collection('clubs');
-        const unsubscribe = clubsCollection.onSnapshot(snapshot => {
-          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setClubes(data);
-        });
-        return () => unsubscribe();
-      }, [user]);
-
-      const getCollection = (collectionName) => {
-    if (clubActivoId) {
-        // Si hay un club activo, apunta a la sub-colección dentro de ese club
-        return db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId).collection(collectionName);
-    } else {
-        // Si no, apunta a las colecciones originales (modo "Independiente")
-        return db.collection('users').doc(user.uid).collection(collectionName);
+  const getCollection = (collectionName) => {
+    if (!clubActivoId) {
+      console.error("No club active. Cannot get collection.");
+      return null;
     }
-};
+    return db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId).collection(collectionName);
+  };
+  
+  const alumnoCrud = {
+    create: async (data) => {
+      const collectionRef = getCollection('alumnos');
+      if (!collectionRef) return;
+      const docRef = await collectionRef.add(data);
+      setToast("Alumno creado");
+      return { ...data, id: docRef.id };
+    },
+    update: ({ id, ...data }) => {
+      const collectionRef = getCollection('alumnos');
+      if (!collectionRef) return;
+      return collectionRef.doc(id).update(data).then(() => setToast("Alumno actualizado"));
+    },
+    delete: (id) => setDeletingInfo({ id, type: 'alumno', collection: 'alumnos' }),
+  };
 
-      const alumnoCrud = {
-        create: async (data) => {
-    const docRef = await getCollection('alumnos').add(data);
-    setToast("Alumno creado");
-    return { ...data, id: docRef.id }; // Devuelve el alumno con su nuevo ID
-},
-        update: ({id, ...data}) => getCollection('alumnos').doc(id).update(data).then(() => setToast("Alumno actualizado")),
-        delete: (id) => setDeletingInfo({ id, type: 'alumno', collection: 'alumnos' }),
-      };
-const pagoCrud = { 
-        createPagosClase: async (pagosData) => { 
-          const batch = db.batch();
-          pagosData.forEach(pago => {
-            if (parseFloat(pago.monto) > 0 || pago.metodo === 'Pendiente') {
-                const docRef = getCollection('pagos').doc();
-                const payload = { 
-                    claseId: payingClase.id, 
-                    alumnoId: pago.alumnoId, 
-                    fecha: payingClase.fecha, 
-                    concepto: `Pago Clase ${payingClase.tipo}`, // Concepto automático
-                    metodo: pago.metodo, 
-                    monto: pago.monto 
-                };
-                if (pago.metodo === 'Mixto') {
-                    payload.detalleMixto = {
-                        efectivo: parseFloat(pago.mixtoEfectivo) || 0,
-                        transferencia: parseFloat(pago.mixtoTransferencia) || 0
-                    };
-                }
-                batch.set(docRef, payload);
-            }
-          });
-          await batch.commit();
-          setToast("Pagos registrados"); 
-          setPayingClase(null);
-          setFocusAlumnoId(null);
-        },
+  const pagoCrud = {
+    createPagosClase: async (pagosData) => {
+      const batch = db.batch();
+      const collectionRef = getCollection('pagos');
+      if (!collectionRef) return;
+      // Actualizar el estado 'pagada' de la clase al guardar el pago.
+      const claseRef = getCollection('clases').doc(payingClase.id);
 
-        createAbono: (pagoData, alumno) => {
-            const newPago = {
-                alumnoId: alumno.id,
-                fecha: pagoData.fechaPago,
-                concepto: pagoData.concepto || `Abono Mensual - ${MESES_NOMBRES[pagoData.mes]}`,
-                monto: pagoData.monto,
-                metodo: pagoData.metodo
+      pagosData.forEach(pago => {
+        if (parseFloat(pago.monto) > 0 || pago.metodo === 'Pendiente') {
+            const docRef = collectionRef.doc();
+            const payload = {
+                claseId: payingClase.id,
+                alumnoId: pago.alumnoId,
+                fecha: payingClase.fecha,
+                concepto: `Pago Clase ${payingClase.tipo}`,
+                metodo: pago.metodo,
+                monto: pago.monto
             };
-            getCollection('pagos').add(newPago).then(() => {
-                setToast("Pago de abono registrado con éxito");
-                setRegistrandoPago(null);
-            });
-        },
-
-        createMensual: (pagoData) => { 
-            const { alumno, mes } = payingCuota; 
-            const fecha = new Date(); 
-            fecha.setMonth(mes); 
-            const newPago = { alumnoId: alumno.id, fecha: formatDate(fecha), concepto: `Cuota Mensual - ${MESES_NOMBRES[mes]}`, ...pagoData };
-            getCollection('pagos').add(newPago).then(() => {
-                setToast("Pago de cuota registrado"); 
-                setPayingCuota({alumno: null, mes: null});
-            });
-        },
-
-        // --- FUNCIÓN NUEVA PARA ACTUALIZAR PAGOS ---
-        update: ({ id, ...data }) => {
-            const dataToSave = { ...data };
-            if (data.metodo === 'Mixto') {
-                dataToSave.detalleMixto = {
-                    efectivo: parseFloat(data.mixtoEfectivo) || 0,
-                    transferencia: parseFloat(data.mixtoTransferencia) || 0
+            if (pago.metodo === 'Mixto') {
+                payload.detalleMixto = {
+                    efectivo: parseFloat(pago.mixtoEfectivo) || 0,
+                    transferencia: parseFloat(pago.mixtoTransferencia) || 0
                 };
             }
-            // Limpiamos los campos temporales antes de guardar
-            delete dataToSave.mixtoEfectivo;
-            delete dataToSave.mixtoTransferencia;
-
-            return getCollection('pagos').doc(id).update(dataToSave).then(() => {
-                setToast("Pago actualizado con éxito");
-                setPagoParaEditar(null); // Cierra el modal de edición
-            });
+            batch.set(docRef, payload);
         }
-      };
-      const claseCrud = { 
-  create: async (c) => { 
-      const claseData = {...c};
-      delete claseData.id;
-      if (claseData.recurrente) {
-          const batch = db.batch();
-          const semanas = parseInt(claseData.mesesRecurrencia, 10) * 4;
-          for(let i=0; i<semanas; i++) {
-              const nuevaFecha = addDays(new Date(claseData.fecha), i * 7);
-              const newClase = { ...claseData, fecha: formatDate(nuevaFecha), recurrente: false };
-              const docRef = getCollection('clases').doc();
-              batch.set(docRef, newClase);
-          }
-          await batch.commit();
-          setToast("Clases recurrentes creadas");
-      } else {
-          await getCollection('clases').add(claseData);
-          setToast("Clase creada");
+      });
+      await batch.commit();
+
+      // Recalcular el estado de la clase después de que los nuevos pagos se hayan guardado.
+      const pagosExistentes = await getCollection('pagos').where('claseId', '==', payingClase.id).get();
+      const totalPagadoAcumulado = pagosExistentes.docs.reduce((sum, doc) => {
+          const pago = doc.data();
+          return sum + parseFloat(pago.monto || 0);
+      }, 0);
+
+      const claseDoc = await claseRef.get();
+      if (claseDoc.exists) {
+          const precioTotalClase = parseFloat(claseDoc.data().precio);
+          const estaPagada = totalPagadoAcumulado >= precioTotalClase;
+          await claseRef.update({ pagada: estaPagada });
       }
-  }, 
-  update: ({id, ...data}) => getCollection('clases').doc(id).update(data).then(() => setToast("Clase actualizada")),
-  delete: (id) => setDeletingInfo({ id, type: 'clase', collection: 'clases' })
-};
-      const gastoCrud = { 
-        create: (g) => getCollection('gastos').add(g).then(() => setToast("Gasto creado")),
-        update: ({id, ...data}) => getCollection('gastos').doc(id).update(data).then(() => setToast("Gasto actualizado")),
-        delete: (id) => setDeletingInfo({ id, type: 'gasto', collection: 'gastos' }),
-      };
-      const perfilCrud = { 
-  update: (p) => db.collection('users').doc(user.uid).collection('profile').doc('main').set(p, { merge: true }).then(() => setToast("Perfil actualizado"))
-};
-      
-      const confirmDelete = async () => {
-        const { id, type, collection } = deletingInfo;
-        if (!id || !collection) return;
-        await getCollection(collection).doc(id).delete();
-        if(type === 'clase'){
-            const pagosSnapshot = await getCollection('pagos').where('claseId', '==', id).get();
-            const batch = db.batch();
-            pagosSnapshot.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-        }
-        setToast(`${type.charAt(0).toUpperCase() + type.slice(1)} eliminado/a`);
-        setDeletingInfo({ id: null, type: null, collection: null });
-      };
-      const handleRegisterMonthlyPayment = (alumno) => {
-    setRegistrandoAbono(alumno); // Guarda el alumno y esto hará que el modal se abra
-};
-const handleExportData = () => {
-    const dataToExport = {
-        alumnos: state.alumnos,
-        clases: state.clases,
-        pagos: state.pagos,
-        gastos: state.gastos,
-        perfil: state.perfil,
-        grupos: state.grupos || []
-    };
 
-    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-        JSON.stringify(dataToExport, null, 2)
-    )}`;
-    
+      setToast("Pagos registrados");
+      setPayingClase(null);
+      setFocusAlumnoId(null);
+    },
+    createAbono: (pagoData, alumno) => {
+      const collectionRef = getCollection('pagos');
+      if (!collectionRef) return;
+      const newPago = {
+        alumnoId: alumno.id,
+        fecha: pagoData.fechaPago,
+        concepto: pagoData.concepto || `Abono Mensual - ${MESES_NOMBRES[pagoData.mes]}`,
+        monto: pagoData.monto,
+        metodo: pagoData.metodo
+      };
+      collectionRef.add(newPago).then(() => {
+        setToast("Pago de abono registrado con éxito");
+        setRegistrandoAbono(null);
+      });
+    },
+    createMensual: (pagoData) => {
+      const collectionRef = getCollection('pagos');
+      if (!collectionRef) return;
+      const { alumno, mes } = payingCuota;
+      const fecha = new Date();
+      fecha.setMonth(mes);
+      const newPago = { alumnoId: alumno.id, fecha: formatDate(fecha), concepto: `Cuota Mensual - ${MESES_NOMBRES[mes]}`, ...pagoData };
+      collectionRef.add(newPago).then(() => {
+        setToast("Pago de cuota registrado");
+        setPayingCuota({ alumno: null, mes: null });
+      });
+    },
+    update: ({ id, ...data }) => {
+      const collectionRef = getCollection('pagos');
+      if (!collectionRef) return;
+      const dataToSave = { ...data };
+      if (data.metodo === 'Mixto') {
+        dataToSave.detalleMixto = {
+          efectivo: parseFloat(data.mixtoEfectivo) || 0,
+          transferencia: parseFloat(data.mixtoTransferencia) || 0
+        };
+      }
+      delete dataToSave.mixtoEfectivo;
+      delete dataToSave.mixtoTransferencia;
+      return collectionRef.doc(id).update(dataToSave).then(() => {
+        setToast("Pago actualizado con éxito");
+        setPagoParaEditar(null);
+      });
+    }
+  };
+  const claseCrud = {
+  create: async (c) => {
+    const collectionRef = getCollection('clases');
+    if (!collectionRef) return;
+    const claseData = { ...c };
+    delete claseData.id;
+
+    const shouldPay = claseData.estado === 'Realizada' || claseData.estado === 'Ausente';
+
+    let nuevaClaseId;
+
+    if (claseData.recurrente) {
+      const batch = db.batch();
+      const semanas = parseInt(claseData.mesesRecurrencia, 10) * 4;
+      for (let i = 0; i < semanas; i++) {
+          const nuevaFecha = addDays(new Date(claseData.fecha), i * 7);
+          const newClase = { ...claseData, fecha: formatDate(nuevaFecha), recurrente: false };
+          const docRef = collectionRef.doc();
+          batch.set(docRef, newClase);
+      }
+      await batch.commit();
+      setToast("Clases recurrentes creadas");
+    } else {
+      const docRef = await collectionRef.add(claseData);
+      nuevaClaseId = docRef.id;
+      setToast("Clase creada");
+    }
+
+    if (shouldPay && nuevaClaseId) {
+        const claseParaPagar = { ...claseData, id: nuevaClaseId };
+        onPay(claseParaPagar);
+    }
+  },
+  update: ({ id, ...data }) => {
+    const collectionRef = getCollection('clases');
+    if (!collectionRef) return;
+
+    const shouldPay = data.estado === 'Realizada' || data.estado === 'Ausente';
+
+    return collectionRef.doc(id).update(data).then(() => {
+        setToast("Clase actualizada");
+        if (shouldPay) {
+            onPay({ ...data, id });
+        }
+    });
+  },
+  delete: (id) => setDeletingInfo({ id, type: 'clase', collection: 'clases' }),
+  onCreateRecurrente: async (alumnoId, serie) => {
+  // 1) Guardar la serie en la ficha del alumno
+  const alumnoRef = getCollection('alumnos').doc(alumnoId);
+  await alumnoRef.update({
+    clasesRecurrentes: firebase.firestore.FieldValue.arrayUnion({ ...serie })
+  });
+
+  // 2) Materializar ocurrencias en "clases" entre desde/hasta, respetando skipDates
+  const col = getCollection('clases');
+  if (!col) return;
+
+  const roster = (serie.alumnoIds && serie.alumnoIds.length)
+    ? [...serie.alumnoIds]
+    : (serie.coAlumnoIds && serie.coAlumnoIds.length ? [alumnoId, ...serie.coAlumnoIds] : [alumnoId]);
+  const rosterKey = (ids) => (ids || []).slice().sort().join(',');
+  const keyFrom = (c) => `${c.fecha}|${c.hora}|${rosterKey(c.alumnoIds)}|${c.tipo||''}`;
+
+  const existentes = new Set(
+    (state.clases || [])
+      .filter(c =>
+        c.fecha >= serie.desde && c.fecha <= serie.hasta &&
+        (c.hora === serie.hora) &&
+        ((c.tipo || '') === (serie.tipo || '')) &&
+        rosterKey(c.alumnoIds) === rosterKey(roster)
+      )
+      .map(keyFrom)
+  );
+
+  const omitidas = new Set(serie.skipDates || []);
+  const NOMBRES_DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+  const toDia = (yyyy_mm_dd) => {
+    const d = new Date(`${yyyy_mm_dd}T00:00:00`);
+    const idx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+    return NOMBRES_DIAS[idx];
+  };
+
+  const dIni = new Date(`${serie.desde}T00:00:00`);
+  const dFin = new Date(`${serie.hasta}T00:00:00`);
+
+  const batch = db.batch();
+  const createdForUI = [];
+
+  for (let d = new Date(dIni); d <= dFin; d.setDate(d.getDate() + 1)) {
+    const fechaStr = formatDate(d);
+    if (omitidas.has(fechaStr)) continue;
+    if (toDia(fechaStr) !== serie.dia) continue;
+
+    const key = `${fechaStr}|${serie.hora}|${rosterKey(roster)}|${serie.tipo||''}`;
+    if (existentes.has(key)) continue;
+
+    const ref = col.doc();
+    const docData = {
+      alumnoIds: roster,
+      cancha: serie.cancha || "",
+      fecha: fechaStr,
+      hora: serie.hora,
+      tipo: serie.tipo,
+      precio: parseFloat(serie.precio || 0),
+      estado: "Programada",
+      notas: ""
+    };
+    batch.set(ref, docData);
+    createdForUI.push({ id: ref.id, ...docData });
+  }
+
+  if (createdForUI.length) await batch.commit();
+
+  // 3) Refrescar UI (opcional)
+  setState(s => ({ ...s, clases: [...(s.clases || []), ...createdForUI] }));
+
+  // Feedback
+  setToast("Serie guardada y clases generadas.");
+},
+  onUpdateRecurrente: async (alumnoId, oldSerie, newSerie) => {
+    const NOMBRES_DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+    const toDia = (yyyy_mm_dd) => {
+      const d = new Date(`${yyyy_mm_dd}T00:00:00`);
+      const idx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+      return NOMBRES_DIAS[idx];
+    };
+    const hoyStr = formatDate(new Date());
+    const maxStr = (a,b) => (a > b ? a : b);
+    const rosterKey = (ids) => (ids || []).slice().sort().join(',');
+    const rosterFromSerie = (s) => (s.alumnoIds && s.alumnoIds.length) ? [...s.alumnoIds] : (s.coAlumnoIds && s.coAlumnoIds.length ? [alumnoId, ...s.coAlumnoIds] : [alumnoId]);
+
+    const oldRoster = rosterFromSerie(oldSerie);
+    const newRoster = rosterFromSerie(newSerie);
+    const oldRosterKey = rosterKey(oldRoster);
+    const newRosterKey = rosterKey(newRoster);
+
+    const oldStart = maxStr(hoyStr, oldSerie.desde || hoyStr);
+    const oldEnd   = oldSerie.hasta || '9999-12-31';
+    const newStart = maxStr(hoyStr, newSerie.desde || hoyStr);
+    const newEnd   = newSerie.hasta || '9999-12-31';
+
+    const alumnoRef = getCollection('alumnos').doc(alumnoId);
+    await alumnoRef.update({ clasesRecurrentes: firebase.firestore.FieldValue.arrayRemove({ ...oldSerie }) });
+    await alumnoRef.update({ clasesRecurrentes: firebase.firestore.FieldValue.arrayUnion({ ...newSerie }) });
+
+    const col = getCollection('clases');
+    if (!col) return;
+
+    // BORRAR lo que dejó de aplicar
+    const deleteRangeStart = (oldStart < newStart ? oldStart : newStart);
+    const deleteRangeEnd   = (oldEnd > newEnd ? oldEnd : newEnd);
+    let qDel = col
+      .where('alumnoIds','array-contains', alumnoId)
+      .where('fecha','>=', deleteRangeStart)
+      .where('fecha','<=', deleteRangeEnd);
+
+    const snapDel = await qDel.get();
+    const batchDel = db.batch();
+
+    snapDel.forEach(doc => {
+      const c = doc.data();
+      const estado = (c.estado || '').toLowerCase();
+      if (estado === 'dada' || estado === 'cobrado' || estado === 'pagado') return;
+      const cRosterKey = rosterKey(c.alumnoIds || []);
+      const esDeOldSerie =
+        c.fecha >= oldStart && c.fecha <= oldEnd &&
+        (!oldSerie.hora || c.hora === oldSerie.hora) &&
+        ((oldSerie.tipo || '') === (c.tipo || '')) &&
+        (toDia(c.fecha) === (oldSerie.dia || toDia(c.fecha))) &&
+        (cRosterKey === oldRosterKey);
+
+      if (!esDeOldSerie) return;
+
+      const sigueEnNueva =
+        c.fecha >= newStart && c.fecha <= newEnd &&
+        (!newSerie.hora || c.hora === newSerie.hora) &&
+        ((newSerie.tipo || '') === (c.tipo || '')) &&
+        (toDia(c.fecha) === (newSerie.dia || toDia(c.fecha))) &&
+        (cRosterKey === newRosterKey);
+
+      if (!sigueEnNueva) batchDel.delete(doc.ref);
+    });
+    await batchDel.commit();
+
+    // CREAR lo faltante (respetando skipDates)
+    const omitidas = new Set(newSerie.skipDates || []);
+    const existentes = new Set(
+      (state.clases || [])
+        .filter(c =>
+          c.fecha >= newStart && c.fecha <= newEnd &&
+          (!newSerie.hora || c.hora === newSerie.hora) &&
+          ((newSerie.tipo || '') === (c.tipo || '')) &&
+          (toDia(c.fecha) === (newSerie.dia || toDia(c.fecha))) &&
+          rosterKey(c.alumnoIds || []) === newRosterKey
+        )
+        .map(c => `${c.fecha}|${c.hora}|${rosterKey(c.alumnoIds||[])}|${c.tipo||''}`)
+    );
+
+    const batchAdd = db.batch();
+    const createdForUI = [];
+    const dIni = new Date(`${newStart}T00:00:00`);
+    const dFin = new Date(`${newEnd}T00:00:00`);
+
+    for (let d = new Date(dIni); d <= dFin; d.setDate(d.getDate() + 1)) {
+      const fechaStr = formatDate(d);
+      if (omitidas.has(fechaStr)) continue;
+      if (toDia(fechaStr) !== newSerie.dia) continue;
+      const key = `${fechaStr}|${newSerie.hora}|${newRosterKey}|${newSerie.tipo||''}`;
+      if (existentes.has(key)) continue;
+
+      const ref = col.doc();
+      const docData = {
+        alumnoIds: newRoster,
+        cancha: newSerie.cancha || "",
+        fecha: fechaStr,
+        hora: newSerie.hora,
+        tipo: newSerie.tipo,
+        precio: parseFloat(newSerie.precio || 0),
+        estado: "Programada",
+        notas: ""
+      };
+      batchAdd.set(ref, docData);
+      createdForUI.push({ id: ref.id, ...docData });
+    }
+    if (createdForUI.length) await batchAdd.commit();
+
+    setState(s => ({ ...s, clases: [...(s.clases || []).filter(c => true), ...createdForUI] }));
+    setToast("Serie actualizada y calendario reprogramado.");
+  },
+
+  onOmitirOcurrencia: async (alumnoId, serie, fecha) => {
+    if (!fecha) { setToast("Elegí una fecha para omitir."); return; }
+
+    const alumnoRef = getCollection('alumnos').doc(alumnoId);
+    const snap = await alumnoRef.get();
+    const series = snap.data().clasesRecurrentes || [];
+    // Intentamos por igualdad exacta; si cada serie tiene id, mejor por id
+    const guardada = series.find(s => (s.id && serie.id) ? s.id === serie.id :
+      (s.dia === serie.dia && s.hora === serie.hora && (s.tipo||'') === (serie.tipo||'') && s.desde === serie.desde && s.hasta === serie.hasta)
+    ) || serie;
+
+    const nueva = { ...(guardada), skipDates: [ ...(guardada.skipDates || []), fecha ] };
+
+    await alumnoRef.update({ clasesRecurrentes: firebase.firestore.FieldValue.arrayRemove(guardada) });
+    await alumnoRef.update({ clasesRecurrentes: firebase.firestore.FieldValue.arrayUnion(nueva) });
+
+    // Borrar la clase concreta en "clases"
+    const col = getCollection('clases');
+    const roster = (serie.alumnoIds && serie.alumnoIds.length)
+      ? [...serie.alumnoIds]
+      : (serie.coAlumnoIds && serie.coAlumnoIds.length ? [alumnoId, ...serie.coAlumnoIds] : [alumnoId]);
+    const rosterKey = (ids) => (ids || []).slice().sort().join(',');
+    const expectedKey = rosterKey(roster);
+
+    const snapQ = await col
+      .where('alumnoIds','array-contains', alumnoId)
+      .where('fecha','==', fecha)
+      .where('hora','==', serie.hora)
+      .get();
+
+    const batch = db.batch();
+    snapQ.forEach(doc => {
+      const c = doc.data();
+      if (rosterKey(c.alumnoIds || []) === expectedKey && (c.tipo || '') === (serie.tipo || '')) {
+        batch.delete(doc.ref);
+      }
+    });
+    await batch.commit();
+
+    setState(s => ({ ...s, clases: (s.clases || []).filter(c => !(c.fecha === fecha && c.hora === serie.hora && rosterKey(c.alumnoIds||[]) === expectedKey)) }));
+    setToast(`Ocurrencia del ${fecha} omitida.`);
+  },
+  onDeleteRecurrente: async (alumnoId, serie) => {
+  const NOMBRES_DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+  const toDia = (yyyy_mm_dd) => {
+    const d = new Date(`${yyyy_mm_dd}T00:00:00`);
+    const idx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+    return NOMBRES_DIAS[idx];
+  };
+  const hoyStr = formatDate(new Date());
+
+  const start = (serie.desde && serie.desde > hoyStr) ? serie.desde : hoyStr;
+  const end   = serie.hasta || '9999-12-31';
+
+  // Quitar serie de la ficha
+  const alumnoRef = getCollection('alumnos').doc(alumnoId);
+  await alumnoRef.update({
+    clasesRecurrentes: firebase.firestore.FieldValue.arrayRemove({ ...serie })
+  });
+
+  // Borrar ocurrencias futuras
+  const col = getCollection('clases');
+  if (!col) return;
+
+  const expectedAlumnoIds = (serie.alumnoIds && serie.alumnoIds.length)
+    ? [...serie.alumnoIds]
+    : (serie.coAlumnoIds && serie.coAlumnoIds.length ? [alumnoId, ...serie.coAlumnoIds] : [alumnoId]);
+  const rosterKey = (ids) => (ids || []).slice().sort().join(',');
+  const expectedKey = rosterKey(expectedAlumnoIds);
+
+  let q = col
+    .where('alumnoIds','array-contains', alumnoId)
+    .where('fecha','>=', start)
+    .where('fecha','<=', end);
+
+  if (serie.hora) q = q.where('hora','==', serie.hora);
+  if (serie.tipo) q = q.where('tipo','==', serie.tipo);
+
+  const snap = await q.get();
+  const batch = db.batch();
+  snap.forEach(doc => {
+    const c = doc.data();
+    const estado = (c.estado || '').toLowerCase();
+    if (estado === 'dada' || estado === 'cobrado' || estado === 'pagado') return;
+    if (serie.dia && toDia(c.fecha) !== serie.dia) return;
+    if (rosterKey(c.alumnoIds || []) !== expectedKey) return;
+    batch.delete(doc.ref);
+  });
+  await batch.commit();
+
+  // Refrescar UI
+  setState(s => ({
+    ...s,
+    clases: (s.clases || []).filter(c => {
+      if (c.fecha < start || c.fecha > end) return true;
+      if (serie.hora && c.hora !== serie.hora) return true;
+      if (serie.tipo && (c.tipo || '') !== (serie.tipo || '')) return true;
+      if (serie.dia && toDia(c.fecha) !== serie.dia) return true;
+      const key = rosterKey(c.alumnoIds || []);
+      if (key !== expectedKey) return true;
+      const estado = (c.estado || '').toLowerCase();
+      if (estado === 'dada' || estado === 'cobrado' || estado === 'pagado') return true;
+      return false;
+    })
+  }));
+
+  setToast("Serie eliminada y clases futuras borradas.");
+}
+};
+  const gastoCrud = {
+    create: (g) => {
+      const collectionRef = getCollection('gastos');
+      if (!collectionRef) return;
+      return collectionRef.add(g).then(() => setToast("Gasto creado"));
+    },
+    update: ({ id, ...data }) => {
+      const collectionRef = getCollection('gastos');
+      if (!collectionRef) return;
+      return collectionRef.doc(id).update(data).then(() => setToast("Gasto actualizado"));
+    },
+    delete: (id) => setDeletingInfo({ id, type: 'gasto', collection: 'gastos' }),
+  };
+  const perfilCrud = {
+    update: (p) => db.collection('users').doc(user.uid).collection('profile').doc('main').set(p, { merge: true }).then(() => setToast("Perfil actualizado"))
+  };
+
+  const confirmDelete = async () => {
+    const { id, type, collection } = deletingInfo;
+    if (!id || !collection) return;
+    const collectionRef = getCollection(collection);
+    if (!collectionRef) return;
+    await collectionRef.doc(id).delete();
+    if (type === 'clase') {
+      const pagosSnapshot = await getCollection('pagos').where('claseId', '==', id).get();
+      const batch = db.batch();
+      pagosSnapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
+    setToast(`${type.charAt(0).toUpperCase() + type.slice(1)} eliminado/a`);
+    setDeletingInfo({ id: null, type: null, collection: null });
+  };
+  const handleRegisterMonthlyPayment = (alumno) => {
+    setRegistrandoAbono(alumno);
+  };
+
+  const handleExportData = () => {
+    const dataToExport = {
+      alumnos: state.alumnos,
+      clases: state.clases,
+      pagos: state.pagos,
+      gastos: state.gastos,
+      perfil: state.perfil,
+      grupos: state.grupos || []
+    };
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(dataToExport, null, 2))}`;
     const link = document.createElement("a");
     link.href = jsonString;
     const date = new Date().toISOString().slice(0, 10);
     link.download = `coachex_backup_${date}.json`;
     link.click();
     setToast("Datos exportados con éxito.");
-};
+  };
 
-const handleImportData = (event) => {
+  const handleImportData = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (e) => {
-        try {
-            const importedData = JSON.parse(e.target.result);
-
-            const confirmImport = window.confirm(
-                "¡ATENCIÓN! ¿Estás seguro de que quieres importar estos datos?\n\n" + 
-                "TODOS TUS DATOS ACTUALES SERÁN BORRADOS Y REEMPLAZADOS.\n\n" +
-                "Esta acción no se puede deshacer."
-            );
-
-            if (confirmImport) {
-                setToast("Importando datos... La página se recargará al finalizar.");
-                console.log("Datos a importar:", importedData);
-                alert("La funcionalidad de escritura en la base de datos está pendiente. Revisa la consola para ver los datos que se importarían.");
-                // TODO: Implementar la escritura en Firebase.
-            }
-        } catch (error) {
-            alert("El archivo seleccionado no es un JSON válido o está corrupto.");
-            console.error("Error al parsear JSON:", error);
-        } finally {
-            event.target.value = null;
+      try {
+        const importedData = JSON.parse(e.target.result);
+        const confirmImport = window.confirm(
+          "¡ATENCIÓN! ¿Estás seguro de que quieres importar estos datos?\n\n" +
+          "TODOS TUS DATOS ACTUALES SERÁN BORRADOS Y REEMPLAZADOS.\n\n" +
+          "Esta acción no se puede deshacer."
+        );
+        if (confirmImport) {
+          setToast("Importando datos... La página se recargará al finalizar.");
+          console.log("Datos a importar:", importedData);
+          alert("La funcionalidad de escritura en la base de datos está pendiente. Revisa la consola para ver los datos que se importarían.");
         }
+      } catch (error) {
+        alert("El archivo seleccionado no es un JSON válido o está corrupto.");
+        console.error("Error al parsear JSON:", error);
+      } finally {
+        event.target.value = null;
+      }
     };
     reader.readAsText(file);
-};
-
-const goToEditClass = (clase) => {
-          setClaseParaEditar(clase);
-          setCurrent("clases");
-      };
-
-const handleDeletePago = (pagoId) => {
+  };
+  const goToEditClass = (clase) => {
+    setClaseParaEditar(clase);
+    setCurrent("clases");
+  };
+  const handleDeletePago = (pagoId) => {
     setDeletingInfo({ id: pagoId, type: 'pago', collection: 'pagos' });
-};
-      if (loading) {
-        return <div className="min-h-screen flex items-center justify-center"><div className="loader"></div></div>;
-      }
-      
-       return (
-        <div className="min-h-screen bg-slate-50 font-sans">
-          <Topbar 
-            current={current} 
-            setCurrent={setCurrent} 
-            onLogout={onLogout}
-            clubes={clubes}
-            clubActivoId={clubActivoId}
-            onClubChange={setClubActivoId}
-            showIndependentOption={state.perfil.modoTrabajo !== 'Club'}
-          />
-          <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
-            {current === "dashboard" && <Dashboard 
-    perfil={state.perfil}
-    clases={state.clases}
-    pagos={state.pagos}
-    gastos={state.gastos}
-    alumnos={state.alumnos}
-    clubes={clubes}
-    clubActivoId={clubActivoId}
-    goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }} 
-    goToEditClass={goToEditClass} 
-/>}
-            {current === "alumnos" && <Alumnos clases={state.clases} pagos={state.pagos} alumnos={state.alumnos} onCreate={alumnoCrud.create} onUpdate={alumnoCrud.update} onDelete={alumnoCrud.delete} onRegisterMonthlyPayment={handleRegisterMonthlyPayment}  onRegistrarClase={openRegistrarClaseForAlumno}  onPagarPendiente={openPagoPendiente}  onEditarPago={(pago) => setPagoParaEditar(pago)} onDeletePago={handleDeletePago} />}            
-            {current === "clases" && <Clases clases={state.clases} alumnos={state.alumnos} pagos={state.pagos} perfil={state.perfil} onCreate={claseCrud.create} onUpdate={claseCrud.update} onDelete={claseCrud.delete} onPay={(clase) => setPayingClase(clase)} user={user} claseParaEditar={claseParaEditar} setClaseParaEditar={setClaseParaEditar} nuevoAlumnoId={nuevoAlumnoId} setNuevoAlumnoId={setNuevoAlumnoId}/>}            {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
-            {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({alumno, mes})} onEditarPago={(pago) => setPagoParaEditar(pago)} onDeletePago={handleDeletePago} />}
-            {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
-            {current === "reportes" && <Reportes pagos={state.pagos} gastos={state.gastos} alumnos={state.alumnos} clases={state.clases} clubActivoId={clubActivoId} clubes={clubes} perfil={state.perfil} />}
-            {current === "perfil" && <Perfil 
-    perfil={state.perfil} 
-    alumnos={state.alumnos} 
-    clases={state.clases}
-    pagos={state.pagos}
-    gastos={state.gastos}
-    grupos={state.grupos}
-    onUpdate={perfilCrud.update} 
-    user={user} 
-    setToast={setToast}
-    getCollection={getCollection}
-    perfilCrud={perfilCrud}
-/>}
-          </main>
-          <Toast msg={toast} onClose={() => setToast("")} />
-          <Modal isOpen={!!deletingInfo.id} title={`Eliminar ${deletingInfo.type}`} onConfirm={confirmDelete} onCancel={() => setDeletingInfo({ id: null, type: null, collection: null })} >
-            ¿Estás seguro? Esta acción no se puede deshacer.
-          </Modal>
-          <PagoGrupalModal 
-    isOpen={!!payingClase} 
-    clase={payingClase}
-    alumnos={state.alumnos}
-    onCancel={() => { setPayingClase(null); setFocusAlumnoId(null); }} 
-     focusAlumnoId={focusAlumnoId}onSave={pagoCrud.createPagosClase} 
-/>
-{/* 👇 PEGA EL NUEVO MODAL AQUÍ 👇 */}
-<RegistroPagoMensualModal 
-    isOpen={!!registrandoAbono}
-    alumno={registrandoAbono}
-    perfil={state.perfil}
-    onCancel={() => setRegistrandoAbono(null)}
-    onSave={(pagoData) => pagoCrud.createAbono(pagoData, registrandoAbono)}
-/>
+  };
 
-          <PagoMensualModal isOpen={!!payingCuota.alumno} alumno={payingCuota.alumno} mes={payingCuota.mes} onCancel={() => setPayingCuota({alumno: null, mes: null})} onSave={pagoCrud.createMensual} />
-            <EditarPagoModal 
-              isOpen={!!pagoParaEditar}
-              pago={pagoParaEditar}
-              onCancel={() => setPagoParaEditar(null)}
-              onSave={pagoCrud.update}
-          />
-          <footer className="text-center text-xs text-slate-500 py-6">Coachex-Pro · Gestión de Profesores</footer>
-        </div>
-      );
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="loader"></div></div>;
+  }
+
+  if (!hasClubs) {
+  return (
+    <OnboardingClubSetup
+      user={user}
+      setHasClubs={setHasClubs}
+      onLogout={onLogout}
+    />
+  );
+}
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans">
+      <Topbar
+        current={current}
+        setCurrent={setCurrent}
+        onLogout={onLogout}
+        clubes={clubes}
+        clubActivoId={clubActivoId}
+        onClubChange={setClubActivoId}
+        showIndependentOption={state.perfil.modoTrabajo !== 'Club'}
+      />
+      <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
+        {current === "dashboard" && <Dashboard
+          perfil={state.perfil}
+          clases={state.clases}
+          pagos={state.pagos}
+          gastos={state.gastos}
+          alumnos={state.alumnos}
+          clubes={clubes}
+          clubActivoId={clubActivoId}
+          goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }}
+          goToEditClass={goToEditClass}
+        />}
+        {current === "alumnos" && <Alumnos
+          clases={state.clases}
+          pagos={state.pagos}
+          alumnos={state.alumnos}
+          onCreate={alumnoCrud.create}
+          onUpdate={alumnoCrud.update}
+          onDelete={alumnoCrud.delete}
+          onRegisterMonthlyPayment={handleRegisterMonthlyPayment}
+          onRegistrarClase={openRegistrarClaseForAlumno}
+          onPagarPendiente={openPagoPendiente}
+          onEditarPago={(pago) => setPagoParaEditar(pago)}
+          onDeletePago={handleDeletePago}
+          onOpenRecurrente={(alumno) => setEditingRecurrente(alumno)} // <--- NUEVO
+        />}
+        {current === "clases" && <Clases
+          clases={state.clases}
+          alumnos={state.alumnos}
+          pagos={state.pagos}
+          perfil={state.perfil}
+          onCreate={claseCrud.create}
+          onUpdate={claseCrud.update}
+          onDelete={claseCrud.delete}
+          onPay={(clase) => setPayingClase(clase)}
+          user={user}
+          claseParaEditar={claseParaEditar}
+          setClaseParaEditar={setClaseParaEditar}
+          nuevoAlumnoId={nuevoAlumnoId}
+          setNuevoAlumnoId={setNuevoAlumnoId}
+          onOpenRecurrentesModal={() => setShowRecurrentesModal(true)}
+        />}
+        {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
+        {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({ alumno, mes })} onEditarPago={(pago) => setPagoParaEditar(pago)} onDeletePago={handleDeletePago} />}
+        {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
+        {current === "reportes" && <Reportes pagos={state.pagos} gastos={state.gastos} alumnos={state.alumnos} clases={state.clases} clubActivoId={clubActivoId} clubes={clubes} perfil={state.perfil} />}
+        {current === "perfil" && <Perfil
+          perfil={state.perfil}
+          alumnos={state.alumnos}
+          clases={state.clases}
+          pagos={state.pagos}
+          gastos={state.gastos}
+          grupos={state.grupos}
+          onUpdate={perfilCrud.update}
+          user={user}
+          setToast={setToast}
+          getCollection={getCollection}
+          perfilCrud={perfilCrud}
+        />}
+      </main>
+      <Toast msg={toast} onClose={() => setToast("")} />
+      <Modal isOpen={!!deletingInfo.id} title={`Eliminar ${deletingInfo.type}`} onConfirm={confirmDelete} onCancel={() => setDeletingInfo({ id: null, type: null, collection: null })} >
+        ¿Estás seguro? Esta acción no se puede deshacer.
+      </Modal>
+      <PagoGrupalModal
+        isOpen={!!payingClase}
+        clase={payingClase}
+        alumnos={state.alumnos}
+        onCancel={() => { setPayingClase(null); setFocusAlumnoId(null); }}
+        focusAlumnoId={focusAlumnoId} onSave={pagoCrud.createPagosClase}
+      />
+      <RegistroPagoMensualModal
+        isOpen={!!registrandoAbono}
+        alumno={registrandoAbono}
+        perfil={state.perfil}
+        onCancel={() => setRegistrandoAbono(null)}
+        onSave={(pagoData) => pagoCrud.createAbono(pagoData, registrandoAbono)}
+      />
+      <PagoMensualModal isOpen={!!payingCuota.alumno} alumno={payingCuota.alumno} mes={payingCuota.mes} onCancel={() => setPayingCuota({ alumno: null, mes: null })} onSave={pagoCrud.createMensual} />
+      <EditarPagoModal
+        isOpen={!!pagoParaEditar}
+        pago={pagoParaEditar}
+        onCancel={() => setPagoParaEditar(null)}
+        onSave={pagoCrud.update}
+      />
+      <GestionRecurrentesModal
+          isOpen={showRecurrentesModal}
+          onClose={() => setShowRecurrentesModal(false)}
+          clases={state.clases}
+          alumnos={state.alumnos}
+          onDeleteSerie={(ids) => {
+              ids.forEach(id => claseCrud.delete(id));
+              setToast("Serie de clases eliminada.");
+              setShowRecurrentesModal(false);
+          }}
+          onUpdateSerie={(updates) => {
+              updates.forEach(upd => claseCrud.update(upd));
+              setToast("Serie de clases actualizada.");
+              setShowRecurrentesModal(false);
+          }}
+      />
+      <GestionAlumnoRecurrenteModal
+  isOpen={!!editingRecurrente}
+  onClose={() => setEditingRecurrente(null)}
+  alumno={editingRecurrente}
+  alumnos={state.alumnos}
+  clases={state.clases}
+  onCreateSerie={claseCrud.onCreateRecurrente}
+  onDeleteSerie={claseCrud.onDeleteRecurrente}
+/>
+      <footer className="text-center text-xs text-slate-500 py-6">Coachex-Pro · Gestión de Profesores</footer>
+    </div>
+  );
+}
+function GestionRecurrentesModal({ isOpen, onClose, clases, alumnos, onDeleteSerie, onUpdateSerie }) {
+    const [filtroAlumnoId, setFiltroAlumnoId] = useState("");
+    const [filtroDia, setFiltroDia] = useState("");
+    const [filtroHora, setFiltroHora] = useState("");
+    const [clasesEncontradas, setClasesEncontradas] = useState([]);
+    const [editandoSerie, setEditandoSerie] = useState(null);
+    const alumnosActivos = useMemo(() => (alumnos || []).filter(a => a.estado === 'activo'), [alumnos]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setFiltroAlumnoId("");
+            setFiltroDia("");
+            setFiltroHora("");
+            setClasesEncontradas([]);
+            setEditandoSerie(null);
+        }
+    }, [isOpen]);
+
+    const buscarClases = () => {
+        const clasesFiltradas = clases.filter(c => {
+            const cumpleAlumno = !filtroAlumnoId || (c.alumnoIds || []).includes(filtroAlumnoId);
+            const d = new Date(`${c.fecha}T00:00:00`);
+            const diaClase = DIAS_SEMANA_NOMBRES[d.getDay() === 0 ? 6 : d.getDay() - 1];
+            const cumpleDia = !filtroDia || diaClase === filtroDia;
+            const cumpleHora = !filtroHora || c.hora === filtroHora;
+            const noPasado = new Date(c.fecha) >= new Date();
+            return cumpleAlumno && cumpleDia && cumpleHora && noPasado;
+        }).sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+        setClasesEncontradas(clasesFiltradas);
+        setEditandoSerie({
+            dia: filtroDia || DIAS_SEMANA_NOMBRES[new Date(clasesFiltradas[0]?.fecha || new Date()).getDay() === 0 ? 6 : new Date(clasesFiltradas[0]?.fecha || new Date()).getDay() - 1],
+            hora: filtroHora || clasesFiltradas[0]?.hora,
+            cancha: clasesFiltradas[0]?.cancha || '',
+            precio: clasesFiltradas[0]?.precio || 0,
+        });
+    };
+
+    const handleUpdateSerie = () => {
+        if (!editandoSerie) return;
+        const updates = clasesEncontradas.map(c => {
+            // Asegurarse de que solo se actualicen los campos que se han editado
+            return {
+                id: c.id,
+                ...editandoSerie,
+                alumnoIds: c.alumnoIds,
+                tipo: c.tipo,
+                fecha: c.fecha
+            };
+        });
+        onUpdateSerie(updates);
+    };
+
+    const handleDeleteSerie = () => {
+        if (window.confirm("¿Estás seguro de que quieres eliminar TODAS las clases de esta serie?")) {
+            const ids = clasesEncontradas.map(c => c.id);
+            onDeleteSerie(ids);
+        }
+    };
+    
+    return (
+        <Modal isOpen={isOpen} title="Gestión de Clases Recurrentes" onCancel={onClose} confirmText="Cerrar" onConfirm={onClose} size="lg">
+            <div className="space-y-6 max-h-[80vh] overflow-y-auto p-4 -mx-4">
+                {/* Panel de Filtros y Búsqueda */}
+                <div className="p-4 border rounded-xl bg-slate-50 space-y-4">
+                    <h4 className="font-semibold text-slate-800">1. Buscar Serie de Clases</h4>
+                    <div>
+                        <label className="text-sm text-slate-600">Alumno</label>
+                        <select value={filtroAlumnoId} onChange={e => setFiltroAlumnoId(e.target.value)} className="w-full border rounded-lg px-3 py-2">
+                            <option value="">Todos los alumnos...</option>
+                            {alumnosActivos.map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className="text-sm text-slate-600">Día</label>
+                            <select value={filtroDia} onChange={e => setFiltroDia(e.target.value)} className="w-full border rounded-lg px-3 py-2">
+                                <option value="">Todos los días...</option>
+                                {DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm text-slate-600">Hora</label>
+                            <select value={filtroHora} onChange={e => setFiltroHora(e.target.value)} className="w-full border rounded-lg px-3 py-2">
+                                <option value="">Todas las horas...</option>
+                                {HORAS.map(h => <option key={h}>{h}</option>)}
+                            </select>
+                        </div>
+                        <button onClick={buscarClases} className="w-full h-10 self-end px-4 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white font-semibold">Buscar</button>
+                    </div>
+                    {clasesEncontradas.length > 0 && (
+                        <p className="text-sm text-slate-600 mt-2">
+                            Se encontraron <span className="font-bold">{clasesEncontradas.length}</span> clases a partir de hoy.
+                        </p>
+                    )}
+                </div>
+
+                {/* Panel de Resultados y Acciones */}
+                {clasesEncontradas.length > 0 && (
+                    <div className="p-4 border rounded-xl bg-slate-50 space-y-4">
+                        <h4 className="font-semibold text-slate-800">2. Editar o Eliminar la Serie</h4>
+                        {/* Formulario de Edición */}
+                        <div className="p-3 border rounded-lg bg-white space-y-3">
+                            <h5 className="font-semibold text-sm">Cambiar datos de toda la serie</h5>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs text-slate-600">Día</label>
+                                    <select value={editandoSerie?.dia || filtroDia} onChange={e => setEditandoSerie(s => ({...s, dia: e.target.value}))} className="w-full border rounded-lg px-2 py-1 text-sm">
+                                        {DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-600">Hora</label>
+                                    <select value={editandoSerie?.hora || filtroHora} onChange={e => setEditandoSerie(s => ({...s, hora: e.target.value}))} className="w-full border rounded-lg px-2 py-1 text-sm">
+                                        {HORAS.map(h => <option key={h}>{h}</option>)}
+                                    </select>
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="text-xs text-slate-600">Ubicación / Cancha</label>
+                                    <input type="text" value={editandoSerie?.cancha || clasesEncontradas[0]?.cancha || ""} onChange={e => setEditandoSerie(s => ({...s, cancha: e.target.value}))} className="w-full border rounded-lg px-2 py-1 text-sm" />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="text-xs text-slate-600">Precio</label>
+                                    <input type="number" value={editandoSerie?.precio || clasesEncontradas[0]?.precio || 0} onChange={e => setEditandoSerie(s => ({...s, precio: e.target.value}))} className="w-full border rounded-lg px-2 py-1 text-sm" />
+                                </div>
+                            </div>
+                            <button onClick={handleUpdateSerie} className="w-full px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold text-sm">Actualizar Serie</button>
+                        </div>
+                        
+                        {/* Botón de Eliminación */}
+                        <button onClick={handleDeleteSerie} className="w-full px-4 py-2 rounded-lg bg-red-600 text-white font-semibold text-sm">Eliminar TODA la Serie</button>
+                        
+                        {/* Vista previa de las clases */}
+                        <div className="space-y-2 mt-4 max-h-48 overflow-y-auto pr-2">
+                            <h5 className="text-sm font-semibold text-slate-800">Clases de la serie:</h5>
+                            {clasesEncontradas.map(c => (
+                                <div key={c.id} className="p-2 text-xs border rounded-lg bg-white">
+                                    {formatDate(c.fecha, 'dd/mm/yyyy')} - {c.hora} ({getNombreCompleto(alumnos.find(a => a.id === c.alumnoIds[0]))})
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </Modal>
+    );
+}
+function GestionAlumnoRecurrenteModal({ isOpen, onClose, alumno, onCreateSerie, onDeleteSerie, alumnos, clases }) {
+    const [nuevaSerie, setNuevaSerie] = useState({ 
+        dia: "Lunes", 
+        hora: "08:00", 
+        tipo: "Individual", 
+        precio: 0,
+        coAlumnoIds: []
+    });
+
+    const [selectedDays, setSelectedDays] = useState([]); // selección múltiple de días
+    const [meses, setMeses] = useState(1);                // duración en meses
+    const [desde, setDesde] = useState(() => {
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`; // YYYY-MM-DD
+    });
+
+    const [editando, setEditando] = useState(null);
+
+    function toggleDay(d) {
+        setSelectedDays(prev =>
+            prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]
+        );
+    }
+    
+    function addMonthsISO(dateStr, months) {
+        try {
+            const [Y, M, D] = dateStr.split('-').map(Number);
+            const d = new Date(Y, M - 1, D);
+            d.setMonth(d.getMonth() + Number(months || 0));
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        } catch (e) {
+            return dateStr;
+        }
     }
 
+    const clasesDelAlumno = useMemo(() => {
+        if (!alumno || !clases) return [];
+        return clases.filter(c => (c.alumnoIds || []).includes(alumno.id));
+    }, [alumno, clases]);
+
+    const seriesRecurrentesConPreview = useMemo(() => {
+        if (!alumno || !alumno.clasesRecurrentes) return [];
+        return alumno.clasesRecurrentes.map(serie => {
+            const d = new Date();
+            const targetDayIndex = DIAS_SEMANA_NOMBRES.indexOf(serie.dia);
+            const currentDayIndex = d.getDay();
+            let dayDifference = targetDayIndex - currentDayIndex;
+            if (dayDifference <= 0) {
+                dayDifference += 7;
+            }
+            const fechaPreview = formatDate(addDays(d, dayDifference), 'dd/mm/yyyy');
+            return {
+                ...serie,
+                fechaPreview
+            };
+        });
+    }, [alumno]);
+
+    useEffect(() => {
+        if (alumno) {
+            const precioInicial = (alumno.precios || {})[nuevaSerie.tipo.toLowerCase()] || 0;
+            setNuevaSerie(prev => ({ ...prev, precio: precioInicial }));
+        }
+    }, [alumno, nuevaSerie.tipo]);
+
+    if (!isOpen || !alumno) return null;
+
+    const handleCreateSerie = () => {
+        if (!nuevaSerie.dia || !nuevaSerie.hora || !nuevaSerie.tipo) {
+            alert("Completa todos los campos para agendar la clase recurrente.");
+            return;
+        }
+        if (nuevaSerie.precio <= 0) {
+            if (!window.confirm("El precio es 0. ¿Quieres continuar?")) {
+                return;
+            }
+        }
+        {
+            const dias = (selectedDays && selectedDays.length > 0) ? selectedDays : [nuevaSerie.dia];
+            const hasta = addMonthsISO(desde, meses);
+            dias.forEach(dia => {
+                const serie = { 
+                    ...nuevaSerie, 
+                    dia, 
+                    desde, 
+                    hasta, 
+                    meses,
+                    alumnoIds: [alumno.id, ...nuevaSerie.coAlumnoIds]
+                };
+                onCreateSerie(alumno.id, serie);
+            });
+        }
+        setNuevaSerie({ 
+            dia: "Lunes", 
+            hora: "08:00", 
+            tipo: "Individual", 
+            precio: 0,
+            coAlumnoIds: [] 
+        });
+        setSelectedDays([]);
+        setMeses(1);
+        setDesde(() => {
+            const d = new Date(); const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        });
+    };
+
+    const handleDeleteSerie = (serie) => {
+        if (window.confirm(`¿Estás seguro de que quieres eliminar la clase recurrente del ${serie.dia} a las ${serie.hora}?`)) {
+            onDeleteSerie(alumno.id, serie);
+        }
+    };
+
+    const handleUpdateSerie = () => {
+        if (!editando || !editando.dia || !editando.hora) {
+            alert("El día y la hora son obligatorios.");
+            return;
+        }
+        onDeleteSerie(alumno.id, editando);
+        onCreateSerie(alumno.id, editando);
+        setEditando(null);
+    };
+
+    const handleCancelEdit = () => {
+        setEditando(null);
+    };
+
+    return (
+        <Modal isOpen={isOpen} title={`Clases recurrentes de ${getNombreCompleto(alumno)}`} onCancel={onClose} confirmText="Cerrar" onConfirm={onClose} size="3xl">
+            <div className="space-y-6">
+                <div className="p-4 border rounded-xl bg-slate-50 space-y-4">
+                    <h4 className="font-semibold text-[#34745B]">Agendar nueva clase recurrente</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                            <label className="text-sm text-slate-600">Día</label>
+                            <select value={nuevaSerie.dia} onChange={e => setNuevaSerie(s => ({...s, dia: e.target.value}))} className="w-full border rounded-lg px-3 py-2">
+                                {DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm text-slate-600">Hora</label>
+                            <select value={nuevaSerie.hora} onChange={e => setNuevaSerie(s => ({...s, hora: e.target.value}))} className="w-full border rounded-lg px-3 py-2">
+                                {HORAS.map(h => <option key={h}>{h}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm text-slate-600">Tipo de Clase</label>
+                            <select value={nuevaSerie.tipo} onChange={e => setNuevaSerie(s => ({...s, tipo: e.target.value, coAlumnoIds: []}))} className="w-full border rounded-lg px-3 py-2">
+                                {TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm text-slate-600">Precio</label>
+                            <input type="number" value={nuevaSerie.precio} onChange={e => setNuevaSerie(s => ({...s, precio: parseFloat(e.target.value) || 0}))} className="w-full border rounded-lg px-3 py-2" />
+                        </div>
+                    </div>
+
+                    {TIPOS_CLASE_MAP[nuevaSerie.tipo] > 1 && (
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {Array.from({ length: TIPOS_CLASE_MAP[nuevaSerie.tipo] - 1 }).map((_, index) => (
+                                <div key={index}>
+                                    <label className="text-sm text-slate-600">Co-alumno {index + 1}</label>
+                                    <select 
+                                        value={nuevaSerie.coAlumnoIds[index] || ""} 
+                                        onChange={e => {
+                                            const newCoAlumnos = [...nuevaSerie.coAlumnoIds];
+                                            newCoAlumnos[index] = e.target.value;
+                                            setNuevaSerie(s => ({...s, coAlumnoIds: newCoAlumnos}));
+                                        }} 
+                                        className="w-full border rounded-lg px-3 py-2"
+                                    >
+                                        <option value="">Seleccionar...</option>
+                                        {alumnos.filter(a => a.id !== alumno.id && !nuevaSerie.coAlumnoIds.includes(a.id)).map(a => 
+                                            <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>
+                                        )}
+                                    </select>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    <div className="grid md:grid-cols-3 gap-4 mt-2">
+                      <div>
+                        <label className="block text-xs text-slate-600 mb-1">Días (múltiples)</label>
+                        <div className="flex flex-wrap gap-2">
+                          {(typeof DIAS_SEMANA_NOMBRES !== 'undefined' ? DIAS_SEMANA_NOMBRES : ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']).map(d => (
+                            <button type="button" key={d}
+                              onClick={() => toggleDay(d)}
+                              className={`px-2 py-1 rounded-full border text-xs ${selectedDays.includes(d) ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-white hover:bg-slate-50'}`}>
+                              {d}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">Si no seleccionás, se usará el día elegido arriba.</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-600 mb-1">Desde</label>
+                        <input type="date" value={desde} onChange={e=>setDesde(e.target.value)} className="border rounded-lg px-2 py-1 text-sm w-full" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-600 mb-1">Duración (meses)</label>
+                        <input type="number" min="1" max="12" value={meses} onChange={e=>setMeses(parseInt(e.target.value||'1',10))} className="border rounded-lg px-2 py-1 text-sm w-full" />
+                      </div>
+                    </div>
+                    <button onClick={handleCreateSerie} className="w-full px-4 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white font-semibold">
+                        Agendar Serie Recurrente
+                    </button>
+                </div>
+
+                <div className="p-4 border rounded-xl bg-white space-y-4">
+                    <h4 className="font-semibold text-slate-800">Series agendadas</h4>
+                    <ul className="space-y-3">
+                        {seriesRecurrentesConPreview.length === 0 ? (
+                            <p className="text-sm text-slate-500">No hay clases recurrentes agendadas para este alumno.</p>
+                        ) : (
+                            seriesRecurrentesConPreview.map((serie, index) => (
+                                <li key={index} className="p-3 border rounded-lg bg-slate-50 flex justify-between items-center">
+                                    <div>
+                                        <p className="font-bold">{serie.dia}, {serie.hora}</p>
+                                        <p className="text-sm text-slate-600">{TIPOS_CLASE_NOMBRES[serie.tipo]} - ${serie.precio}</p>
+                                        <p className="text-xs text-slate-400">Próxima clase: {serie.fechaPreview}</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setEditando(serie)} className="px-3 py-1 text-sm rounded-lg border text-blue-600 hover:bg-blue-50">Editar</button>
+                                        <button onClick={() => handleDeleteSerie(serie)} className="px-3 py-1 text-sm rounded-lg border text-red-600 hover:bg-red-50">Eliminar</button>
+                                    </div>
+                                </li>
+                            ))
+                        )}
+                    </ul>
+                </div>
+
+                <Modal isOpen={!!editando} title={`Editar serie recurrente`} onCancel={handleCancelEdit} onConfirm={handleUpdateSerie} confirmText="Guardar Cambios" size="sm">
+                    <div className="grid gap-3">
+                        <div>
+                            <label className="text-sm text-slate-600">Día</label>
+                            <select value={editando?.dia} onChange={e => setEditando(s => ({...s, dia: e.target.value}))} className="w-full border rounded-lg px-3 py-2">
+                                {DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm text-slate-600">Hora</label>
+                            <select value={editando?.hora} onChange={e => setEditando(s => ({...s, hora: e.target.value}))} className="w-full border rounded-lg px-3 py-2">
+                                {HORAS.map(h => <option key={h}>{h}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm text-slate-600">Tipo de Clase</label>
+                            <select value={editando?.tipo} onChange={e => setEditando(s => ({...s, tipo: e.target.value}))} className="w-full border rounded-lg px-3 py-2">
+                                {TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm text-slate-600">Precio</label>
+                            <input type="number" value={editando?.precio} onChange={e => setEditando(s => ({...s, precio: parseFloat(e.target.value) || 0}))} className="w-full border rounded-lg px-3 py-2" />
+                        </div>
+                    </div>
+                </Modal>
+            </div>
+        </Modal>
+    );
+}
     // ------------------------------ APP WRAPPER WITH AUTH ------------------------------
     function AppGPadel() {
         const [user, setUser] = useState(null);
