@@ -501,7 +501,7 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
       );
     }
     
-function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment, clases, pagos, onRegistrarClase, onPagarPendiente, onEditarPago, onDeletePago, onOpenRecurrente }) {
+function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment, clases, pagos, onRegistrarClase, onPagarPendiente, onEditarPago, onDeletePago }) {
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -599,7 +599,6 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
         onRegistrarPago={onRegisterMonthlyPayment} 
         onEditarPago={onEditarPago} 
         onDeletePago={onDeletePago}
-        onOpenRecurrente={onOpenRecurrente}
     />
   </>);
 }
@@ -614,7 +613,6 @@ function AlumnoFichaModal({
   onRegistrarPago,
   onEditarPago,
   onDeletePago,
-  onOpenRecurrente
 }) {
   // Alumno "en vivo" (rehidratado desde la lista completa)
   const alumnoLive = useMemo(
@@ -666,11 +664,6 @@ function AlumnoFichaModal({
     const totalPagos = pagosDelAlumno.reduce((sum, p) => sum + parseFloat(p.monto), 0);
     const totalPendiente = clasesPendientes.reduce((sum, c) => sum + c.precio || 0, 0);
 
-    const handleOpenRecurrente = () => {
-      onOpenRecurrente(alumno);
-      onClose();
-    };
-
     return (
         <Modal isOpen={!!alumno} onClose={onClose} title={`Ficha de ${getNombreCompleto(alumno)}`} size="5xl" confirmText="Cerrar" onConfirm={onClose}>
             <div className="flex flex-col md:flex-row gap-6">
@@ -701,7 +694,6 @@ function AlumnoFichaModal({
                         <nav className="-mb-px flex space-x-8 text-sm">
                             <button onClick={() => setTab("clases")} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${tab === 'clases' ? 'border-[#34745B] text-[#34745B]' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`}>Clases ({clasesDelAlumno.length})</button>
                             <button onClick={() => setTab("pagos")} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${tab === 'pagos' ? 'border-[#34745B] text-[#34745B]' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`}>Pagos ({pagosDelAlumno.length})</button>
-                            <button onClick={() => onOpenRecurrente(alumno)} className="whitespace-nowrap py-4 px-1 border-b-2 font-medium border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">Clases Recurrentes</button>
                         </nav>
                     </div>
 
@@ -740,59 +732,7 @@ function AlumnoFichaModal({
                                     )}
                                 </tbody>
                             </table>
-                        {/* Recurrentes del alumno: vista rápida dentro de la ficha */}
-                        {alumno?.clasesRecurrentes && Array.isArray(alumno.clasesRecurrentes) && alumno.clasesRecurrentes.length > 0 && (
-                          <div className="mt-4">
-                            <h4 className="font-bold text-lg text-slate-800 mb-2">Recurrentes</h4>
-                            <div className="space-y-1">
-                              {alumno.clasesRecurrentes.map((serie, i) => {
-                                try {
-                                  const d = new Date();
-                                  const nombres = (typeof DIAS_SEMANA_NOMBRES !== 'undefined' && DIAS_SEMANA_NOMBRES) ? DIAS_SEMANA_NOMBRES : ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-                                  const target = nombres.indexOf(serie.dia);
-                                  const current = d.getDay();
-                                  let diff = target - current;
-                                  if (diff <= 0) diff += 7;
-                                  const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
-                                  const dd = String(next.getDate()).padStart(2,'0');
-                                  const mm = String(next.getMonth()+1).padStart(2,'0');
-                                  const yyyy = next.getFullYear();
-                                  const fechaPreview = `${dd}/${mm}/${yyyy}`;
-                                  return (
-                                    <div key={i} className="p-2 border rounded-lg bg-white text-xs">
-                                      {serie.dia} {serie.hora} · {serie.tipo} · ${serie.precio || 0}
-                                      <span className="ml-2 text-slate-500">Próxima: {fechaPreview}</span>
-                                    
-      <div className="mt-2 flex items-center gap-2">
-        <input type="date" className="border rounded-lg px-2 py-1 text-xs"
-          value={omitDate[i] || ""}
-          onChange={e => setOmitDate(prev => ({ ...prev, [i]: e.target.value }))}
-        />
-        <button className="px-2 py-1 rounded-lg bg-amber-600 text-white text-xs"
-          onClick={async () => {
-            const f = (omitDate[i] || "").trim();
-            if (!f) { setToast("Elegí una fecha para omitir."); return; }
-            await claseCrud.onOmitirOcurrencia(alumno.id, serie, f);
-          }}
-        >Omitir fecha</button>
-        <button className="px-2 py-1 rounded-lg bg-red-600 text-white text-xs"
-          onClick={async () => {
-            if (confirm('Eliminar esta serie (borra clases FUTURAS)?')) {
-              await claseCrud.onDeleteRecurrente(alumno.id, serie);
-            }
-          }}
-        >Eliminar serie</button>
-      </div>
-    </div>
-                                  );
-                                } catch (e) {
-                                  return <div key={i} className="text-xs text-slate-500">Recurrente: {serie?.dia} {serie?.hora} · {serie?.tipo}</div>
-                                }
-                              })}
-                            </div>
-                          </div>
-                        )}
-        
+                            
                         </div>
                     )}
                     
@@ -928,10 +868,10 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   );
 }
     
-function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar, nuevoAlumnoId, setNuevoAlumnoId, onOpenRecurrentesModal }) {
+function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar, nuevoAlumnoId, setNuevoAlumnoId }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "", recurrente: false, mesesRecurrencia: 3 };
+  const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "" };
   const [form, setForm] = useState(emptyForm);
   const [formStep, setFormStep] = useState(1);
   const [alumnoSearchQuery, setAlumnoSearchQuery] = useState("");
@@ -1083,7 +1023,7 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
   }
   function openEdit(c) {
     setEditing(c);
-    setForm({ ...emptyForm, ...c, recurrente: false });
+    setForm({ ...emptyForm, ...c, });
     setFormStep(3);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1126,57 +1066,6 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
   const primerAlumnoId = form.alumnoIds ? form.alumnoIds[0] : null;
   const esMensual = alumnoMap.get(primerAlumnoId)?.plan === 'mensual';
 
-  // --- Funciones para clases recurrentes ---
-function getProximaClaseFecha(diaNombre) {
-  const hoy = new Date();
-  const diaHoy = hoy.getDay(); // 0 (Domingo) - 6 (Sábado)
-  const diaObjetivo = DIAS_SEMANA_NOMBRES.indexOf(diaNombre) + 1; // 1 (Lunes) - 7 (Domingo)
-  const diferencia = (diaObjetivo - diaHoy + 7) % 7;
-  const proximaFecha = new Date(hoy);
-  proximaFecha.setDate(hoy.getDate() + diferencia);
-  return formatDate(proximaFecha, 'dd/mm/yyyy');
-}
-
-function handleCrearInstancias(alumnoId, serie) {
-  const batch = db.batch();
-  const collectionRef = getCollection('clases');
-  const alumno = alumnos.find(a => a.id === alumnoId);
-
-  const fechaInicio = new Date(serie.desde);
-  const fechaFin = new Date(serie.hasta);
-
-  const targetDayIndex = DIAS_SEMANA_NOMBRES.indexOf(serie.dia);
-
-  let currentDate = new Date(fechaInicio);
-
-  while (currentDate <= fechaFin) {
-    if (currentDate.getDay() === targetDayIndex) {
-      const docRef = collectionRef.doc();
-      batch.set(docRef, {
-        alumnoIds: serie.coAlumnoIds ? [alumnoId, ...serie.coAlumnoIds] : [alumnoId],
-        cancha: serie.cancha || "",
-        fecha: formatDate(currentDate),
-        hora: serie.hora,
-        tipo: serie.tipo,
-        precio: serie.precio,
-        estado: "Programada",
-        notas: ""
-      });
-    }
-    currentDate.setDate(currentDate.getDate() + 1);
-  }
-
-  batch.commit().then(() => {
-    setToast("Clases recurrentes creadas exitosamente.");
-  }).catch(error => {
-    console.error("Error al crear clases recurrentes:", error);
-    setToast("Error al crear clases. Revisa la consola.");
-  });
-}
-
-  const alumnosConRecurrentes = useMemo(() => {
-  return (alumnos || []).filter(a => a.clasesRecurrentes && a.clasesRecurrentes.length > 0);
-}, [alumnos]);
 
   return (
     <div className="grid gap-4">
@@ -2305,8 +2194,6 @@ function GestionClubes({ user }) {
 function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user, setToast, getCollection, perfilCrud }) {
       const fileInputRef = React.useRef(null);
       const [form, setForm] = useState(perfil);
-  const [omitDate, setOmitDate] = useState({});
-
       const [pinInput, setPinInput] = useState({ newPin: "", confirmPin: "" });
       const [plantillas, setPlantillas] = useState([]);
       const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
@@ -3419,6 +3306,7 @@ function MainApp({ user, onLogout }) {
       setFocusAlumnoId(alumnoId);
     }
   };
+  const [claseParaAgendar, setClaseParaAgendar] = useState(null);
   const [payingCuota, setPayingCuota] = useState({ alumno: null, mes: null });
   const [claseParaEditar, setClaseParaEditar] = useState(null);
   const [nuevoAlumnoId, setNuevoAlumnoId] = useState(null);
@@ -3428,23 +3316,6 @@ function MainApp({ user, onLogout }) {
   const [clubActivoId, setClubActivoId] = useState(null);
   const [clubes, setClubes] = useState([]);
   const [hasClubs, setHasClubs] = useState(false);
-  const [showRecurrentesModal, setShowRecurrentesModal] = useState(false);
-  const [editingRecurrente, setEditingRecurrente] = useState(null)
-
-  // Sync recurrente modal when alumnos list changes (rehydrate current alumno)
-useEffect(() => {
-    if (!editingRecurrente) return;
-    const list = (state?.alumnos || []);
-    const updated = list.find(a => a.id === editingRecurrente.id);
-    if (!updated) return;
-    const lenOld = (editingRecurrente.clasesRecurrentes || []).length;
-    const lenNew = (updated.clasesRecurrentes || []).length;
-    if (lenNew !== lenOld) {
-        setEditingRecurrente(updated);
-    }
-}, [state?.alumnos, editingRecurrente]);
-
-; // <--- NUEVO ESTADO
 
   useEffect(() => {
     if (!user) return;
@@ -3570,6 +3441,7 @@ useEffect(() => {
       setToast("Pagos registrados");
       setPayingClase(null);
       setFocusAlumnoId(null);
+      setClaseParaAgendar(payingClase);
     },
     createAbono: (pagoData, alumno) => {
       const collectionRef = getCollection('pagos');
@@ -3616,7 +3488,7 @@ useEffect(() => {
       });
     }
   };
-  const claseCrud = {
+ const claseCrud = {
   create: async (c) => {
     const collectionRef = getCollection('clases');
     if (!collectionRef) return;
@@ -3663,298 +3535,6 @@ useEffect(() => {
     });
   },
   delete: (id) => setDeletingInfo({ id, type: 'clase', collection: 'clases' }),
-  onCreateRecurrente: async (alumnoId, serie) => {
-  // 1) Guardar la serie en la ficha del alumno
-  const alumnoRef = getCollection('alumnos').doc(alumnoId);
-  await alumnoRef.update({
-    clasesRecurrentes: firebase.firestore.FieldValue.arrayUnion({ ...serie })
-  });
-
-  // 2) Materializar ocurrencias en "clases" entre desde/hasta, respetando skipDates
-  const col = getCollection('clases');
-  if (!col) return;
-
-  const roster = (serie.alumnoIds && serie.alumnoIds.length)
-    ? [...serie.alumnoIds]
-    : (serie.coAlumnoIds && serie.coAlumnoIds.length ? [alumnoId, ...serie.coAlumnoIds] : [alumnoId]);
-  const rosterKey = (ids) => (ids || []).slice().sort().join(',');
-  const keyFrom = (c) => `${c.fecha}|${c.hora}|${rosterKey(c.alumnoIds)}|${c.tipo||''}`;
-
-  const existentes = new Set(
-    (state.clases || [])
-      .filter(c =>
-        c.fecha >= serie.desde && c.fecha <= serie.hasta &&
-        (c.hora === serie.hora) &&
-        ((c.tipo || '') === (serie.tipo || '')) &&
-        rosterKey(c.alumnoIds) === rosterKey(roster)
-      )
-      .map(keyFrom)
-  );
-
-  const omitidas = new Set(serie.skipDates || []);
-  const NOMBRES_DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
-  const toDia = (yyyy_mm_dd) => {
-    const d = new Date(`${yyyy_mm_dd}T00:00:00`);
-    const idx = d.getDay() === 0 ? 6 : d.getDay() - 1;
-    return NOMBRES_DIAS[idx];
-  };
-
-  const dIni = new Date(`${serie.desde}T00:00:00`);
-  const dFin = new Date(`${serie.hasta}T00:00:00`);
-
-  const batch = db.batch();
-  const createdForUI = [];
-
-  for (let d = new Date(dIni); d <= dFin; d.setDate(d.getDate() + 1)) {
-    const fechaStr = formatDate(d);
-    if (omitidas.has(fechaStr)) continue;
-    if (toDia(fechaStr) !== serie.dia) continue;
-
-    const key = `${fechaStr}|${serie.hora}|${rosterKey(roster)}|${serie.tipo||''}`;
-    if (existentes.has(key)) continue;
-
-    const ref = col.doc();
-    const docData = {
-      alumnoIds: roster,
-      cancha: serie.cancha || "",
-      fecha: fechaStr,
-      hora: serie.hora,
-      tipo: serie.tipo,
-      precio: parseFloat(serie.precio || 0),
-      estado: "Programada",
-      notas: ""
-    };
-    batch.set(ref, docData);
-    createdForUI.push({ id: ref.id, ...docData });
-  }
-
-  if (createdForUI.length) await batch.commit();
-
-  // 3) Refrescar UI (opcional)
-  setState(s => ({ ...s, clases: [...(s.clases || []), ...createdForUI] }));
-
-  // Feedback
-  setToast("Serie guardada y clases generadas.");
-},
-  onUpdateRecurrente: async (alumnoId, oldSerie, newSerie) => {
-    const NOMBRES_DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
-    const toDia = (yyyy_mm_dd) => {
-      const d = new Date(`${yyyy_mm_dd}T00:00:00`);
-      const idx = d.getDay() === 0 ? 6 : d.getDay() - 1;
-      return NOMBRES_DIAS[idx];
-    };
-    const hoyStr = formatDate(new Date());
-    const maxStr = (a,b) => (a > b ? a : b);
-    const rosterKey = (ids) => (ids || []).slice().sort().join(',');
-    const rosterFromSerie = (s) => (s.alumnoIds && s.alumnoIds.length) ? [...s.alumnoIds] : (s.coAlumnoIds && s.coAlumnoIds.length ? [alumnoId, ...s.coAlumnoIds] : [alumnoId]);
-
-    const oldRoster = rosterFromSerie(oldSerie);
-    const newRoster = rosterFromSerie(newSerie);
-    const oldRosterKey = rosterKey(oldRoster);
-    const newRosterKey = rosterKey(newRoster);
-
-    const oldStart = maxStr(hoyStr, oldSerie.desde || hoyStr);
-    const oldEnd   = oldSerie.hasta || '9999-12-31';
-    const newStart = maxStr(hoyStr, newSerie.desde || hoyStr);
-    const newEnd   = newSerie.hasta || '9999-12-31';
-
-    const alumnoRef = getCollection('alumnos').doc(alumnoId);
-    await alumnoRef.update({ clasesRecurrentes: firebase.firestore.FieldValue.arrayRemove({ ...oldSerie }) });
-    await alumnoRef.update({ clasesRecurrentes: firebase.firestore.FieldValue.arrayUnion({ ...newSerie }) });
-
-    const col = getCollection('clases');
-    if (!col) return;
-
-    // BORRAR lo que dejó de aplicar
-    const deleteRangeStart = (oldStart < newStart ? oldStart : newStart);
-    const deleteRangeEnd   = (oldEnd > newEnd ? oldEnd : newEnd);
-    let qDel = col
-      .where('alumnoIds','array-contains', alumnoId)
-      .where('fecha','>=', deleteRangeStart)
-      .where('fecha','<=', deleteRangeEnd);
-
-    const snapDel = await qDel.get();
-    const batchDel = db.batch();
-
-    snapDel.forEach(doc => {
-      const c = doc.data();
-      const estado = (c.estado || '').toLowerCase();
-      if (estado === 'dada' || estado === 'cobrado' || estado === 'pagado') return;
-      const cRosterKey = rosterKey(c.alumnoIds || []);
-      const esDeOldSerie =
-        c.fecha >= oldStart && c.fecha <= oldEnd &&
-        (!oldSerie.hora || c.hora === oldSerie.hora) &&
-        ((oldSerie.tipo || '') === (c.tipo || '')) &&
-        (toDia(c.fecha) === (oldSerie.dia || toDia(c.fecha))) &&
-        (cRosterKey === oldRosterKey);
-
-      if (!esDeOldSerie) return;
-
-      const sigueEnNueva =
-        c.fecha >= newStart && c.fecha <= newEnd &&
-        (!newSerie.hora || c.hora === newSerie.hora) &&
-        ((newSerie.tipo || '') === (c.tipo || '')) &&
-        (toDia(c.fecha) === (newSerie.dia || toDia(c.fecha))) &&
-        (cRosterKey === newRosterKey);
-
-      if (!sigueEnNueva) batchDel.delete(doc.ref);
-    });
-    await batchDel.commit();
-
-    // CREAR lo faltante (respetando skipDates)
-    const omitidas = new Set(newSerie.skipDates || []);
-    const existentes = new Set(
-      (state.clases || [])
-        .filter(c =>
-          c.fecha >= newStart && c.fecha <= newEnd &&
-          (!newSerie.hora || c.hora === newSerie.hora) &&
-          ((newSerie.tipo || '') === (c.tipo || '')) &&
-          (toDia(c.fecha) === (newSerie.dia || toDia(c.fecha))) &&
-          rosterKey(c.alumnoIds || []) === newRosterKey
-        )
-        .map(c => `${c.fecha}|${c.hora}|${rosterKey(c.alumnoIds||[])}|${c.tipo||''}`)
-    );
-
-    const batchAdd = db.batch();
-    const createdForUI = [];
-    const dIni = new Date(`${newStart}T00:00:00`);
-    const dFin = new Date(`${newEnd}T00:00:00`);
-
-    for (let d = new Date(dIni); d <= dFin; d.setDate(d.getDate() + 1)) {
-      const fechaStr = formatDate(d);
-      if (omitidas.has(fechaStr)) continue;
-      if (toDia(fechaStr) !== newSerie.dia) continue;
-      const key = `${fechaStr}|${newSerie.hora}|${newRosterKey}|${newSerie.tipo||''}`;
-      if (existentes.has(key)) continue;
-
-      const ref = col.doc();
-      const docData = {
-        alumnoIds: newRoster,
-        cancha: newSerie.cancha || "",
-        fecha: fechaStr,
-        hora: newSerie.hora,
-        tipo: newSerie.tipo,
-        precio: parseFloat(newSerie.precio || 0),
-        estado: "Programada",
-        notas: ""
-      };
-      batchAdd.set(ref, docData);
-      createdForUI.push({ id: ref.id, ...docData });
-    }
-    if (createdForUI.length) await batchAdd.commit();
-
-    setState(s => ({ ...s, clases: [...(s.clases || []).filter(c => true), ...createdForUI] }));
-    setToast("Serie actualizada y calendario reprogramado.");
-  },
-
-  onOmitirOcurrencia: async (alumnoId, serie, fecha) => {
-    if (!fecha) { setToast("Elegí una fecha para omitir."); return; }
-
-    const alumnoRef = getCollection('alumnos').doc(alumnoId);
-    const snap = await alumnoRef.get();
-    const series = snap.data().clasesRecurrentes || [];
-    // Intentamos por igualdad exacta; si cada serie tiene id, mejor por id
-    const guardada = series.find(s => (s.id && serie.id) ? s.id === serie.id :
-      (s.dia === serie.dia && s.hora === serie.hora && (s.tipo||'') === (serie.tipo||'') && s.desde === serie.desde && s.hasta === serie.hasta)
-    ) || serie;
-
-    const nueva = { ...(guardada), skipDates: [ ...(guardada.skipDates || []), fecha ] };
-
-    await alumnoRef.update({ clasesRecurrentes: firebase.firestore.FieldValue.arrayRemove(guardada) });
-    await alumnoRef.update({ clasesRecurrentes: firebase.firestore.FieldValue.arrayUnion(nueva) });
-
-    // Borrar la clase concreta en "clases"
-    const col = getCollection('clases');
-    const roster = (serie.alumnoIds && serie.alumnoIds.length)
-      ? [...serie.alumnoIds]
-      : (serie.coAlumnoIds && serie.coAlumnoIds.length ? [alumnoId, ...serie.coAlumnoIds] : [alumnoId]);
-    const rosterKey = (ids) => (ids || []).slice().sort().join(',');
-    const expectedKey = rosterKey(roster);
-
-    const snapQ = await col
-      .where('alumnoIds','array-contains', alumnoId)
-      .where('fecha','==', fecha)
-      .where('hora','==', serie.hora)
-      .get();
-
-    const batch = db.batch();
-    snapQ.forEach(doc => {
-      const c = doc.data();
-      if (rosterKey(c.alumnoIds || []) === expectedKey && (c.tipo || '') === (serie.tipo || '')) {
-        batch.delete(doc.ref);
-      }
-    });
-    await batch.commit();
-
-    setState(s => ({ ...s, clases: (s.clases || []).filter(c => !(c.fecha === fecha && c.hora === serie.hora && rosterKey(c.alumnoIds||[]) === expectedKey)) }));
-    setToast(`Ocurrencia del ${fecha} omitida.`);
-  },
-  onDeleteRecurrente: async (alumnoId, serie) => {
-  const NOMBRES_DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
-  const toDia = (yyyy_mm_dd) => {
-    const d = new Date(`${yyyy_mm_dd}T00:00:00`);
-    const idx = d.getDay() === 0 ? 6 : d.getDay() - 1;
-    return NOMBRES_DIAS[idx];
-  };
-  const hoyStr = formatDate(new Date());
-
-  const start = (serie.desde && serie.desde > hoyStr) ? serie.desde : hoyStr;
-  const end   = serie.hasta || '9999-12-31';
-
-  // Quitar serie de la ficha
-  const alumnoRef = getCollection('alumnos').doc(alumnoId);
-  await alumnoRef.update({
-    clasesRecurrentes: firebase.firestore.FieldValue.arrayRemove({ ...serie })
-  });
-
-  // Borrar ocurrencias futuras
-  const col = getCollection('clases');
-  if (!col) return;
-
-  const expectedAlumnoIds = (serie.alumnoIds && serie.alumnoIds.length)
-    ? [...serie.alumnoIds]
-    : (serie.coAlumnoIds && serie.coAlumnoIds.length ? [alumnoId, ...serie.coAlumnoIds] : [alumnoId]);
-  const rosterKey = (ids) => (ids || []).slice().sort().join(',');
-  const expectedKey = rosterKey(expectedAlumnoIds);
-
-  let q = col
-    .where('alumnoIds','array-contains', alumnoId)
-    .where('fecha','>=', start)
-    .where('fecha','<=', end);
-
-  if (serie.hora) q = q.where('hora','==', serie.hora);
-  if (serie.tipo) q = q.where('tipo','==', serie.tipo);
-
-  const snap = await q.get();
-  const batch = db.batch();
-  snap.forEach(doc => {
-    const c = doc.data();
-    const estado = (c.estado || '').toLowerCase();
-    if (estado === 'dada' || estado === 'cobrado' || estado === 'pagado') return;
-    if (serie.dia && toDia(c.fecha) !== serie.dia) return;
-    if (rosterKey(c.alumnoIds || []) !== expectedKey) return;
-    batch.delete(doc.ref);
-  });
-  await batch.commit();
-
-  // Refrescar UI
-  setState(s => ({
-    ...s,
-    clases: (s.clases || []).filter(c => {
-      if (c.fecha < start || c.fecha > end) return true;
-      if (serie.hora && c.hora !== serie.hora) return true;
-      if (serie.tipo && (c.tipo || '') !== (serie.tipo || '')) return true;
-      if (serie.dia && toDia(c.fecha) !== serie.dia) return true;
-      const key = rosterKey(c.alumnoIds || []);
-      if (key !== expectedKey) return true;
-      const estado = (c.estado || '').toLowerCase();
-      if (estado === 'dada' || estado === 'cobrado' || estado === 'pagado') return true;
-      return false;
-    })
-  }));
-
-  setToast("Serie eliminada y clases futuras borradas.");
-}
 };
   const gastoCrud = {
     create: (g) => {
@@ -4093,7 +3673,6 @@ useEffect(() => {
           onPagarPendiente={openPagoPendiente}
           onEditarPago={(pago) => setPagoParaEditar(pago)}
           onDeletePago={handleDeletePago}
-          onOpenRecurrente={(alumno) => setEditingRecurrente(alumno)} // <--- NUEVO
         />}
         {current === "clases" && <Clases
           clases={state.clases}
@@ -4109,7 +3688,6 @@ useEffect(() => {
           setClaseParaEditar={setClaseParaEditar}
           nuevoAlumnoId={nuevoAlumnoId}
           setNuevoAlumnoId={setNuevoAlumnoId}
-          onOpenRecurrentesModal={() => setShowRecurrentesModal(true)}
         />}
         {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
         {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({ alumno, mes })} onEditarPago={(pago) => setPagoParaEditar(pago)} onDeletePago={handleDeletePago} />}
@@ -4153,451 +3731,150 @@ useEffect(() => {
         pago={pagoParaEditar}
         onCancel={() => setPagoParaEditar(null)}
         onSave={pagoCrud.update}
-      />
-      <GestionRecurrentesModal
-          isOpen={showRecurrentesModal}
-          onClose={() => setShowRecurrentesModal(false)}
-          clases={state.clases}
+            />
+            <AgendarProximaClaseModal
+          isOpen={!!claseParaAgendar}
+          onClose={() => setClaseParaAgendar(null)}
+          onSchedule={claseCrud.create}
+          claseBase={claseParaAgendar}
           alumnos={state.alumnos}
-          onDeleteSerie={(ids) => {
-              ids.forEach(id => claseCrud.delete(id));
-              setToast("Serie de clases eliminada.");
-              setShowRecurrentesModal(false);
-          }}
-          onUpdateSerie={(updates) => {
-              updates.forEach(upd => claseCrud.update(upd));
-              setToast("Serie de clases actualizada.");
-              setShowRecurrentesModal(false);
-          }}
       />
-      <GestionAlumnoRecurrenteModal
-  isOpen={!!editingRecurrente}
-  onClose={() => setEditingRecurrente(null)}
-  alumno={editingRecurrente}
-  alumnos={state.alumnos}
-  clases={state.clases}
-  onCreateSerie={claseCrud.onCreateRecurrente}
-  onDeleteSerie={claseCrud.onDeleteRecurrente}
-/>
       <footer className="text-center text-xs text-slate-500 py-6">Coachex-Pro · Gestión de Profesores</footer>
     </div>
   );
 }
-function GestionRecurrentesModal({ isOpen, onClose, clases, alumnos, onDeleteSerie, onUpdateSerie }) {
-    const [filtroAlumnoId, setFiltroAlumnoId] = useState("");
-    const [filtroDia, setFiltroDia] = useState("");
-    const [filtroHora, setFiltroHora] = useState("");
-    const [clasesEncontradas, setClasesEncontradas] = useState([]);
-    const [editandoSerie, setEditandoSerie] = useState(null);
-    const alumnosActivos = useMemo(() => (alumnos || []).filter(a => a.estado === 'activo'), [alumnos]);
 
-    useEffect(() => {
-        if (!isOpen) {
-            setFiltroAlumnoId("");
-            setFiltroDia("");
-            setFiltroHora("");
-            setClasesEncontradas([]);
-            setEditandoSerie(null);
-        }
-    }, [isOpen]);
-
-    const buscarClases = () => {
-        const clasesFiltradas = clases.filter(c => {
-            const cumpleAlumno = !filtroAlumnoId || (c.alumnoIds || []).includes(filtroAlumnoId);
-            const d = new Date(`${c.fecha}T00:00:00`);
-            const diaClase = DIAS_SEMANA_NOMBRES[d.getDay() === 0 ? 6 : d.getDay() - 1];
-            const cumpleDia = !filtroDia || diaClase === filtroDia;
-            const cumpleHora = !filtroHora || c.hora === filtroHora;
-            const noPasado = new Date(c.fecha) >= new Date();
-            return cumpleAlumno && cumpleDia && cumpleHora && noPasado;
-        }).sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
-        setClasesEncontradas(clasesFiltradas);
-        setEditandoSerie({
-            dia: filtroDia || DIAS_SEMANA_NOMBRES[new Date(clasesFiltradas[0]?.fecha || new Date()).getDay() === 0 ? 6 : new Date(clasesFiltradas[0]?.fecha || new Date()).getDay() - 1],
-            hora: filtroHora || clasesFiltradas[0]?.hora,
-            cancha: clasesFiltradas[0]?.cancha || '',
-            precio: clasesFiltradas[0]?.precio || 0,
-        });
-    };
-
-    const handleUpdateSerie = () => {
-        if (!editandoSerie) return;
-        const updates = clasesEncontradas.map(c => {
-            // Asegurarse de que solo se actualicen los campos que se han editado
-            return {
-                id: c.id,
-                ...editandoSerie,
-                alumnoIds: c.alumnoIds,
-                tipo: c.tipo,
-                fecha: c.fecha
-            };
-        });
-        onUpdateSerie(updates);
-    };
-
-    const handleDeleteSerie = () => {
-        if (window.confirm("¿Estás seguro de que quieres eliminar TODAS las clases de esta serie?")) {
-            const ids = clasesEncontradas.map(c => c.id);
-            onDeleteSerie(ids);
-        }
-    };
-    
-    return (
-        <Modal isOpen={isOpen} title="Gestión de Clases Recurrentes" onCancel={onClose} confirmText="Cerrar" onConfirm={onClose} size="lg">
-            <div className="space-y-6 max-h-[80vh] overflow-y-auto p-4 -mx-4">
-                {/* Panel de Filtros y Búsqueda */}
-                <div className="p-4 border rounded-xl bg-slate-50 space-y-4">
-                    <h4 className="font-semibold text-slate-800">1. Buscar Serie de Clases</h4>
-                    <div>
-                        <label className="text-sm text-slate-600">Alumno</label>
-                        <select value={filtroAlumnoId} onChange={e => setFiltroAlumnoId(e.target.value)} className="w-full border rounded-lg px-3 py-2">
-                            <option value="">Todos los alumnos...</option>
-                            {alumnosActivos.map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
-                        </select>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                        <div>
-                            <label className="text-sm text-slate-600">Día</label>
-                            <select value={filtroDia} onChange={e => setFiltroDia(e.target.value)} className="w-full border rounded-lg px-3 py-2">
-                                <option value="">Todos los días...</option>
-                                {DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-sm text-slate-600">Hora</label>
-                            <select value={filtroHora} onChange={e => setFiltroHora(e.target.value)} className="w-full border rounded-lg px-3 py-2">
-                                <option value="">Todas las horas...</option>
-                                {HORAS.map(h => <option key={h}>{h}</option>)}
-                            </select>
-                        </div>
-                        <button onClick={buscarClases} className="w-full h-10 self-end px-4 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white font-semibold">Buscar</button>
-                    </div>
-                    {clasesEncontradas.length > 0 && (
-                        <p className="text-sm text-slate-600 mt-2">
-                            Se encontraron <span className="font-bold">{clasesEncontradas.length}</span> clases a partir de hoy.
-                        </p>
-                    )}
-                </div>
-
-                {/* Panel de Resultados y Acciones */}
-                {clasesEncontradas.length > 0 && (
-                    <div className="p-4 border rounded-xl bg-slate-50 space-y-4">
-                        <h4 className="font-semibold text-slate-800">2. Editar o Eliminar la Serie</h4>
-                        {/* Formulario de Edición */}
-                        <div className="p-3 border rounded-lg bg-white space-y-3">
-                            <h5 className="font-semibold text-sm">Cambiar datos de toda la serie</h5>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-xs text-slate-600">Día</label>
-                                    <select value={editandoSerie?.dia || filtroDia} onChange={e => setEditandoSerie(s => ({...s, dia: e.target.value}))} className="w-full border rounded-lg px-2 py-1 text-sm">
-                                        {DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="text-xs text-slate-600">Hora</label>
-                                    <select value={editandoSerie?.hora || filtroHora} onChange={e => setEditandoSerie(s => ({...s, hora: e.target.value}))} className="w-full border rounded-lg px-2 py-1 text-sm">
-                                        {HORAS.map(h => <option key={h}>{h}</option>)}
-                                    </select>
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="text-xs text-slate-600">Ubicación / Cancha</label>
-                                    <input type="text" value={editandoSerie?.cancha || clasesEncontradas[0]?.cancha || ""} onChange={e => setEditandoSerie(s => ({...s, cancha: e.target.value}))} className="w-full border rounded-lg px-2 py-1 text-sm" />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="text-xs text-slate-600">Precio</label>
-                                    <input type="number" value={editandoSerie?.precio || clasesEncontradas[0]?.precio || 0} onChange={e => setEditandoSerie(s => ({...s, precio: e.target.value}))} className="w-full border rounded-lg px-2 py-1 text-sm" />
-                                </div>
-                            </div>
-                            <button onClick={handleUpdateSerie} className="w-full px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold text-sm">Actualizar Serie</button>
-                        </div>
-                        
-                        {/* Botón de Eliminación */}
-                        <button onClick={handleDeleteSerie} className="w-full px-4 py-2 rounded-lg bg-red-600 text-white font-semibold text-sm">Eliminar TODA la Serie</button>
-                        
-                        {/* Vista previa de las clases */}
-                        <div className="space-y-2 mt-4 max-h-48 overflow-y-auto pr-2">
-                            <h5 className="text-sm font-semibold text-slate-800">Clases de la serie:</h5>
-                            {clasesEncontradas.map(c => (
-                                <div key={c.id} className="p-2 text-xs border rounded-lg bg-white">
-                                    {formatDate(c.fecha, 'dd/mm/yyyy')} - {c.hora} ({getNombreCompleto(alumnos.find(a => a.id === c.alumnoIds[0]))})
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </div>
-        </Modal>
-    );
-}
-function GestionAlumnoRecurrenteModal({ isOpen, onClose, alumno, onCreateSerie, onDeleteSerie, alumnos, clases }) {
-    const [nuevaSerie, setNuevaSerie] = useState({ 
-        dia: "Lunes", 
-        hora: "08:00", 
-        tipo: "Individual", 
-        precio: 0,
-        coAlumnoIds: []
+function AgendarProximaClaseModal({ isOpen, onClose, onSchedule, claseBase, alumnos }) {
+    const nextWeekDate = addDays(new Date(claseBase?.fecha), 7);
+    const [form, setForm] = useState({
+        fecha: formatDate(nextWeekDate),
+        hora: claseBase?.hora || "",
+        precio: claseBase?.precio || 0,
+        tipo: claseBase?.tipo || "Individual",
+        alumnoIds: claseBase?.alumnoIds || []
     });
 
-    const [selectedDays, setSelectedDays] = useState([]); // selección múltiple de días
-    const [meses, setMeses] = useState(1);                // duración en meses
-    const [desde, setDesde] = useState(() => {
-        const d = new Date();
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`; // YYYY-MM-DD
-    });
-
-    const [editando, setEditando] = useState(null);
-
-    function toggleDay(d) {
-        setSelectedDays(prev =>
-            prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]
-        );
-    }
-    
-    function addMonthsISO(dateStr, months) {
-        try {
-            const [Y, M, D] = dateStr.split('-').map(Number);
-            const d = new Date(Y, M - 1, D);
-            d.setMonth(d.getMonth() + Number(months || 0));
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${y}-${m}-${day}`;
-        } catch (e) {
-            return dateStr;
-        }
-    }
-
-    const clasesDelAlumno = useMemo(() => {
-        if (!alumno || !clases) return [];
-        return clases.filter(c => (c.alumnoIds || []).includes(alumno.id));
-    }, [alumno, clases]);
-
-    const seriesRecurrentesConPreview = useMemo(() => {
-        if (!alumno || !alumno.clasesRecurrentes) return [];
-        return alumno.clasesRecurrentes.map(serie => {
-            const d = new Date();
-            const targetDayIndex = DIAS_SEMANA_NOMBRES.indexOf(serie.dia);
-            const currentDayIndex = d.getDay();
-            let dayDifference = targetDayIndex - currentDayIndex;
-            if (dayDifference <= 0) {
-                dayDifference += 7;
-            }
-            const fechaPreview = formatDate(addDays(d, dayDifference), 'dd/mm/yyyy');
-            return {
-                ...serie,
-                fechaPreview
-            };
-        });
-    }, [alumno]);
+    const alumnoMap = useMemo(() => new Map((alumnos || []).map(a => [a.id, a])), [alumnos]);
 
     useEffect(() => {
-        if (alumno) {
-            const precioInicial = (alumno.precios || {})[nuevaSerie.tipo.toLowerCase()] || 0;
-            setNuevaSerie(prev => ({ ...prev, precio: precioInicial }));
-        }
-    }, [alumno, nuevaSerie.tipo]);
-
-    if (!isOpen || !alumno) return null;
-
-    const handleCreateSerie = () => {
-        if (!nuevaSerie.dia || !nuevaSerie.hora || !nuevaSerie.tipo) {
-            alert("Completa todos los campos para agendar la clase recurrente.");
-            return;
-        }
-        if (nuevaSerie.precio <= 0) {
-            if (!window.confirm("El precio es 0. ¿Quieres continuar?")) {
-                return;
-            }
-        }
-        {
-            const dias = (selectedDays && selectedDays.length > 0) ? selectedDays : [nuevaSerie.dia];
-            const hasta = addMonthsISO(desde, meses);
-            dias.forEach(dia => {
-                const serie = { 
-                    ...nuevaSerie, 
-                    dia, 
-                    desde, 
-                    hasta, 
-                    meses,
-                    alumnoIds: [alumno.id, ...nuevaSerie.coAlumnoIds]
-                };
-                onCreateSerie(alumno.id, serie);
+        if (claseBase) {
+            const nextWeekDate = addDays(new Date(claseBase.fecha), 7);
+            setForm({
+                fecha: formatDate(nextWeekDate),
+                hora: claseBase.hora || "",
+                precio: claseBase.precio || 0,
+                tipo: claseBase.tipo || "Individual",
+                alumnoIds: claseBase.alumnoIds || []
             });
         }
-        setNuevaSerie({ 
-            dia: "Lunes", 
-            hora: "08:00", 
-            tipo: "Individual", 
-            precio: 0,
-            coAlumnoIds: [] 
-        });
-        setSelectedDays([]);
-        setMeses(1);
-        setDesde(() => {
-            const d = new Date(); const yyyy = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
-        });
+    }, [claseBase]);
+
+    const handleFormChange = (e) => {
+        const { name, value } = e.target;
+        setForm(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleDeleteSerie = (serie) => {
-        if (window.confirm(`¿Estás seguro de que quieres eliminar la clase recurrente del ${serie.dia} a las ${serie.hora}?`)) {
-            onDeleteSerie(alumno.id, serie);
-        }
+    const handleAlumnoChange = (index, newId) => {
+        const newAlumnoIds = [...form.alumnoIds];
+        newAlumnoIds[index] = newId;
+        setForm(prev => ({ ...prev, alumnoIds: newAlumnoIds }));
     };
 
-    const handleUpdateSerie = () => {
-        if (!editando || !editando.dia || !editando.hora) {
-            alert("El día y la hora son obligatorios.");
+    const handleSchedule = () => {
+        if (form.alumnoIds.length === 0 || !form.fecha || !form.hora) {
+            alert("Por favor, completa la fecha, hora y al menos un alumno.");
             return;
         }
-        onDeleteSerie(alumno.id, editando);
-        onCreateSerie(alumno.id, editando);
-        setEditando(null);
+        onSchedule(form);
+        onClose();
     };
 
-    const handleCancelEdit = () => {
-        setEditando(null);
-    };
+    const getNombreCompleto = (a) => a ? `${a.apellido || ''} ${a.nombre || ''}`.trim() : 'Alumno eliminado';
+    const alumnosActivos = (alumnos || []).filter(a => a.estado === 'activo');
+
+    if (!isOpen || !claseBase) return null;
 
     return (
-        <Modal isOpen={isOpen} title={`Clases recurrentes de ${getNombreCompleto(alumno)}`} onCancel={onClose} confirmText="Cerrar" onConfirm={onClose} size="3xl">
-            <div className="space-y-6">
-                <div className="p-4 border rounded-xl bg-slate-50 space-y-4">
-                    <h4 className="font-semibold text-[#34745B]">Agendar nueva clase recurrente</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div>
-                            <label className="text-sm text-slate-600">Día</label>
-                            <select value={nuevaSerie.dia} onChange={e => setNuevaSerie(s => ({...s, dia: e.target.value}))} className="w-full border rounded-lg px-3 py-2">
-                                {DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-sm text-slate-600">Hora</label>
-                            <select value={nuevaSerie.hora} onChange={e => setNuevaSerie(s => ({...s, hora: e.target.value}))} className="w-full border rounded-lg px-3 py-2">
-                                {HORAS.map(h => <option key={h}>{h}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-sm text-slate-600">Tipo de Clase</label>
-                            <select value={nuevaSerie.tipo} onChange={e => setNuevaSerie(s => ({...s, tipo: e.target.value, coAlumnoIds: []}))} className="w-full border rounded-lg px-3 py-2">
-                                {TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-sm text-slate-600">Precio</label>
-                            <input type="number" value={nuevaSerie.precio} onChange={e => setNuevaSerie(s => ({...s, precio: parseFloat(e.target.value) || 0}))} className="w-full border rounded-lg px-3 py-2" />
-                        </div>
+        <Modal 
+            isOpen={isOpen} 
+            title="Agendar próxima clase" 
+            onCancel={onClose} 
+            onConfirm={handleSchedule} 
+            confirmText="Agendar Clase"
+            size="2xl"
+        >
+            <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                    Se acaba de registrar el pago para la clase de hoy. ¿Deseas agendar la próxima?
+                </p>
+                <div className="grid md:grid-cols-2 gap-4 p-4 border rounded-xl bg-slate-50">
+                    <div>
+                        <label className="text-sm text-slate-600">Fecha</label>
+                        <input 
+                            type="date" 
+                            name="fecha" 
+                            value={form.fecha} 
+                            onChange={handleFormChange} 
+                            className="w-full border rounded-lg px-3 py-2 mt-1" 
+                        />
                     </div>
-
-                    {TIPOS_CLASE_MAP[nuevaSerie.tipo] > 1 && (
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {Array.from({ length: TIPOS_CLASE_MAP[nuevaSerie.tipo] - 1 }).map((_, index) => (
-                                <div key={index}>
-                                    <label className="text-sm text-slate-600">Co-alumno {index + 1}</label>
-                                    <select 
-                                        value={nuevaSerie.coAlumnoIds[index] || ""} 
-                                        onChange={e => {
-                                            const newCoAlumnos = [...nuevaSerie.coAlumnoIds];
-                                            newCoAlumnos[index] = e.target.value;
-                                            setNuevaSerie(s => ({...s, coAlumnoIds: newCoAlumnos}));
-                                        }} 
-                                        className="w-full border rounded-lg px-3 py-2"
-                                    >
-                                        <option value="">Seleccionar...</option>
-                                        {alumnos.filter(a => a.id !== alumno.id && !nuevaSerie.coAlumnoIds.includes(a.id)).map(a => 
-                                            <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>
-                                        )}
-                                    </select>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    
-                    <div className="grid md:grid-cols-3 gap-4 mt-2">
-                      <div>
-                        <label className="block text-xs text-slate-600 mb-1">Días (múltiples)</label>
-                        <div className="flex flex-wrap gap-2">
-                          {(typeof DIAS_SEMANA_NOMBRES !== 'undefined' ? DIAS_SEMANA_NOMBRES : ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']).map(d => (
-                            <button type="button" key={d}
-                              onClick={() => toggleDay(d)}
-                              className={`px-2 py-1 rounded-full border text-xs ${selectedDays.includes(d) ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-white hover:bg-slate-50'}`}>
-                              {d}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-[11px] text-slate-500 mt-1">Si no seleccionás, se usará el día elegido arriba.</p>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-slate-600 mb-1">Desde</label>
-                        <input type="date" value={desde} onChange={e=>setDesde(e.target.value)} className="border rounded-lg px-2 py-1 text-sm w-full" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-slate-600 mb-1">Duración (meses)</label>
-                        <input type="number" min="1" max="12" value={meses} onChange={e=>setMeses(parseInt(e.target.value||'1',10))} className="border rounded-lg px-2 py-1 text-sm w-full" />
-                      </div>
+                    <div>
+                        <label className="text-sm text-slate-600">Hora</label>
+                        <input 
+                            type="time" 
+                            name="hora" 
+                            value={form.hora} 
+                            onChange={handleFormChange} 
+                            className="w-full border rounded-lg px-3 py-2 mt-1" 
+                        />
                     </div>
-                    <button onClick={handleCreateSerie} className="w-full px-4 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white font-semibold">
-                        Agendar Serie Recurrente
-                    </button>
+                    <div>
+                        <label className="text-sm text-slate-600">Precio</label>
+                        <input 
+                            type="number" 
+                            name="precio" 
+                            value={form.precio} 
+                            onChange={handleFormChange} 
+                            className="w-full border rounded-lg px-3 py-2 mt-1" 
+                        />
+                    </div>
+                    <div>
+                        <label className="text-sm text-slate-600">Tipo de Clase</label>
+                        <select 
+                            name="tipo" 
+                            value={form.tipo} 
+                            onChange={handleFormChange} 
+                            className="w-full border rounded-lg px-3 py-2 mt-1"
+                        >
+                            {TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}
+                        </select>
+                    </div>
                 </div>
 
-                <div className="p-4 border rounded-xl bg-white space-y-4">
-                    <h4 className="font-semibold text-slate-800">Series agendadas</h4>
-                    <ul className="space-y-3">
-                        {seriesRecurrentesConPreview.length === 0 ? (
-                            <p className="text-sm text-slate-500">No hay clases recurrentes agendadas para este alumno.</p>
-                        ) : (
-                            seriesRecurrentesConPreview.map((serie, index) => (
-                                <li key={index} className="p-3 border rounded-lg bg-slate-50 flex justify-between items-center">
-                                    <div>
-                                        <p className="font-bold">{serie.dia}, {serie.hora}</p>
-                                        <p className="text-sm text-slate-600">{TIPOS_CLASE_NOMBRES[serie.tipo]} - ${serie.precio}</p>
-                                        <p className="text-xs text-slate-400">Próxima clase: {serie.fechaPreview}</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => setEditando(serie)} className="px-3 py-1 text-sm rounded-lg border text-blue-600 hover:bg-blue-50">Editar</button>
-                                        <button onClick={() => handleDeleteSerie(serie)} className="px-3 py-1 text-sm rounded-lg border text-red-600 hover:bg-red-50">Eliminar</button>
-                                    </div>
-                                </li>
-                            ))
-                        )}
-                    </ul>
-                </div>
-
-                <Modal isOpen={!!editando} title={`Editar serie recurrente`} onCancel={handleCancelEdit} onConfirm={handleUpdateSerie} confirmText="Guardar Cambios" size="sm">
-                    <div className="grid gap-3">
-                        <div>
-                            <label className="text-sm text-slate-600">Día</label>
-                            <select value={editando?.dia} onChange={e => setEditando(s => ({...s, dia: e.target.value}))} className="w-full border rounded-lg px-3 py-2">
-                                {DIAS_SEMANA_NOMBRES.map(d => <option key={d}>{d}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-sm text-slate-600">Hora</label>
-                            <select value={editando?.hora} onChange={e => setEditando(s => ({...s, hora: e.target.value}))} className="w-full border rounded-lg px-3 py-2">
-                                {HORAS.map(h => <option key={h}>{h}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-sm text-slate-600">Tipo de Clase</label>
-                            <select value={editando?.tipo} onChange={e => setEditando(s => ({...s, tipo: e.target.value}))} className="w-full border rounded-lg px-3 py-2">
-                                {TIPOS_CLASE.map(t => <option key={t}>{t}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-sm text-slate-600">Precio</label>
-                            <input type="number" value={editando?.precio} onChange={e => setEditando(s => ({...s, precio: parseFloat(e.target.value) || 0}))} className="w-full border rounded-lg px-3 py-2" />
-                        </div>
+                <div className="p-4 border rounded-xl bg-slate-50">
+                    <label className="text-sm text-slate-600">Alumnos</label>
+                    <div className="grid gap-2 mt-1">
+                        {(form.alumnoIds || []).map((alumnoId, index) => (
+                            <div key={index}>
+                                <select 
+                                    value={alumnoId} 
+                                    onChange={e => handleAlumnoChange(index, e.target.value)} 
+                                    className="w-full border rounded-lg px-3 py-2"
+                                >
+                                    <option value="">Seleccionar...</option>
+                                    {alumnosActivos.map(a => (
+                                        <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        ))}
                     </div>
-                </Modal>
+                </div>
             </div>
         </Modal>
     );
 }
+
     // ------------------------------ APP WRAPPER WITH AUTH ------------------------------
     function AppGPadel() {
         const [user, setUser] = useState(null);
