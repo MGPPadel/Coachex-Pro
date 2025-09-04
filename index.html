@@ -114,9 +114,39 @@
     const DEPORTES = ["Pádel", "Tenis"];
     const ESTADOS_ALUMNO = [{value: "activo", label: "Activo"}, {value: "espera", label: "Lista de espera"}];
     const ESTADOS_CLASE = ["Programada", "Realizada", "Cancelada", "Ausente"];
-    const TIPOS_CLASE_MAP = { Individual: 1, Dupla: 2, Trio: 3, Cuarteto: 4, Escuelita: 1 };
+    const TIPOS_CLASE_MAP = { "Clase 1 persona": 1, "Clase 2 personas": 2, "Clase 3 personas": 3, "Clase 4 personas": 4, Escuelita: 1 };
     const TIPOS_CLASE = Object.keys(TIPOS_CLASE_MAP);
-    const TIPOS_CLASE_NOMBRES = { Individual: "Individual", Dupla: "Clase para 2", Trio: "Clase para 3", Cuarteto: "Clase para 4", Escuelita: "Escuelita" };
+
+// Mapeo consistente de 'tipo' -> clave de precios del perfil
+const PRECIO_KEY_POR_TIPO = {
+  "Clase 1 persona": "individual",
+  "Clase 2 personas": "dupla",
+  "Clase 3 personas": "trio",
+  "Clase 4 personas": "cuarteto",
+  "Escuelita": "escuelita"
+};
+const getPrecioSugerido = (tipo, perfil) => {
+  const key = PRECIO_KEY_POR_TIPO[tipo] || "individual";
+  const tabla = (perfil && perfil.precios) ? perfil.precios : {};
+
+const computePrecioClase = (tipo, alumnoIds, perfil, alumnoMap) => {
+  const perAlumno = parseFloat(getPrecioSugerido(tipo, perfil) || 0);
+  const ids = (alumnoIds || []).filter(Boolean);
+  // Si no hay IDs todavía, usamos la cantidad del tipo como base
+  const fallbackCount = TIPOS_CLASE_MAP[tipo] || 1;
+  // Contar cuántos NO son mensuales
+  const noMensuales = ids.filter(id => {
+    const a = alumnoMap.get(id);
+    return a ? (a.plan !== 'mensual') : true;
+  }).length;
+  const count = ids.length > 0 ? (noMensuales || ids.length) : fallbackCount;
+  return (perAlumno * count).toString();
+};
+
+  return tabla[key] ?? "";
+};
+
+    const TIPOS_CLASE_NOMBRES = { "Clase 1 persona": "Clase 1 persona", "Clase 2 personas": "Clase 2 personas", "Clase 3 personas": "Clase 3 personas", "Clase 4 personas": "Clase 4 personas", Escuelita: "Escuelita" };
     const METODOS_PAGO = ["Efectivo", "Transferencia", "Mixto", "Mensual","Pendiente"];
     const CATEGORIAS_GASTO = ["Alquiler", "Equipamiento", "Servicios", "Varios"];
     const PLANES_PAGO = [{value: "porClase", label: "Por Clase"}, {value: "mensual", label: "Mensual"}];
@@ -174,6 +204,21 @@
       return `$ ${formatted}`;
     };
 
+// --- Normalizador robusto de horarioLaboral ---
+function toArrayHorarioLaboral(hl) {
+  if (!hl) return [];
+  if (Array.isArray(hl)) return hl;
+  if (typeof hl === 'string') {
+    try { const parsed = JSON.parse(hl); return Array.isArray(parsed) ? parsed : []; } catch (e) { return []; }
+  }
+  if (typeof hl === 'object') {
+    // Convierte objetos estilo mapa a un array de valores confiable
+    try { return Object.values(hl); } catch (e) { return []; }
+  }
+  return [];
+}
+
+
     // ------------------------------ UI Básicos ------------------------------
     function Card({ title, right, children }) { return (<section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4"><div className="flex items-center justify-between mb-3"><h3 className="text-base font-semibold text-slate-800">{title}</h3>{right}</div>{children}</section>); }
     function Toast({ msg, onClose }) { useEffect(() => { if (!msg) return; const t = setTimeout(onClose, 2500); return () => clearTimeout(t); }, [msg, onClose]); if (!msg) return null; return (<div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-xl z-50">{msg}</div>); }
@@ -201,9 +246,9 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
     <header className="w-full bg-slate-900 text-white">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="logo flaticon.png" alt="Logo Circular" className="w-10 h-10 rounded-full"/>
+          <img src={logoCircularBase64} alt="Logo Circular" className="w-10 h-10 rounded-full"/>
           <div>
-            <img src="logo_coachex N.png" alt="Coachex-Pro Logo" style={{ height: '24px' }}/>
+            <img src={logoCoachexBase64} alt="Coachex-Pro Logo" style={{ height: '24px' }}/>
             <p className="text-xs opacity-80 -mt-0.5">Gestión de Profesores</p>
           </div>
         </div>
@@ -260,15 +305,21 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
     }
     
     function Dashboard({ perfil, clases, pagos, gastos, alumnos, clubes, clubActivoId, goToNewClass, goToEditClass }) {
-      console.log("DATOS RECIBIDOS POR EL DASHBOARD:", { clubId: clubActivoId, nombrePerfil: perfil.nombre });
-        const [currentDate, setCurrentDate] = useState(new Date());
+      useEffect(() => {
+  console.log("DATOS RECIBIDOS POR EL DASHBOARD:", { clubId: clubActivoId, nombrePerfil: perfil?.nombre });
+}, [clubActivoId, perfil?.nombre]);
+const [currentDate, setCurrentDate] = useState(new Date());
         const [mostrarSoloHorarioLaboral, setMostrarSoloHorarioLaboral] = useState(false);
         const weekStartDate = getWeekStartDate(currentDate);
         const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
         
         const alumnoMap = useMemo(() => new Map((alumnos || []).map(a => [a.id, getNombreCompleto(a)])), [alumnos]);
         
-        const hoy = formatDate(new Date());
+        
+        const alumnoObjMap = useMemo(() => new Map((alumnos || []).map(a => [a.id, a])), [alumnos]);
+        const [contactosExpandId, setContactosExpandId] = useState(null);
+        const [contactosMsg, setContactosMsg] = useState("");
+const hoy = formatDate(new Date());
         const semanaInicio = formatDate(getWeekStartDate(new Date()));
         const manana = formatDate(addDays(new Date(), 1));
 
@@ -285,6 +336,45 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
                 .map(c => ({...c, nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')}))
                 .sort((a, b) => a.hora.localeCompare(b.hora));
         }, [clases, manana, alumnoMap]);
+        // --- Horario disponible para mañana ---
+        const getDayIndex = (d) => (d.getDay() === 0 ? 6 : d.getDay() - 1); // 0..6 (Lun..Dom)
+        const getNombreDiaFromYMD = (yyyy_mm_dd) => {
+          const d = new Date(`${yyyy_mm_dd}T00:00:00`);
+          return DIAS_SEMANA_NOMBRES[getDayIndex(d)];
+        };
+        const generateSlots = (desde, hasta, stepMin = 60) => {
+          const [h1, m1] = (desde || '08:00').split(':').map(Number);
+          const [h2, m2] = (hasta || '20:00').split(':').map(Number);
+          const start = h1 * 60 + m1;
+          const end = h2 * 60 + m2;
+          const res = [];
+          for (let t = start; t + stepMin <= end; t += stepMin) {
+            const hh = String(Math.floor(t / 60)).padStart(2, '0');
+            const mm = String(t % 60).padStart(2, '0');
+            res.push(`${hh}:${mm}`);
+          }
+          return res;
+        };
+        const bloquesManana = useMemo(() => {
+          const nombreDia = getNombreDiaFromYMD(manana);
+          const data = clubActivo ? (clubActivo.horarioLaboral || {}) : (perfil.horarioLaboral || []);
+          if (clubActivo && data && Array.isArray(data.bloques)) {
+            return data.bloques.filter(b => b.dia === nombreDia && (b.activo ?? true)).map(b => ({ desde: b.desde, hasta: b.hasta }));
+          }
+          const arr = Array.isArray(data) ? data : [];
+          return arr.filter(b => b.dia === nombreDia && (b.activo ?? true)).map(b => ({ desde: b.desde, hasta: b.hasta }));
+        }, [clubActivo, perfil, manana]);
+        const horarioDisponibleManana = useMemo(() => {
+          const ocupadas = new Set((clasesManana || []).map(c => c.hora));
+          const slots = [];
+          bloquesManana.forEach(b => {
+            generateSlots(b.desde, b.hasta, 60).forEach(h => {
+              if (!ocupadas.has(h)) slots.push(h);
+            });
+          });
+          return slots.sort((a,b)=>a.localeCompare(b));
+        }, [bloquesManana, clasesManana]);
+
 
         const resumenClasesHoy = useMemo(() => {
             if (!clasesHoy || clasesHoy.length === 0) return [];
@@ -366,10 +456,21 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
                             </div>
                         )}
                     </div>
-                    <div className="bg-slate-100 border border-slate-200 p-4 rounded-xl">
-                        <p className="text-sm text-slate-600">Pagos Mensuales Pendientes</p>
-                        <p className="text-2xl font-bold text-slate-800">{pagosPendientes}</p>
-                    </div>
+                    
+<div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+  <p className="text-sm text-slate-600">Horario disponible para mañana</p>
+  <div className="mt-1 text-xs text-slate-500">{horarioDisponibleManana.length} libres</div>
+  {horarioDisponibleManana.length === 0 ? (
+    <p className="text-sm text-slate-500 mt-2">No hay horas libres dentro del horario laboral.</p>
+  ) : (
+    <div className="mt-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+      {horarioDisponibleManana.map(h => (
+        <span key={h} className="inline-block px-2 py-1 rounded-lg border text-sm text-slate-700 bg-white">{h}</span>
+      ))}
+    </div>
+  )}
+</div>
+
                     <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
                         <p className="text-sm text-green-800">Balance de la Semana</p>
                         <p className={`text-2xl font-bold ${balanceSemana >= 0 ? 'text-[#34745B]' : 'text-red-900'}`}>{formatCurrency(balanceSemana)}</p>
@@ -382,35 +483,86 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
                             <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
                         ) : (
                             <ul className="space-y-2">
-                                {clasesHoy.map(c => (
-                                    <li key={c.id} className="p-2 border-b flex justify-between items-center">
-                                        <div>
-                                            <p className="font-semibold text-slate-700">{c.hora} - {c.nombresAlumnos}</p>
-                                            <p className="text-xs text-slate-500">{c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}</p>
-                                        </div>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs ${c.estado === 'Programada' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-800'}`}>{c.estado}</span>
-                                    </li>
-                                ))}
-                            </ul>
+    {clasesHoy.map(c => (
+        <li key={c.id} className="p-2 border-b flex justify-between items-center">
+            <div>
+                <p className="font-semibold text-slate-700">{c.hora} - {c.nombresAlumnos}</p>
+                <p className="text-xs text-slate-500">{c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}</p>
+            </div>
+            {c.estado !== 'Programada' && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                    c.estado === 'Realizada' ? 'bg-green-100 text-green-800' :
+                    c.estado === 'Ausente' ? 'bg-orange-100 text-orange-800' :
+                    c.estado === 'Cancelada' ? 'bg-red-100 text-red-800' : ''
+                }`}>
+                    {c.estado}
+                </span>
+            )}
+        </li>
+    ))}
+</ul>
                         )}
                     </Card>
-                    <Card title={<span className="text-[#34745B]">Agenda de Mañana</span>}>
+                  
+                    <Card title={<span className="text-[#34745B]">Agenda de Mañana · Contactos</span>}>
                         {clasesManana.length === 0 ? (
                             <p className="text-sm text-slate-500">No hay clases programadas para mañana.</p>
                         ) : (
                             <ul className="space-y-2">
                                 {clasesManana.map(c => (
-                                    <li key={c.id} className="p-2 border-b flex justify-between items-center">
-                                        <div>
-                                            <p className="font-semibold text-slate-700">{c.hora} - {c.nombresAlumnos}</p>
-                                            <p className="text-xs text-slate-500">{c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}</p>
+                                    <li key={c.id} className="p-2 border rounded-lg">
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <p className="font-semibold text-slate-700">{c.hora} - {c.nombresAlumnos}</p>
+                                                <p className="text-xs text-slate-500">{c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-800`}>{c.estado}</span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => { const canchaTxt = c.cancha ? ` en ${c.cancha}` : ""; const def=`Hola! Te recuerdo tu clase ${c.tipo}${canchaTxt} el ${c.fecha} a las ${c.hora}.`; setContactosMsg(def); setContactosExpandId(contactosExpandId === c.id ? null : c.id); }}
+                                                  className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50"
+                                                >
+                                                  Contactos
+                                                </button>
+                                            </div>
                                         </div>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-800`}>{c.estado}</span>
+                                        {contactosExpandId === c.id && (
+                                          <div className="mt-3 p-3 bg-slate-50 rounded-lg border">
+                                            <div className="mb-3"><label className="text-xs text-slate-500 block mb-1">Mensaje (editable)</label><textarea value={contactosMsg} onChange={(e)=>setContactosMsg(e.target.value)} className="w-full border rounded-lg px-2 py-1 text-sm" rows="2"/></div><table className="w-full text-sm">
+                                              <thead>
+                                                <tr className="text-slate-500">
+                                                  <th className="text-left px-2 py-1">Alumno</th>
+                                                  <th className="text-left px-2 py-1">Teléfono</th>
+                                                  <th className="text-left px-2 py-1">Acción</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {(c.alumnoIds || []).filter(Boolean).map(id => {
+                                                  const a = alumnoObjMap.get(id);
+                                                  if (!a) return null;
+                                                  const nombre = getNombreCompleto(a);
+                                                  const telRaw = (a.telefono || a.contactoPadre || "").toString();
+                                                  const digits = telRaw.replace(/\D/g, "");
+                                                  const canchaTxt = c.cancha ? ` en ${c.cancha}` : ""; const base = `Hola! Te recuerdo tu clase ${c.tipo}${canchaTxt} el ${c.fecha} a las ${c.hora}.`; const msg = contactosExpandId === c.id && contactosMsg ? contactosMsg : base; const wa = `https://api.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(msg)}`;
+                                                  return (
+                                                    <tr key={id} className="border-t">
+                                                      <td className="px-2 py-1">{nombre}</td>
+                                                      <td className="px-2 py-1">{telRaw || '-'}</td>
+                                                      <td className="px-2 py-1"><a className="text-emerald-700 underline" href={wa} target="_blank" rel="noopener">WhatsApp</a></td>
+                                                    </tr>
+                                                  );
+                                                })}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        )}
                                     </li>
                                 ))}
                             </ul>
                         )}
                     </Card>
+
                 </div>
 
                 <Card 
@@ -871,7 +1023,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
 function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar, nuevoAlumnoId, setNuevoAlumnoId }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: perfil.precios.individual, notas: "", cancha: "" };
+  const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: (parseFloat((perfil.precios || {}).individual || 0)).toString(), notas: "", cancha: "" };
   const [form, setForm] = useState(emptyForm);
   const [formStep, setFormStep] = useState(1);
   const [alumnoSearchQuery, setAlumnoSearchQuery] = useState("");
@@ -958,7 +1110,7 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
       if (name === "tipo") {
         const primerAlumno = alumnoMap.get(prev.alumnoIds[0]);
         const esPlanMensual = primerAlumno?.plan === 'mensual';
-        newState.precio = (perfil.precios[val.toLowerCase()] || "");
+        newState.precio = getPrecioSugerido(val, perfil);
         const numAlumnos = TIPOS_CLASE_MAP[val] || 1;
         newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
       }
@@ -1051,9 +1203,7 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
       }
     } else {
       onCreate(finalForm);
-      if (shouldOpenPayModal) {
-          claseToPay = finalForm;
-      }
+      // Nota: NO abrimos modal aquí. claseCrud.create abrirá el pago con el ID real de la clase.
     }
 
     if (claseToPay) {
@@ -1155,16 +1305,47 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
             }
             return acc;
           }, {});
-          const diasLaborales = (perfil.horarioLaboral || []).filter(d => d.activo).map(d => d.dia);
-          const ClaseItem = ({ clase }) => (
-            <div
-              onClick={() => openEdit(clase)}
-              className="p-3 bg-white rounded-lg shadow-sm border border-slate-200 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
-            >
-              <p className="font-semibold text-slate-800">{clase.hora} - {clase.nombresAlumnos}</p>
-              <p className="text-xs text-slate-500 mt-1">{clase.tipo}{clase.cancha ? ` en ${clase.cancha}` : ''}</p>
+          const diasLaborales = toArrayHorarioLaboral(perfil?.horarioLaboral).filter(d => d.activo).map(d => d.dia);
+          const ClaseItem = ({ clase }) => {
+    // Calcular el estado del pago
+    const totalPagado = (clase.pagos || []).reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
+    const precioClase = parseFloat(clase.precio || 0);
+    const estadoPago = totalPagado >= precioClase ? 'Pagada' : 'Pendiente';
+
+    // Determinar los colores y texto de la etiqueta de estado de la clase
+    const estadoClaseBg = clase.estado === 'Realizada' ? 'bg-green-100 text-green-800' :
+                         clase.estado === 'Ausente' ? 'bg-orange-100 text-orange-800' :
+                         clase.estado === 'Cancelada' ? 'bg-red-100 text-red-800' : '';
+    
+    // Determinar los colores de la etiqueta de pago
+    const estadoPagoBg = estadoPago === 'Pagada' ? 'bg-green-100 text-green-800' :
+                         'bg-red-100 text-red-800';
+
+    return (
+        <div
+            onClick={() => openEdit(clase)}
+            className="p-3 bg-white rounded-lg shadow-sm border border-slate-200 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
+        >
+            <div className="flex justify-between items-center">
+                <p className="font-semibold text-slate-800">{clase.hora} - {clase.nombresAlumnos}</p>
+                <div className="flex gap-2">
+                    {clase.estado !== 'Programada' && (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoClaseBg}`}>
+                            {clase.estado}
+                        </span>
+                    )}
+                    {clase.estado === 'Realizada' && (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoPagoBg}`}>
+                            {estadoPago}
+                        </span>
+                    )}
+                </div>
             </div>
-          );
+            <p className="text-xs text-slate-500 mt-1">{clase.tipo}{clase.cancha ? ` en ${clase.cancha}` : ''}</p>
+        </div>
+    );
+};
+
           const DiaGroup = ({ fecha, clasesDelDia = [] }) => {
             const d = new Date(`${fecha}T00:00:00`);
             const diaNombre = DIAS_SEMANA_NOMBRES[d.getDay() === 0 ? 6 : d.getDay() - 1];
@@ -1186,15 +1367,17 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
             <div className="space-y-6">
               <div>
                 <h2 className="text-xl font-bold text-[#34745B] mb-2">Agenda de Hoy</h2>
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
-                  {clasesDeHoy.length > 0 ? (
-                    <div className="space-y-2">
-                      {clasesDeHoy.sort((a, b) => a.hora.localeCompare(b.hora)).map(c => <ClaseItem key={c.id} clase={c} />)}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
-                  )}
-                </div>
+               <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
+    {clasesDeHoy.length > 0 ? (
+        <div className="space-y-2">
+            {clasesDeHoy.sort((a, b) => a.hora.localeCompare(b.hora)).map(c => (
+                <ClaseItem key={c.id} clase={c} />
+            ))}
+        </div>
+    ) : (
+        <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
+    )}
+</div>
               </div>
               <div>
                 <div className="flex justify-between items-center mb-3">
@@ -2892,11 +3075,15 @@ function PlantillaModal({ isOpen, plantilla, onCancel, onSave }) {
         const [view, setView] = useState('login');
         const [loading, setLoading] = useState(false);
 
-        const handleAuthAction = async (e) => {
+        
+        // Evitar updates en componente desmontado
+        const mountedRef = React.useRef(true);
+        useEffect(() => () => { mountedRef.current = false; }, []);
+const handleAuthAction = async (e) => {
             e.preventDefault();
-            setLoading(true);
-            setError('');
-            setMessage('');
+            mountedRef.current && setLoading(true);
+            mountedRef.current && setError('');
+            mountedRef.current && setMessage('');
             try {
                 if (view === 'register') {
                     const userCredential = await auth.createUserWithEmailAndPassword(email, password);
@@ -2913,12 +3100,12 @@ function PlantillaModal({ isOpen, plantilla, onCancel, onSave }) {
 
         const handlePasswordReset = async (e) => {
             e.preventDefault();
-            setLoading(true);
-            setError('');
-            setMessage('');
+            mountedRef.current && setLoading(true);
+            mountedRef.current && setError('');
+            mountedRef.current && setMessage('');
             try {
                 await auth.sendPasswordResetEmail(email);
-                setMessage('Se envió un correo para restablecer tu contraseña.');
+                mountedRef.current && setMessage('Se envió un correo para restablecer tu contraseña.');
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -2931,7 +3118,7 @@ function PlantillaModal({ isOpen, plantilla, onCancel, onSave }) {
                 <div className="w-full max-w-sm mx-auto">
                     <div className="flex flex-col items-center mb-8"> {/* Aumentamos un poco el margen inferior */}
     <img 
-      src="coachexpro logos N.png" // <-- EL NOMBRE DE TU NUEVO ARCHIVO
+      src={logoCoachexBase64} // <-- EL NOMBRE DE TU NUEVO ARCHIVO
       alt="Coachex-Pro Logo" 
       className="w-64" // Ajusta el ancho aquí si es necesario
     />
@@ -3074,7 +3261,7 @@ function OnboardingClubSetup({ user, setHasClubs, onLogout }) {
       {/* Header */}
       <div className="pt-8 pb-6 text-center">
         <img
-          src="coachexpro_logo.png"
+          src={logoCoachexBase64}
           alt="Coachex-Pro Logo"
           className="h-10 mx-auto object-contain opacity-90"
           onError={(e)=>{ e.currentTarget.style.display='none'; }}
@@ -3518,7 +3705,7 @@ function MainApp({ user, onLogout }) {
 
     if (shouldPay && nuevaClaseId) {
         const claseParaPagar = { ...claseData, id: nuevaClaseId };
-        onPay(claseParaPagar);
+        setPayingClase(claseParaPagar);
     }
   },
   update: ({ id, ...data }) => {
@@ -3899,8 +4086,21 @@ function AgendarProximaClaseModal({ isOpen, onClose, onSchedule, claseBase, alum
         return <MainApp user={user} onLogout={() => auth.signOut()} />;
     }
     
-    ReactDOM.render(<AppGPadel />, document.getElementById('root'));
-  </script>
+    
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error, info) { console.error("Error en ErrorBoundary:", error, info); }
+  render() {
+    if (this.state.hasError) {
+      return <div className="p-6 text-center text-red-700">Ocurrió un error en la vista. Probá recargar o volver al inicio.</div>;
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.render(<ErrorBoundary><AppGPadel /></ErrorBoundary>, document.getElementById('root'));
+</script>
 
 </body>
 </html>
