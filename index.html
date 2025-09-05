@@ -171,21 +171,17 @@ const computePrecioClase = (tipo, alumnoIds, perfil, alumnoMap) => {
       return new Date(d.setDate(diff));
     };
     const addDays = (date, days) => {
-      const result = new Date(date);
-      result.setDate(result.getDate() + days);
-      return result;
-    };
+  const base = (date instanceof Date) ? date : new Date(date);
+  const y = base.getFullYear(), m = base.getMonth(), d = base.getDate();
+  return new Date(y, m, d + days, 0, 0, 0, 0);
+};
     const formatDate = (date, format = 'yyyy-mm-dd') => {
   if (!date) return '';
-  // Si la fecha ya es un objeto Date, usarlo directamente.
-  // Si es una cadena, asumir que ya está en formato YYYY-MM-DD y convertirla a un objeto Date.
-  const d = typeof date === 'string' ? new Date(`${date}T00:00:00`) : date;
-  
-  // Utiliza los métodos getUTC para asegurar que la fecha no se altere por la zona horaria local.
-  const year = d.getUTCFullYear();
-  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  
+  const isStr = (typeof date === 'string');
+  const d = isStr ? new Date(`${date}T00:00:00`) : date;
+  const year = isStr ? d.getUTCFullYear() : d.getFullYear();
+  const month = String((isStr ? d.getUTCMonth() : d.getMonth()) + 1).padStart(2, '0');
+  const day = String(isStr ? d.getUTCDate() : d.getDate()).padStart(2, '0');
   if (format === 'dd/mm') return `${day}/${month}`;
   if (format === 'dd/mm/yyyy') return `${day}/${month}/${year}`;
   return `${year}-${month}-${day}`;
@@ -221,25 +217,39 @@ function toArrayHorarioLaboral(hl) {
 
     // ------------------------------ UI Básicos ------------------------------
     function Card({ title, right, children }) { return (<section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4"><div className="flex items-center justify-between mb-3"><h3 className="text-base font-semibold text-slate-800">{title}</h3>{right}</div>{children}</section>); }
-    function Toast({ msg, onClose }) { useEffect(() => { if (!msg) return; const t = setTimeout(onClose, 2500); return () => clearTimeout(t); }, [msg, onClose]); if (!msg) return null; return (<div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-xl z-50">{msg}</div>); }
-    function Modal({ isOpen, title, children, onConfirm, onCancel, confirmText = "Confirmar", size = 'md' }) { // <-- 1. Agregamos 'size' aquí
-  if (!isOpen) return null; 
-  
+    function Toast({ msg, onClose }) {
+  useEffect(() => {
+    if (!msg) return;
+    const t = setTimeout(onClose, 2500);
+    return () => clearTimeout(t);
+  }, [msg, onClose]);
+
+  if (!msg) return null;
+  return (
+    <div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-xl z-50">
+      {msg}
+    </div>
+  );
+}
+
+function Modal({ isOpen, title, children, onConfirm, onCancel, confirmText = "Confirmar", size = 'md' }) {
+  if (!isOpen) return null;
+  const sizeToClass = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl', '2xl': 'max-w-2xl' };
+  const maxW = sizeToClass[size] || sizeToClass.md;
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      {/* --- 👇 AQUÍ ES DONDE CAMBIA EL TAMAÑO 👇 --- */}
-      <div className={`bg-white rounded-2xl shadow-xl p-6 w-full max-w-${size}`}>
+      <div className={`bg-white rounded-2xl shadow-xl p-6 w-full ${maxW}`}>
         <h3 className="text-lg font-semibold mb-4">{title}</h3>
         <div className="text-slate-600 mb-6">{children}</div>
         <div className="flex justify-end gap-3">
           <button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg border">Cancelar</button>
-          {/* El código del botón no cambia */}
           <button onClick={onConfirm} className={`px-4 py-2 rounded-lg text-white ${confirmText === "Confirmar" ? "bg-red-600" : "bg-emerald-600"}`}>{confirmText}</button>
         </div>
       </div>
     </div>
-  ); 
-}    
+  );
+}
+    
 function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubChange, showIndependentOption }) {
   const tabs = [ { id: "dashboard", label: "Dashboard" }, { id: "alumnos", label: "Alumnos" }, { id: "clases", label: "Clases" },{ id: "grupos", label: "Grupos" }, { id: "pagos", label: "Pagos" }, { id: "gastos", label: "Gastos" }, { id: "reportes", label: "Reportes" }, { id: "perfil", label: "Perfil" } ];
   return (
@@ -253,16 +263,22 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
           </div>
         </div>
         <nav className="hidden md:flex items-center gap-3">
-          <select 
-            value={clubActivoId || ""} // Valor por defecto ahora es cadena vacía
-            onChange={(e) => onClubChange(e.target.value)}
-            className="text-sm px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 focus:ring-2 focus:ring-white max-w-[200px]"
-            title="Seleccionar Club de Trabajo"
-          >
-            {clubes.map(club => (
-              <option key={club.id} value={club.id}>{club.nombre}</option>
-            ))}
-          </select>
+          {Array.isArray(clubes) && clubes.length > 1 ? (
+  <select 
+    value={clubActivoId || ""}
+    onChange={(e) => onClubChange(e.target.value)}
+    className="text-sm px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 focus:ring-2 focus:ring-white max-w-[220px]"
+    title="Seleccionar Club de Trabajo"
+  >
+    {clubes.map(club => (
+      <option key={club.id} value={club.id}>{club.nombre}</option>
+    ))}
+  </select>
+) : (
+  <div className="text-slate-200 text-sm px-2 py-1 rounded-md bg-slate-800/40 border border-slate-700/50">
+    {clubActivoId ? (clubes.find(c=>c.id===clubActivoId)?.nombre || "—") : (clubes[0]?.nombre || "—")}
+  </div>
+)}
           {tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-1.5 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"}`}>{t.label}</button>))}
           <button onClick={onLogout} className="px-2 py-1 rounded-lg text-sm transition bg-red-600 hover:bg-red-700 text-white ml-4">Cerrar Sesión</button>
         </nav>
@@ -409,7 +425,7 @@ const hoy = formatDate(new Date());
         }, [pagos, alumnos, perfil]);
         
         const clubActivo = clubActivoId ? (clubes || []).find(c => c.id === clubActivoId) : null;
-        const nombreLugar = clubActivo ? clubActivo.nombre : "Independiente";
+        const nombreLugar = clubActivo ? clubActivo.nombre : "—";
         const nombreCompleto = `${perfil.nombre || ''} ${perfil.apellido || ''}`.trim();
         const horarioData = clubActivo ? clubActivo.horarioLaboral : perfil.horarioLaboral;
         
@@ -465,8 +481,18 @@ const hoy = formatDate(new Date());
   ) : (
     <div className="mt-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
       {horarioDisponibleManana.map(h => (
-        <span key={h} className="inline-block px-2 py-1 rounded-lg border text-sm text-slate-700 bg-white">{h}</span>
-      ))}
+  <div key={h} className="flex items-center justify-between border rounded-lg px-2 py-1 bg-white">
+    <span className="text-sm text-slate-700">{h}</span>
+    <button
+      type="button"
+      onClick={() => goToNewClass && goToNewClass({ fecha: manana, hora: h })}
+      className="text-xs px-2 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+      title="Agendar clase en este horario"
+    >
+      Agendar
+    </button>
+  </div>
+))}
     </div>
   )}
 </div>
@@ -1020,11 +1046,19 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
   );
 }
     
-function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar, nuevoAlumnoId, setNuevoAlumnoId }) {
+function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar, nuevoAlumnoId, setNuevoAlumnoId , prefillClase, onPrefillConsumed }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: (parseFloat((perfil.precios || {}).individual || 0)).toString(), notas: "", cancha: "" };
   const [form, setForm] = useState(emptyForm);
+  useEffect(() => {
+    if (prefillClase && prefillClase.fecha && prefillClase.hora) {
+      setShowForm(true);
+      setForm(prev => ({ ...prev, fecha: prefillClase.fecha, hora: prefillClase.hora }));
+      onPrefillConsumed && onPrefillConsumed();
+    }
+  }, [prefillClase]);
+
   const [formStep, setFormStep] = useState(1);
   const [alumnoSearchQuery, setAlumnoSearchQuery] = useState("");
   const [isAlumnosListOpen, setIsAlumnosListOpen] = useState(false);
@@ -3481,6 +3515,8 @@ const SetupTimeField = ({ value, onChange, invalid=false, ...rest }) => (
     
 function MainApp({ user, onLogout }) {
   const [current, setCurrent] = useState("dashboard");
+  const [prefillClase, setPrefillClase] = useState(null);
+
   const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
@@ -3845,7 +3881,7 @@ function MainApp({ user, onLogout }) {
           alumnos={state.alumnos}
           clubes={clubes}
           clubActivoId={clubActivoId}
-          goToNewClass={() => { setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }}
+          goToNewClass={(prefill) => { setPrefillClase(prefill || null); setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }}
           goToEditClass={goToEditClass}
         />}
         {current === "alumnos" && <Alumnos
@@ -3875,6 +3911,8 @@ function MainApp({ user, onLogout }) {
           setClaseParaEditar={setClaseParaEditar}
           nuevoAlumnoId={nuevoAlumnoId}
           setNuevoAlumnoId={setNuevoAlumnoId}
+          prefillClase={prefillClase}
+          onPrefillConsumed={() => setPrefillClase(null)}
         />}
         {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
         {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({ alumno, mes })} onEditarPago={(pago) => setPagoParaEditar(pago)} onDeletePago={handleDeletePago} />}
