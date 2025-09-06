@@ -408,7 +408,7 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
         <div className="flex items-center gap-3">
           <img src={logoCircularBase64} alt="Logo Circular" className="w-8 h-8 sm:w-10 sm:h-10 rounded-full"/>
           <div>
-            <img src={logoCoachexBase64} alt="Coachex-Pro Logo" className="h-5 sm:h-6"/>
+            <img src="./assets/img/logo_coachex%20N.png" alt="Coachex-Pro Logo" className="h-5 sm:h-6"/>
             <p className="text-[10px] sm:text-xs opacity-80 -mt-0.5">Gestión de Profesores</p>
           </div>
         </div>
@@ -3321,7 +3321,7 @@ const handleAuthAction = async (e) => {
                 <div className="w-full max-w-sm mx-auto">
                     <div className="flex flex-col items-center mb-8"> {/* Aumentamos un poco el margen inferior */}
     <img 
-      src={logoCoachexBase64} // <-- EL NOMBRE DE TU NUEVO ARCHIVO
+      src="./assets/img/logo_coachex%20N.png" // <-- EL NOMBRE DE TU NUEVO ARCHIVO
       alt="Coachex-Pro Logo" 
       className="w-64" // Ajusta el ancho aquí si es necesario
     />
@@ -3464,7 +3464,7 @@ function OnboardingClubSetup({ user, setHasClubs, onLogout }) {
       {/* Header */}
       <div className="pt-8 pb-6 text-center">
         <img
-          src={logoCoachexBase64}
+          src="./assets/img/logo_coachex%20N.png"
           alt="Coachex-Pro Logo"
           className="h-10 mx-auto object-contain opacity-90"
           onError={(e)=>{ e.currentTarget.style.display='none'; }}
