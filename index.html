@@ -127,6 +127,45 @@ const PRECIO_KEY_POR_TIPO = {
   "Clase 4 personas": "cuarteto",
   "Escuelita": "escuelita"
 };
+
+// Normaliza etiquetas de tipo de clase a los nombres canónicos usados en la app
+function normalizarTipoClase(t) {
+  if (!t) return "Clase 1 persona";
+  const s = String(t)
+    .trim().toLowerCase()
+    .replace(/clase\s+para\s+/, '')
+    .replace(/^clase\s+/, '')
+    .replace(/\s+de\s+/, ' ')
+    .replace(/\s+/g, ' ');
+
+  const alias = {
+    'individual': 'Clase 1 persona',
+    '1': 'Clase 1 persona',
+    '1 persona': 'Clase 1 persona',
+
+    'dupla': 'Clase 2 personas',
+    '2': 'Clase 2 personas',
+    '2 personas': 'Clase 2 personas',
+
+    'trio': 'Clase 3 personas',
+    '3': 'Clase 3 personas',
+    '3 personas': 'Clase 3 personas',
+
+    'cuarteto': 'Clase 4 personas',
+    '4': 'Clase 4 personas',
+    '4 personas': 'Clase 4 personas',
+
+    'escuelita': 'Escuelita'
+  };
+  if (alias[s]) return alias[s];
+
+  const m = s.match(/^(\d)\s*personas?$/);
+  if (m) {
+    const n = Number(m[1]);
+    return n === 1 ? 'Clase 1 persona' : `Clase ${n} personas`;
+  }
+  return TIPOS_CLASE.includes(t) ? t : 'Clase 1 persona';
+}
 const getPrecioSugerido = (tipo, perfil) => {
   const key = PRECIO_KEY_POR_TIPO[tipo] || "individual";
   const tabla = (perfil && perfil.precios) ? perfil.precios : {};
@@ -151,12 +190,20 @@ const computePrecioClase = (tipo, alumnoIds, perfil, alumnoMap) => {
     const TIPOS_CLASE_NOMBRES = { "Clase 1 persona": "Clase 1 persona", "Clase 2 personas": "Clase 2 personas", "Clase 3 personas": "Clase 3 personas", "Clase 4 personas": "Clase 4 personas", Escuelita: "Escuelita" };
     const METODOS_PAGO = ["Efectivo", "Transferencia", "Mixto", "Mensual","Pendiente"];
     const CATEGORIAS_GASTO = ["Alquiler", "Equipamiento", "Servicios", "Varios"];
+    // Alias para compatibilidad con componentes que usan CATEGORIAS_GASTOS
+    const CATEGORIAS_GASTOS = CATEGORIAS_GASTO;
+
     const PLANES_PAGO = [{value: "porClase", label: "Por Clase"}, {value: "mensual", label: "Mensual"}];
     const FRECUENCIAS_MENSUALES = [{value: "1xSemana", label: "1 vez por semana"}, {value: "2xSemana", label: "2 veces por semana"}, {value: "3xSemana", label: "3 veces por semana"}, {value: "libre", label: "Libre"}];
     const MESES_RECURRENCIA = [1, 2, 3, 4, 5, 6, 9, 12];
     const HORAS = Array.from({ length: 16 }, (_, i) => `${String(i + 7).padStart(2, '0')}:00`); // De 07:00 a 22:00
     
     // --- Utilidades ---
+// Quita "Clase" o "Clase para" del nombre canónico para evitar "clase de Clase ..."
+function labelSinClase(tipo) {
+  const base = (TIPOS_CLASE_NOMBRES?.[tipo] ?? tipo ?? '').trim();
+  return base.replace(/^Clase\s+(?:para\s+)?/i, '').trim();
+}
     const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
     const toDigits = (s = "") => String(s).replace(/[^0-9]/g, "");
     const waLink = (telefono = "", nombre = "") => {
@@ -172,23 +219,97 @@ const computePrecioClase = (tipo, alumnoIds, perfil, alumnoMap) => {
       d.setHours(0, 0, 0, 0);
       return new Date(d.setDate(diff));
     };
+    const parseYMDLocal = (ymd) => {
+  if (!ymd || typeof ymd !== 'string') return null;
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+};
     const addDays = (date, days) => {
-  const base = (date instanceof Date) ? date : new Date(date);
+  const base = (date instanceof Date) ? date : parseYMDLocal(String(date)) || new Date(date);
   const y = base.getFullYear(), m = base.getMonth(), d = base.getDate();
-  return new Date(y, m, d + days, 0, 0, 0, 0);
+  return new Date(y, m, d + Number(days || 0), 0, 0, 0, 0);
 };
     const formatDate = (date, format = 'yyyy-mm-dd') => {
   if (!date) return '';
-  const isStr = (typeof date === 'string');
-  const d = isStr ? new Date(`${date}T00:00:00`) : date;
-  const year = isStr ? d.getUTCFullYear() : d.getFullYear();
-  const month = String((isStr ? d.getUTCMonth() : d.getMonth()) + 1).padStart(2, '0');
-  const day = String(isStr ? d.getUTCDate() : d.getDate()).padStart(2, '0');
+  const d = (typeof date === 'string') ? parseYMDLocal(date) : new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
   if (format === 'dd/mm') return `${day}/${month}`;
   if (format === 'dd/mm/yyyy') return `${day}/${month}/${year}`;
   return `${year}-${month}-${day}`;
 };
     const getNombreCompleto = (a) => a ? `${a.apellido || ''} ${a.nombre || ''}`.trim() : 'Alumno eliminado';
+// --- Searchable alumno picker (reusable) ---
+function AlumnoSearchSelect({ value, onChange, alumnos, excludeIds = [], placeholder = "Buscar alumno...", autoFocus = false }) {
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState("");
+  const inputRef = React.useRef(null);
+  const boxRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (autoFocus && inputRef.current) inputRef.current.focus();
+  }, [autoFocus]);
+
+  React.useEffect(() => {
+    function handleClickOutside(e) {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const norm = (s) => (s || "").normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const selected = React.useMemo(() => (alumnos || []).find(a => a.id === value) || null, [alumnos, value]);
+  const filtered = React.useMemo(() => {
+    const needle = norm(q);
+    return (alumnos || []).filter(a => !excludeIds.includes(a.id) && (!needle || norm(getNombreCompleto(a)).includes(needle)));
+  }, [alumnos, excludeIds, q]);
+
+  const showList = open && (!selected || q.length > 0);
+
+  return (
+    <div className="relative" ref={boxRef}>
+      <div className="flex gap-2">
+        <input
+          ref={inputRef}
+          type="text"
+          className="w-full border rounded-lg px-3 py-2"
+          placeholder={placeholder}
+          value={selected && q.length === 0 ? getNombreCompleto(selected) : q}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => { setQ(e.target.value); onChange(""); }}
+        />
+        {value && (
+          <button
+            type="button"
+            className="px-2 text-slate-500 hover:text-slate-700"
+            onClick={() => { onChange(""); setQ(""); setOpen(true); }}
+            title="Limpiar selección"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {showList && (
+        <div className="absolute z-30 mt-1 w-full bg-white border rounded-lg shadow max-h-64 overflow-auto">
+          {filtered.length ? filtered.map(a => (
+            <button
+              type="button"
+              key={a.id}
+              className="w-full text-left px-3 py-2 hover:bg-slate-50"
+              onClick={() => { onChange(a.id); setQ(""); setOpen(false); }}
+            >
+              {getNombreCompleto(a)}
+            </button>
+          )) : (
+            <div className="px-3 py-2 text-slate-500">Sin resultados</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
     const formatCurrency = (value) => {
       const number = parseFloat(value);
       if (isNaN(number)) {
@@ -249,21 +370,35 @@ function toArrayHorarioLaboral(hl) {
 
 function Modal({ isOpen, title, children, onConfirm, onCancel, confirmText = "Confirmar", size = 'md' }) {
   if (!isOpen) return null;
-  const sizeToClass = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl', '2xl': 'max-w-2xl' };
+  const sizeToClass = {
+    sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl', '2xl': 'max-w-2xl', '5xl': 'max-w-5xl'
+  };
   const maxW = sizeToClass[size] || sizeToClass.md;
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className={`bg-white rounded-2xl shadow-xl p-6 w-full ${maxW}`}>
-        <h3 className="text-lg font-semibold mb-4">{title}</h3>
-        <div className="text-slate-600 mb-6">{children}</div>
-        <div className="flex justify-end gap-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className={`w-full ${maxW} bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]`}>
+        <div className="p-6 border-b">
+          <h3 className="text-lg font-semibold">{title}</h3>
+        </div>
+
+        {/* Cuerpo scrollable */}
+        <div className="flex-1 overflow-y-auto p-6 text-slate-600">
+          {children}
+        </div>
+
+        {/* Footer fijo dentro del modal */}
+        <div className="p-4 border-t bg-white flex justify-end gap-3 sticky bottom-0">
           <button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg border">Cancelar</button>
-          <button onClick={onConfirm} className={`px-4 py-2 rounded-lg text-white ${confirmText === "Confirmar" ? "bg-red-600" : "bg-emerald-600"}`}>{confirmText}</button>
+          <button onClick={onConfirm} className={`px-4 py-2 rounded-lg text-white ${confirmText === "Confirmar" ? "bg-red-600" : "bg-emerald-600"}`}>
+            {confirmText}
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
     
 function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubChange, showIndependentOption }) {
   const tabs = [ { id: "dashboard", label: "Dashboard" }, { id: "alumnos", label: "Alumnos" }, { id: "clases", label: "Clases" },{ id: "grupos", label: "Grupos" }, { id: "pagos", label: "Pagos" }, { id: "gastos", label: "Gastos" }, { id: "reportes", label: "Reportes" }, { id: "perfil", label: "Perfil" } ];
@@ -305,35 +440,42 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
 }
     
     function ClasesPorTamanoMes({ clases }) {
-        const resumen = useMemo(() => {
-            const ahora = new Date();
-            const mesActual = ahora.getMonth();
-            const anioActual = ahora.getFullYear();
-            
-            const clasesDelMes = clases.filter(c => {
-                const fechaClase = new Date(c.fecha);
-                return fechaClase.getMonth() === mesActual && fechaClase.getFullYear() === anioActual && c.estado === "realizada";
-            });
+  const resumen = useMemo(() => {
+    const ahora = new Date();
+    const mesActual = ahora.getMonth();
+    const anioActual = ahora.getFullYear();
 
-            return TIPOS_CLASE.reduce((acc, tipo) => {
-                acc[tipo] = clasesDelMes.filter(c => c.tipo === tipo).length;
-                return acc;
-            }, {});
-        }, [clases]);
+    const clasesDelMes = clases.filter(c => {
+      const fechaClase = new Date(c.fecha);
+      return (
+        fechaClase.getMonth() === mesActual &&
+        fechaClase.getFullYear() === anioActual &&
+        c.estado === "realizada"
+      );
+    });
 
-        return (
-            <Card title="Clases por cantidad de alumnos">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-center">
-                    {TIPOS_CLASE.map(tipo => (
-                        <div key={tipo} className="bg-slate-50 p-2 rounded-lg flex flex-col justify-between h-full">
-                            <p className="text-xs text-slate-600 h-8 flex items-center justify-center">{TIPOS_CLASE_NOMBRES[tipo]}</p>
-                            <p className="text-xl font-bold">{resumen[tipo] || 0}</p>
-                        </div>
-                    ))}
-                </div>
-            </Card>
-        );
-    }
+    return TIPOS_CLASE.reduce((acc, tipo) => {
+      acc[tipo] = clasesDelMes.filter(
+        c => normalizarTipoClase(c.tipo) === tipo
+      ).length;
+      return acc;
+    }, {});
+  }, [clases]);
+
+  return (
+    <Card title="Clases por cantidad de alumnos">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-center">
+        {TIPOS_CLASE.map(tipo => (
+          <div key={tipo} className="bg-slate-50 p-2 rounded-lg flex flex-col justify-between h-full">
+            <p className="text-xs text-slate-600 h-8 flex items-center justify-center">{labelSinClase(tipo)}</p>
+            <p className="text-xl font-bold">{resumen[tipo] || 0}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
     
     function Dashboard({ perfil, clases, pagos, gastos, alumnos, clubes, clubActivoId, goToNewClass, goToEditClass }) {
       useEffect(() => {
@@ -410,14 +552,14 @@ const hoy = formatDate(new Date());
         const resumenClasesHoy = useMemo(() => {
             if (!clasesHoy || clasesHoy.length === 0) return [];
             const counts = clasesHoy.reduce((acc, clase) => {
-                const tipo = clase.tipo || "Sin tipo";
+                const tipo = normalizarTipoClase(clase.tipo || 'Clase 1 persona');
                 acc[tipo] = (acc[tipo] || 0) + 1;
                 return acc;
             }, {});
             return Object.entries(counts).map(([tipo, cantidad]) => {
-                const nombreClase = TIPOS_CLASE_NOMBRES[tipo] || tipo;
+                const nombreClase = labelSinClase(tipo);
                 const textoClase = cantidad > 1 ? 'clases' : 'clase';
-                return `${cantidad} ${textoClase} de ${nombreClase.replace('Clase para ', '')}`;
+                return `${cantidad} ${textoClase} de ${nombreClase}`;
             });
         }, [clasesHoy]);
         
@@ -858,14 +1000,20 @@ function AlumnoFichaModal({
     const totalPendiente = clasesPendientes.reduce((sum, c) => sum + c.precio || 0, 0);
 
     return (
-        <Modal isOpen={!!alumno} onClose={onClose} title={`Ficha de ${getNombreCompleto(alumno)}`} size="5xl" confirmText="Cerrar" onConfirm={onClose}>
+        <Modal isOpen={!!alumno}
+  title={`Ficha de ${getNombreCompleto(alumno)}`}
+  size="5xl"
+  confirmText="Cerrar"
+  onConfirm={onClose}
+  onCancel={onClose}
+>
             <div className="flex flex-col md:flex-row gap-6">
                 <div className="md:w-1/3 p-4 bg-slate-50 rounded-xl space-y-4">
                     <h3 className="text-xl font-bold text-[#34745B]">{getNombreCompleto(alumno)}</h3>
                     <div className="text-sm space-y-2 text-slate-700">
                         {alumno.telefono && <p>📞 Teléfono: <a href={waLink(alumno.telefono, alumno.nombre)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{alumno.telefono}</a></p>}
                         {alumno.contactoPadre && <p>👪 Contacto Padre/Madre: {alumno.contactoPadre}</p>}
-                        <p>⛳ Deporte: {alumno.deporte || 'Pádel'}</p>
+                        <p>🎾 Deporte: {alumno.deporte || 'Pádel'}</p>
                         <p>✅ Estado: <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${alumno.estado === 'espera' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{alumno.estado === 'espera' ? 'En Espera' : 'Activo'}</span></p>
                         <p>💵 Plan de Pago: {alumno.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</p>
                         {alumno.notas && <p>✍️ Notas: <span className="italic">{alumno.notas}</span></p>}
@@ -1064,7 +1212,7 @@ function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHo
 function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar, nuevoAlumnoId, setNuevoAlumnoId , prefillClase, onPrefillConsumed }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Individual", estado: "Programada", precio: (parseFloat((perfil.precios || {}).individual || 0)).toString(), notas: "", cancha: "" };
+  const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Clase 1 persona", estado: "Programada", precio: (parseFloat((perfil.precios || {}).individual || 0)).toString(), notas: "", cancha: "" };
   const [form, setForm] = useState(emptyForm);
   useEffect(() => {
     if (prefillClase && prefillClase.fecha && prefillClase.hora) {
@@ -1136,7 +1284,8 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
   }, [pagos]);
   const clasesConDatos = useMemo(() => (clases || []).map(c => ({
     ...c,
-    nombresAlumnos: (c.alumnoIds || []).map(id => getNombreCompleto(alumnoMap.get(id))).filter(Boolean).join(', '),
+    
+    tipo: normalizarTipoClase(c.tipo), nombresAlumnos: (c.alumnoIds || []).map(id => getNombreCompleto(alumnoMap.get(id))).filter(Boolean).join(', '),
     pagos: pagosPorClase.get(c.id) || []
   })), [clases, alumnoMap, pagosPorClase]);
   const clasesFiltradas = useMemo(() => {
@@ -1157,10 +1306,10 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
     setForm(prev => {
       const newState = { ...prev, [name]: val };
       if (name === "tipo") {
-        const primerAlumno = alumnoMap.get(prev.alumnoIds[0]);
-        const esPlanMensual = primerAlumno?.plan === 'mensual';
-        newState.precio = getPrecioSugerido(val, perfil);
-        const numAlumnos = TIPOS_CLASE_MAP[val] || 1;
+        const canon = normalizarTipoClase(val);
+        newState.tipo = canon;
+        newState.precio = getPrecioSugerido(canon, perfil);
+        const numAlumnos = TIPOS_CLASE_MAP[canon] || 1;
         newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
       }
       return newState;
@@ -1172,7 +1321,7 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
       newAlumnoIds[index] = newId;
       const primerAlumno = alumnoMap.get(newAlumnoIds[0]);
       const esMensual = primerAlumno?.plan === 'mensual';
-      const nuevoPrecio = esMensual ? "0" : (perfil.precios[(prev.tipo || '').toLowerCase()] || "");
+      const nuevoPrecio = esMensual ? "0" : getPrecioSugerido(prev.tipo, perfil);
       return { ...prev, alumnoIds: newAlumnoIds, precio: nuevoPrecio };
     });
     if (index === 0 && newId) {
@@ -1224,7 +1373,7 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
   }
   function openEdit(c) {
     setEditing(c);
-    setForm({ ...emptyForm, ...c, });
+    setForm({ ...emptyForm, ...c, tipo: normalizarTipoClase(c.tipo) });
     setFormStep(3);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1306,14 +1455,18 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
               <>
                 <div className="md:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-3">
                   {(form.alumnoIds || [""]).map((alumnoId, index) => (
-                    <div key={index}>
-                      <label className="text-sm text-slate-600">Alumno {index + 1}</label>
-                      <select value={alumnoId} onChange={(e) => handleAlumnoChange(index, e.target.value)} className="w-full border rounded-lg px-3 py-2" required>
-                        <option value="">Seleccionar...</option>
-                        {alumnosActivos.filter(a => !(form.alumnoIds || []).includes(a.id) || a.id === alumnoId).map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
-                      </select>
-                    </div>
-                  ))}
+  <div key={index}>
+    <label className="text-sm text-slate-600">Alumno {index + 1}</label>
+    <AlumnoSearchSelect
+      value={alumnoId}
+      onChange={(newId) => handleAlumnoChange(index, newId)}
+      alumnos={alumnosActivos}
+      excludeIds={(form.alumnoIds || []).filter((_, i) => i !== index)}
+      placeholder={`Buscar alumno ${index + 1}...`}
+      autoFocus={index === 0}
+    />
+  </div>
+))}
                 </div>
                 <div className="md:col-span-2">
                   <label className="text-sm text-slate-600">Ubicación / Cancha</label>
@@ -2064,23 +2217,24 @@ function Reportes({ pagos, gastos, alumnos, clases, clubActivoId, clubes, perfil
         };
       }, [pagosFiltrados, clubActivoId, clubes]);
 
-      const resumenClasesMes = useMemo(() => {
-          const conteoPorTipo = clasesFiltradas.reduce((acc, clase) => {
-              const tipo = clase.tipo || 'Desconocido';
-              const precio = parseFloat(clase.precio || 0);
-              if (!acc[tipo]) {
-                  acc[tipo] = { cantidad: 0, valorTotal: 0 };
-              }
-              acc[tipo].cantidad += 1;
-              acc[tipo].valorTotal += precio;
-              return acc;
-          }, {});
-          return {
-              totalClases: clasesFiltradas.length,
-              valorTotalGeneral: clasesFiltradas.reduce((acc, c) => acc + parseFloat(c.precio || 0), 0),
-              detalle: Object.entries(conteoPorTipo).sort((a, b) => b[1].cantidad - a[1].cantidad)
-          };
-      }, [clasesFiltradas]);
+const resumenClasesMes = useMemo(() => {
+  const conteoPorTipo = clasesFiltradas.reduce((acc, clase) => {
+    const tipoCanonico = normalizarTipoClase(clase.tipo || 'Clase 1 persona');
+    const precio = parseFloat(clase.precio || 0);
+    if (!acc[tipoCanonico]) {
+      acc[tipoCanonico] = { cantidad: 0, valorTotal: 0 };
+    }
+    acc[tipoCanonico].cantidad += 1;
+    acc[tipoCanonico].valorTotal += precio;
+    return acc;
+  }, {});
+
+  return {
+    totalClases: clasesFiltradas.length,
+    valorTotalGeneral: clasesFiltradas.reduce((acc, c) => acc + parseFloat(c.precio || 0), 0),
+    detalle: Object.entries(conteoPorTipo).sort((a, b) => b[1].cantidad - a[1].cantidad)
+  };
+}, [clasesFiltradas]);
 
       const PeriodoButton = ({ value, children }) => (
         <button 
@@ -2228,7 +2382,7 @@ function Reportes({ pagos, gastos, alumnos, clases, clubActivoId, clubes, perfil
                             {resumenClasesMes.detalle.map(([tipo, data]) => (
                                 <li key={tipo} className="flex justify-between items-center bg-white p-2 rounded-md">
                                     <span>
-                                        <strong>{data.cantidad}</strong> {data.cantidad > 1 ? 'clases' : 'clase'} de <strong>{TIPOS_CLASE_NOMBRES[tipo] || tipo}</strong>
+                                        <strong>{data.cantidad}</strong> {data.cantidad > 1 ? 'clases' : 'clase'} de <strong>{labelSinClase(tipo)}</strong>
                                     </span>
                                     <span className="font-semibold text-slate-800">
                                         {formatCurrency(data.valorTotal)}
@@ -3990,7 +4144,7 @@ function AgendarProximaClaseModal({ isOpen, onClose, onSchedule, claseBase, alum
         fecha: formatDate(nextWeekDate),
         hora: claseBase?.hora || "",
         precio: claseBase?.precio || 0,
-        tipo: claseBase?.tipo || "Individual",
+        tipo: normalizarTipoClase(claseBase?.tipo) || "Clase 1 persona",
         alumnoIds: claseBase?.alumnoIds || []
     });
 
@@ -4003,7 +4157,7 @@ function AgendarProximaClaseModal({ isOpen, onClose, onSchedule, claseBase, alum
                 fecha: formatDate(nextWeekDate),
                 hora: claseBase.hora || "",
                 precio: claseBase.precio || 0,
-                tipo: claseBase.tipo || "Individual",
+                tipo: normalizarTipoClase(claseBase.tipo) || "Clase 1 persona",
                 alumnoIds: claseBase.alumnoIds || []
             });
         }
@@ -4011,7 +4165,7 @@ function AgendarProximaClaseModal({ isOpen, onClose, onSchedule, claseBase, alum
 
     const handleFormChange = (e) => {
         const { name, value } = e.target;
-        setForm(prev => ({ ...prev, [name]: value }));
+        setForm(prev => ({ ...prev, [name]: name === 'tipo' ? normalizarTipoClase(value) : value }));
     };
 
     const handleAlumnoChange = (index, newId) => {
