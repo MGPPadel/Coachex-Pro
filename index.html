@@ -19,29 +19,54 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
 
-  <style>
+  <style>:root{
+  --brand-dark:#2e8b57;
+  --brand-light:#7dd3a6;
+  --inner:#3f3f41;
+}
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     
       overflow-x: hidden;
     }
-    .loader {
-      border: 4px solid #1f2523;
-      border-top: 4px solid #139060;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 2s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  </style>
+
+/* Loader Pulso Dual */
+.loader{
+  width:56px; height:56px; border-radius:50%;
+  position:relative;
+  background: radial-gradient(circle at 30% 30%, var(--brand-light), var(--brand-dark));
+  box-shadow: 0 8px 18px rgba(0,0,0,.18);
+  animation: pulse-out 1.5s ease-in-out infinite;
+  transform-origin:center center;
+}
+.loader::after{
+  content:""; position:absolute; inset:0; margin:auto;
+  width:58%; height:58%; border-radius:50%;
+  background: var(--inner);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.85);
+  animation: pulse-in 1.5s ease-in-out infinite;
+  transform-origin:center center;
+}
+@keyframes pulse-out{
+  0%,100%{ transform: scale(1);   opacity:1;   }
+  50%    { transform: scale(1.18); opacity:.85; }
+}
+@keyframes pulse-in{
+  0%,100%{ transform: scale(1);   opacity:.9; }
+  50%    { transform: scale(0.82); opacity:.75; }
+}
+@media (prefers-reduced-motion: reduce){
+  .loader, .loader::after{ animation:none; }
+}
+</style>
 </head>
 <body>
   
-  <div id="root"></div>
+  <div class="screen-center" id="app-loader" style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
+  <div class="loader" aria-label="Cargando"></div>
+</div>
+<div id="root"></div>
 
   <script type="text/babel">
     // --- INICIO DEL CÓDIGO DE LA APLICACIÓN ---
@@ -72,9 +97,365 @@
     const auth = firebase.auth();
     const db = firebase.firestore();
     
-    const logoCircularBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAARgAAAEYCAYAAACHjumMAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAHBhaW50Lm5ldCA0LjEuNWRHWFIAAAi/SURBVHhe7d3NchxFFgTQ9z3TvbObdHN3k50gQZCAkCCwQUKyE5BAgmQnQAIhISEhQYKsBCQksSQkyEHQQQ/d1b2u6dE+781/vj/V01N7dVVX1UP10sTq5r+d3d3dVwjf3t7e/f7+fvrV1VWflqX/aV33f11dXeHd3V39/f39W1dX1+3t7e23S0tLvVwunw54P/u3vC7L4c3/a+tA+F1dXXL//v3w9e3tLe7evYv79+9jdnY2ZmdnY3Z2Nmbn5+P9+/fx/v37eP/+fbz5+Tn279+P27dvY2dnZ8yvXz9+e/z48b29vV1dXR3/9OlT7O3t/f2xsbE1NTV9fHw4Pz8fOzs7WF9fj42Njfj4+KC1tRVvb2/Yr7/G+fl5+Pj4wMbGhv+P45/++MUXX/z6t7/97d//+te/1n/u3NxcbTQazc3Nxd7e3g3c3t6u4eHhTU36v37+w4cPNzw8vGkYhr34u7u7tby8vCktLU07OztV//X29mr53/1u5+LFi7l48aKS/0sS/d/V1TXv7u52z/8lSX+P4/9/f/+/t7d3c35+vqZpWlNTU6sF/y+l2/s45v+P4x/f3t7e//r27Zuqqqoq/vPnz/H+/Xt4eXnB5uYmhoaGMDY2hrGxMcydOxcTE0sYHx/P2J/+lLGxscw/fy5jY2MZm5tLmJ+fx/bt2/j06ZNNT/Hjx4+4efMmbty4gQsXLmBoaAgjIyOYmJiA6dOnsXjxYhgdHY3h4WEsXrwYQ4YMwcSJE7F7925cuHABd3f44GzNzc3FzMxMJiYmMDEwAAd3+MAnTpyAt7c3LCwsICQkBBISEjAyMgJxcXF49OgRfv/998yfP5/Vq1fx/v37OH/+PF5eXvB92dnLly9x7tw5/O1vfwufz4fL5cLKygpu3ryJmzdvIjIyEpGRkVi/fj0WLFiAEydO4MSJE5iYmIDs7Gzk5eWhvLwcS5YswebNm/Hx8UFeXh4KCgqwaNEirFixAgsWLMD69evZ3d3d639f7h/b29v/z5n4+/t/+/DhA16ePMHp06f5tW+//fb/3bt3D/f39yvz8/M1Ozs7tbm5uVrc3d0ttbe3q+7u7ur8/Lzq7e3Nl5aWqu7u7mp9fX1fV1fX/aWlpS1LS0s/W1paXlpbW5+VlZWzQf63ubn54eXl5fMhSRL9f3t7++7p/6/tXz9/dXW1urq6Wh0dHVVPT091dXV1VVdXV2+0b319vbpabTab29vba7Wa/H/p3T6u+X/qH9/e3v7/rq6uYnx8/O+PjY2hq6sLGzdu4PLlywgLC8P169dx/fp1JCQk4MKFC7h69SpCQkIQHx+PixcvisdLS0tITU3FuXPncOPGDdTX13PhwgWcP38ea9euZenSpahYsSJeXl5Ys2YNS5YsQUlJCZKSklCzZg2zZ8+GoaGh16KLi4txdnYmCAJxcXGwsrLi9evXUf/2t/g++yv45fXr1/H73/8eZWVl2LhxIzZu3IjVq1fj2bNnePbsGRYXF/H69Wv4fL6o/Mknn2Dbtm14++23+fn54eDBg1izZg0LFizAyZMncenSJSxevBj//Oc/YWVlBVeuXMHhw4dx6dIlPPnkkwB8/fp1lJeX4sKFC9i0aRMmTpyIH/7wB3z22WfMzs5y584dPPzwwzg7O+Ptt99m165d+Oc//wknJyd8+eWXWLRoEa5fv46ioiJ8/PHHuP79u/jv//5vbN26Fe3t7Vi3bh3WrVuHTp06YfXq1di2bRtef/11nn/+eSxfvhyrV6+GkZERLF26lDfeeINdu3bh0qVLmD17NpYtW4bf/va3+PHHH7Fv3z48efKEEydOIDk5GY8ePeLChQs4f/48rl+/jhMnTuDgwYM4f/48XF1dUVZWxn379uH+/fvYvn079uzZg3379mHPnj34fP/9WLJkCW7cuAEHBwfg6e6E3/0O+N///g+ys7PxwQcfYNSoUZg+fTp++9vfcurUKX4+OgQPP/ww3nzzTaxZs4Znz57h2LFjLF++HHfffTd+++03nn32WTz77LOMjIygdevW4OjoyMsvv8wPP/zAysoKPvvsM4YMGYIffviBwsJCrFu3DjNnzsSKFSuwa9cuffHFF3jjjTcoKSlBV1fXdevW4eGHH2bWrFnYuHEjZs+ejRdffJFhw4Zhy5YteO6551i5ciXGxsaIjY1FfHw8wsLCkJSUhKysLJycnFBcXMyKFSv4/PPPuXjxIv7whz/guuuuw8svv4zFixdjtWrVePXVV/nss8/YuHEjMjMzmThxIl5//XUWLFiAadOmYciQIUhLS0NqaipCQkLw4MEDnD59mnXr1uGyyy5Dr169sHjxYixatAjPPfccS5cuRXJyMmJjYxETE4PExETExMQgLi4OQUFBCAwMxNSpU/HHH3/w5JNPcu/ePfzyl7/Eo48+ivz8fLzzzjtIT09HXl4eXnzxRSxatAh/+tOfOHbsGOx2O0JDQxEREYF79+7h1q1b+OGHHxgaGoLDw/u4ffs21q5diwceeICUlBSMHz8eXbt25d///newWq148MEHuWvXLuzdu5clS5bg3//+N2bOnImxsbHEx8czbtw4JCQk4MKFC7hz5w58Ph/sdjveeecd/v3vf2Pbtm0sWLCA0aNHc9ppp2HdunU4ODjg3LlzCAgIQFhYGIYOHYrhw4dDJpOhqKgImZmZTJ48mSeeeILNmzcjJSUFWVlZnDx5kujoaKxevRqTJ0/GysoKrly5wkknnYTnnnuOlStX4oUXXmDNmjWYPn06vvvuu7766iuqqqooKCiAy+WCu7t75Obm4tGjR6iqquKtt97iX//6V7788kusX78eGzdu5IcffmDjxo1Ys2YNnn32WZYtW4anT5/iyJEjmDRpEnbt2sUbb7zBuXPn8OabbzJ06FDs3r2bgQMHYubMmVixYgXWrl2LjIwMnDp1invvvZcRI0YwduxYPPfcc9x9990AHD9+nMDAQPzwhz/EtGnTcOjQIaSlpfH6668zZ84cBAUF4b333mPhwoV4//33+fLLL9Hb24u77rqLX/3qV3z99dfY2Nhg27ZtWLFiBfn5+SxYsICxY8eybds2XH311axdu5all13G3Llzeeqpp9i/fz/ee+89hg8fjq1btzJkyBC++OILRo8ezenTp/npp59YtWoVli9fzhtvvMH06dM5derUN4C1tbW54IILmDZtGiZOnMiYMWOYMGHCm5aWloqnnnoKExMTjB07Fr/5zW+45ppruOGGG5g2bRpGRkZIS0vD559/ztixYxkxYgRjxoxh3LhxTJo0CQkJCZibm8P4+DjGxsZw9+5dxMbGsGzZMpw8eRKHDx+GzWbDT3/6U3p1683ChQs5d+4cpk+fzksvvQRbt25l1KhRnHnmmSxcuJDVq1dz8803M3z4cAYPHgwA//nPfxg6dCj2799vdnZ2/PXXX8yePZsDBw5w0003YXR0FGvXrmXTpk0MHDiQW2+9lUWLFvHkk0+ybNmyr2WzZs2K2NhYjBgxAm+//TalpaXMnDmTefPmoaurC3V1dcycOZP33nuPJ598kpdffpnJkydz3nnnYWBgwBtvvMH3339vdnZ23HLLLcjNzeXuu+/m+eefZ86cOZimKfz85z/n/PPPV72nTp2KkSNH4qabbuL666/noosuYvDgwUycOBHz58+v+h/84Ad888033H///axdu5ann36aVatWsWjRIu666y7GjBljbm5ufvvb3/LVV1/x8ssvc/nllzNp0iSee+45Ro0axZQpU1ixYgX33XcfM2bM4D//+Q8PP/wwH3zwAb169cKDDz7Ipk2bmDFjBlatWsXSpUuZPXs2zzzzDH//+9959tlnWbFiBfr6+vjss8+YPHnyG97a2tp8+umnXH/99Vx00UU89dRT/O///s+oUaMAlJSU4Mknn+Thhx/m5ptvZvny5fzsZz/D5ZdfzpNPPsngwYPx8MMP4+zsjDvuuIN//etf/OpXv+LHH3/kzjvvZNeuXbzwwh7cddddfP3117z++utUVVWxbNky7rzzTtasWcN///tfxo0bx+LFi7nmmuu46KKLmDBhAu666y6WLFnCPffcw5lnnslZZ53FggUL+N///s/555/PH/7wB6ZNm8a4ceN44403mDVrFu677z4AYmNjsX37djZt2sRbb71FSkqK9555n2uuuQYrVqygpaWF22+/nQsuuIBPP/0UkydP5sYbbwSgsLDQ66/97//+DwAfffQRTz75JLfddhvPPfccAwYMIDU1lZtvvhmAkJAQRkZG+Pvf/y61P/7xD958801+8IMf4OzsjJtuuomKigo+/vjjm97r6+vTzMwMv//97zl9+jQPPvggzz77LHl5eSxdupQVK1bg4MGD9Pb2snfvXgIDAzk3N1fq//6/Wf6/p6dH8fHxL5eWlr6WJG3atOnUqVPL169ff5j//fff/73d3d3/tNNOO317e3uSJKlpmqZpXFxcfDjn/5v85z+fTUlKSkr4f+utt/5VSqn9ftQy/Q/9o2l8fHz4+vqipaUFlZWV6N+/PxkZGbzxxhvExcWxcuVKLFy4EB07duTNN9/Em2++CUBAQEAvr/3iiy9y+vRpRo0axdSpU/n6668ZOXIk//3vfzl8+DAvvPACW7duxdSpU1m6dClz5syhV69enD59mq5duzJw4EBuvvlm5s+fz0033YTDw/vU1NTwox/9CGVlZczNzSEvL4/S0tJq8fHxweHDh7FixQpKSkqIiYkhPDyc7373OxISEti4cSMzZszgnnvu4dNPP4XP54tKf/7znxk4cCA+Pj4YPXo0Tz75JPLy8tiyZQu///3vKSgowJtvvsnvf/97/va3v2HHjh3MmzcPXbp04fzzz+fs2bP429/+xueff05WVhaWLFnyBn9+fp7k5GTmz5+PefPm+fa3v2XdunUsW7ZMgKqq8vDw4MEHH2TOnDk88sgj7Ny5k3nz5vHqq68yZ84crrjiCvr6+vjTn/6Ujz76iIqKCu666y6uueYaVq5cyYwZM/jXv/7FihUrmDVrFkePHmX+/Pl8++23PPjgg2zbto3XX3+dqVOn8plnngEA//jHPxgyZAh/+9vfWLNmDaNHj2bixIl47LHHuOGGG9i7dy8LFy5kyJAhLFy4EG+//TYff/wxp0+fZvz48TzxxBO8/fbbTJw4kaSkJB588EFmz57NgQMH+Oijj1i4cCHPP/88y5Yt46c//WkmTpxITk4Ozz//PMePH8fKysobb7xx2dnZ0bVrV8LDwzly5Mhb/Nlnn+Hk5ITs7Gy++eYbbty4wbx581ixYgW/+MUvePbZZ3nooYfYu3cvAE899RTy8vL46quvWLFiBUeOHOHOO+/k4MGDFR8vXrwY27dv58477+T555+npqaGqVOnMnPmTKZNm8by5ctZv349zzzzDCNGjGDChAncc889fP755wCMHDmSZcuWMW3atE+Vf//73xk/fjyff/45y5Yt44wzzqC3txeVf//73/HGG2/wxBNPMHv2bJ566inuvfdeUlNTefrpp3nooYfYu3cv/vjHP7JmzRp27NiBdevWcdFFF7F8+XLmzJmDkydPYmRk5A3/5JNP0tTUxPTp03nllVdYt24dBw4cYN26dWzevBn9+vXj2LFjdO3alWHDhnHhhRdSu3ZtbrnlFl5++WU6duxoVlZWLFu2DCcnJ9atW4dVq1ahpaXFyy+/TOvWrbnx5ptZtGgRn3/+ObNnz+aJJ56orl/xxRf54IMPWLJkCefOnWNqaso/yPr/nZ6bTp06de3ChQul/D8eSJKkP/7xjx/+cPLkyZ/+t4n+r3Nzc/z9/f/u2tra38Y0Tbm5udX8v9XNZzKZ/H8ppf5+vPX/qX8s/f76+vrGxsbS19dHXFwcTp8+zeeff47Vq1ezbNky/P39CQgI4PXXX+eBBx5g2bJlePXVV9mxYwe7d+/mxhtv5Ec/+hGHDh3ikksumaWlJTY2NpgyZQp9+/aloKCAKVOm8PLLL7Nz50727NmDd999lyuuuIL6+vqUlZXx9ttvU15ezpUrV/LnP/+ZVatW0dPTQ0tLiyuvvJKenh4uXrzItGnTGDp0KCtXruTo0aPs378fp06d4oUXXqCqqory8nImTpyIUaNG0djYyOuvv46hoSGuu+46Zs2axbx589i0aRMvvPAC559/Pt999x19fX1MnDiR8ePH09LSApPJhIsvvpg1a9YwcOBA/vnPfzJo0KCfKu/evYuNGzcya9Yszp07x/r16xkzZgzvvPMOq1ev5rbbbuPIkSM0Nzdz11130d7ezssvv8zbb7/Niy++yLp167jhhhuoqKjgvvvuA8DRo0f57LPP+Oijj9i6dSt79+7lnXfeyaBBg5gzZw5PPPGE2rVr89xzz7FkyRKuueYaSkpK8PT0ZP78+QwZMoTx48ezbNkyxo0bR1NTExMmTOCdd95BoVCgqKiIpUuXYnp6mnvvvZelS5eyc+fOmx7/6KOP2LNnDwMHDqStrY1vfOMbXHTRRaxevZpz586xZcsWNBoNr7zyCsOHD+frr79m4MCBvPzyy2zevJnzzjuP3bt309XVxeuvv87s2bPp7u7m0Ucf5ZlnnmHatGlMmTKFSy+9lKlTp/Lss89yySWXUFNTw29+8xtmzJhBY2MjS5Ys4dJLL2XmzJn07t2bN954gwsuuACAkJAQZsyYwaFDh7jmmmsYPnw469ats3r16mvZ+fl5vvvuu5uSkpLccsstBAQE0NHRAQDY2Nhw5swZkpKSWLNmDStWrOCFF17gnnvuyTXXXEOTk5N3PcnJydx9993cf//9vPbaazyz7N9/T/N/s+T/9evXb+Xn5//N9fX1f6v/n/rHeP1/SRL9b0nS/O+7d+9+/s+p+H/r/2v9X5L0/1P/b0n6/1P/b37+9ddf/+3t7V1eXl6e/o/y/6/+/+aD/+/+v0dXV9fNzMz8f25vb+8G+f+a//fv37/L8fHx/Pz8/H/+/fbt27f/7+zsrP7+/v/n/H8u//v9/f1/u1wu/9f//P/V1VX4+vr+37m5udjf3/9//f9fX1/n5ubmHw5eXl5wcnKy6e/s7AwHBwf09fWxsbHx2z//5s2b/y1J+ve///3f8vnz529evHhxfHx8rP/bt2/fys/Pz9/f/1uS/j83Nzf7eDjn/38O+f+a/N9//fXXb2VlZSX/L0lSr9frdVX/P/Wf//zn1w1Jkj/U/9ekv6+rq+v29vby8vLy5v9N+v+dnp7+6evrq15fX5/6x/S/3N3d7efr/1f/+8b/L0n6/036/8vLy0tLS0vz/9f//729vev/af4/nJyc/Ovr6/P/j+m/1cXFBd///vevW7du/X/l//9fXFyMvr6+b/P/a/7/lStX/vW///u//2v+f+v/q39KSkpKSkpq/+f+/ftZ+/f0/y+Vv7+pqcnX1dXl5eXlbVNTk//r/z/y/0v94+zs7P+7vb19q/+/+sc0/n93d/dXnZ2dn7X//0v/b2pqqv4f2//X//8n/X/t/y//X729vZ9l/Z+V/n/1/3/L+n/r/5L+31Qq/W9+/vnnn/+b//81f+X/P/f+v1f//9X/b63//2/r/186/3/t/3/l/6v/f63//7a+v/X/P5Wqqv7/f6/+v63//6/+v63//2v//18q/+96f2v/v+X/r/7/a/+/pff/5c//k//v//j/+P6/J0iSfpL/vyT9/+v/f6X/v+b//yX/v7X+/19K6v9v6f1v6f1//P4v5f+/pff/lf//lf+/pf//lf//lf//lf/v7//6f8v/v1/9/xf/v+n/r+n//+f8/1/8/y/+/pf/fpb+/pf//5f+/y/+/pf//+f//xf+/8n//5v+/lf//+P7//1dK/3/V8r/v/X8r/v/r/V/+/1f+/5f+/4v+/tf//Wfr/2/9/lf//+v//lf//pP+/8v//+n+f8v//+v/fpP+fP//88/+7ubn5q87Ozj9L/3+T/v/l5eXla//n//9/29vbn2X9n5X+/2v/f0n/v2r/f6X//7n//2/y/+/y//+l+v+X6v+/pP/fpP+/+f9/2/+/Sv//Uv1/pf//Uv3/V/1/Vf+/+v/fpf/fpf+/Uv//1P//Vf//kv5/Jb9/+f8P/X8S/n+l//9c//9b8v+X7v+/pf+/pf+/pP+/Sv+/+v//kv7/5f+/pff/pf+/pf+/pfe/pf/fpfe/Sv+/8v//+n//0v//Uv7/kv5/Jb///b+l//9b+//X/v+7+v9/lf7/V/v/r/T/V6X//7v+/y/+f6/+f1/9/3f1//+6+v9f6f6/5f+/8v/f6f//7n//6//f9X//+f/f/n//+v+/2/+f5/k/7+k//+k//+k//+k//+k//9v/n+f/v9f+/9v/n9f/f+/4v/f+v/v+r/v9v/n+f//9b/f1f//7v+/6v+/7v+/+v+/7P+/2/+f7P+/6v+/0v3f5v+/3/+/8v3f5Pu//f4/w/9v+v9//v+f+v9/k/5/JP3/SP7/JP3/SP7/JP3/SP7/JP3/SP7/JP3/SP7/JP3/SP7/k/7/JP3/SP7/kv7/JP3/SP7/JP3/SP7/JP3/SP7/k/5/kv5/kv5/kv5/kv5/kv5/kv5/SP7/SP7/SP7/SP7/JP3/JP3/SP7/JP3/k/5/kv5/JP3/k/5/kv5/kv5/kv5/kv5/SP7/k/5/kv5/k/5/kv5/kv5/JP3/SP7/SP7/JP3/k/5/kv5/kv5/JP3/JP3/JP3/k/5/kv5/SP7/k/5/kv5/JP3/kv5/kv5/JP3/SP7/SP7/JP3/k/5/kv5/kv5/JP3/SP7/k/5/kv5/JP3/kv5/kv5/kv5/k/5/SP7/SP7/SP7/SP7/kv5/JP3/JP3/JP3/k/5/kv5/SP7/k/5/kv5/k/5/kv5/kv5/JP3/SP7/SP7/JP3/k/5/kv5/kv5/JP3/JP3/JP3/k/5/kv5/k/5/SP7/k/5/kv5/kv5/kv5/kv5/JP3/SP7/SP7/JP3/SP7/k/5/kv5/kv5/JP3/k/5/kv5/k/5/k/5/k/5/SP7/SP7/SP7/SP7/kv5/kv5/JP3/JP3/JP3/k/5/kv5/SP7/k/5/k/5/kv5/kv5/JP3/SP7/SP7/JP3/SP7/k/5/kv5/kv5/JP3/k/5/k/5/kv5/kv5/k/5/k/5/k/5/kv5/SP7/k/5/SP7/k/5/kv5/kv5/JP3/JP3/JP3/SP7/SP7/SP7/SP7/SP7/k/5/kv5/JP3/kv5/kv5/kv5/kv5/JP3/k/5/k/5/k/5/k/5/SP7/kv5/k/5/SP7/SP7/SP7/SP7/k/5/k/5/k/5/SP7/SP7/JP3/JP3/SP7/SP7/SP7/SP7/k/5/k/5/JP3/kv5/k/5/JP3/k/5/kv5/kv5/SP7/SP7/SP7/k/5/k/5/kv5/JP3/JP3/k/5/kv5/SP7/kv5/k/5/k/5/SP7/SP7/k/5/JP3/JP3/SP7/SP7/k/5/kv5/kv5/kv5/k/5/SP7/k/5/SP7/SP7/SP7/kv5/SP7/k/5/JP3/SP7/k/5/kv5/kv5/kv5/k/5/k/5/kv5/k/5/k/5/SP7/SP7/k/5/kv5/k/5/kv5/SP7/JP3/SP7/SP7/JP3/SP7/k/5/k/5/k/5/k/5/JP3/kv5/kv5/kv5/SP7/k/5/kv5/k/5/k/5/SP7/k/5/kv5/k/5/kv5/k/5/k/5/kv5/k/5/k/5/k/5/kv5/kv5/kv5/SP7/SP7/k/5/SP7/JP3/JP3/JP3/JP3/JP3/SP7/k/5/k/5/k/5/kv5/k/5/k/5/kv5/k/5/k/5/kv5/k/5/kv5/k/5/SP7/k/5/k/5/JP3/k/5/k/5/JP3/k/5/k/5/JP3/JP3/JP3/JP3/JP3/SP7/SP7/SP7/SP7/k/5/5/k/5/k/5/k/5/kv5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/JP3/JP3/JP3/JP3/JP3/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/k/5/kv5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/JP3/JP3/JP3/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/kv5/k/5/kv5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/k/5/k/5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/JP3/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/k/5/JP3/k/5/k/5/k/5/JP3/k/5/JP3/JP3/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/kv5/k/5/k/5/k/5/k/5/kv5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/JP3/JP3/JP3/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/kv5/k/5/k/5/JP3/k/5/k/5/k/5/k/5/JP3/JP3/k/5/k/5/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/JP3/JP3/JP3/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/JP3/JP3/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/SP7/SP7/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/SP7/SP7/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/5/k/a"
-    const logoCoachexBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAakAAAAhCAYAAADf3/kYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAHBhaW50Lm5ldCA0LjEuNWRHWFIAABNqSURBVHhe7Z1tExtHFsZ/7iTbcBu3A0iAJEACyE0AERAgkECAAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAIElE/zQd4m16k027kBCwA5gB7AD2AHsALYTWP0N2mF5P/vX5n0d2A7sALYDW997D2A7sF2w/T2fB8AOYTsw/fXlYwdhB7ADWE2r7bJm5f348x3YDrCagD2w3l5kO7AD2AHsAI4DWy5tD2AHsANs8w/sQhL/j32P+9eM24TtwDbQeD9kYDewXfD8Y4f/O+wHdgBbP8f97uEHewBdhD/N+F/9f6/k/Qf8H/sM/6f//vf2P6/P8I+5uL8v//882/w/9X/83P+v0v//0n///z/Z2f+n/j/n//93/n/z//3/3L+fy///2v+n5L+/+//v+z/r///n//1/1f9f2v+/1n//0n7//n//0n7//n/n7b/nxv/35b/v+P/n7b/n/f/j/b/b///P97v//29//8f+v5f///z//3/j///n//v//3/b///t/3+Yv///f//+b+P///f//+b+v/3///+/9v9//z+X/v9v/v+X/v8v/f9v/v8n/v8n/f9P+v/f/P/P+v/P+v/f/P/f+v9/8/9f+v9/9f8/9f+/+v+f/v9P/v/f/P/P+v9v/n/b/v+X/v+v+f+/9f//2v//6v//6v//6v//6v//6v9/8/+/Wf//2v//6v//6v9/9f+f/P/P+v/P+v/P+v/f/P/f+v/P+v/f/P9v/n+b/v8n/f9v/v8n/f9P+v9v/n+b/v82/f9v/v+b/v8v/f9v/n+T/n8yP/9k=";
-    
+    // --- Helpers de Firebase para mensualidades/pagos/clases ---
+const _db = db; // usamos el db que ya inicializaste
+
+  // === Helpers de colecciones (usa "clubes") ===
+function pagosRef(user, clubId) {
+  return _db
+    .collection("users").doc(user.uid)
+    .collection("clubes").doc(clubId)
+    .collection("pagos");
+}
+
+function clasesRef(user, clubId) {
+  return _db
+    .collection("users").doc(user.uid)
+    .collection("clubes").doc(clubId)
+    .collection("clases");
+}
+
+function mensualidadesRef(user, clubId) {
+  return _db
+    .collection("users").doc(user.uid)
+    .collection("clubes").doc(clubId)
+    .collection("mensualidades");
+}
+
+
+// === Componente: CuentaCorrienteAlumno (limpio, usa tu ensureMensualidadParaAlumno existente) ===
+function CuentaCorrienteAlumno({ alumno, user, clubId, perfil }) {
+  const [loading, setLoading] = React.useState(true);
+  const [busy, setBusy] = React.useState(false);
+  const [mensualidad, setMensualidad] = React.useState(null);
+  const [movimientos, setMovimientos] = React.useState([]);
+  const [error, setError] = React.useState("");
+
+  // clave visual YYYY-MM (solo para mostrar)
+  const mesClaveUI = React.useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+  }, []);
+
+  // Rango del mes actual (para filtrar por fecha)
+  function rangoMesActual() {
+    const ini = new Date(`${mesClaveUI}-01T00:00:00`);
+    const fin = new Date(ini);
+    fin.setMonth(fin.getMonth() + 1);
+    return { ini, fin };
+  }
+
+  // Carga mensualidad + movimientos
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setError("");
+        if (!user || !clubId || !alumno) return;
+
+        // Usa tu ensureMensualidadParaAlumno (con fechaRef)
+        const m = await ensureMensualidadParaAlumno({
+          user,
+          clubId,
+          alumno,
+          perfil,
+          fechaRef: new Date(),
+        });
+        setMensualidad(m ? { id: m.id, ...m } : null);
+
+        if (m && Number(m.incluidas || 0) === 0) {
+          const refFix = mensualidadesRef(user, clubId).doc(m.id);
+          await refFix.set({ incluidas: 1 }, { merge: true });
+          m.incluidas = 1;
+        }
+
+        if (!alive) return;
+
+        const snap = await pagosRef(user, clubId)
+  .where("alumnoId", "==", alumno.id)
+  .get();
+
+const { ini, fin } = rangoMesActual();
+const movs = [];
+snap.forEach((doc) => {
+  const p = { id: doc.id, ...doc.data() };
+  if (p.metodo === "Mensual" || p.metodo === "Mensual (débito de saldo)") {
+    const f = typeof p.fecha === "string"
+      ? new Date(`${p.fecha}T00:00:00`)
+      : p.fecha?.toDate?.() || p.fecha || null;
+    if (!f || (f >= ini && f < fin)) movs.push(p);
+  }
+});
+// ordenar en memoria
+movs.sort((a, b) => {
+  const fa = typeof a.fecha === "string" ? new Date(`${a.fecha}T00:00:00`) : a.fecha?.toDate?.() || a.fecha || 0;
+  const fb = typeof b.fecha === "string" ? new Date(`${b.fecha}T00:00:00`) : b.fecha?.toDate?.() || b.fecha || 0;
+  return fb - fa; // desc
+});
+setMovimientos(movs);
+      } catch (e) {
+        console.warn("CuentaCorrienteAlumno load:", e);
+        setError("No se pudo cargar la cuenta corriente.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [user, clubId, alumno, perfil, mesClaveUI]);
+
+  // DocRef de la mensualidad actual
+  async function getMensualidadDocRef() {
+    if (mensualidad?.id) {
+      return mensualidadesRef(user, clubId).doc(mensualidad.id);
+    }
+    const m = await ensureMensualidadParaAlumno({
+      user,
+      clubId,
+      alumno,
+      perfil,
+      fechaRef: new Date(),
+    });
+    if (m?.id) return mensualidadesRef(user, clubId).doc(m.id);
+    throw new Error("No se consiguió el documento de mensualidad");
+  }
+
+  // Marcar cuota como pagada
+  async function marcarCuotaPagada() {
+    try {
+      setBusy(true);
+      const ref = await getMensualidadDocRef();
+      await ref.set(
+        { pagado: true, pagadoEn: new Date().toISOString() },
+        { merge: true }
+      );
+      setMensualidad((prev) => (prev ? { ...prev, pagado: true } : prev));
+    } catch (e) {
+      console.error("marcarCuotaPagada:", e);
+      setError("No se pudo marcar como pagada.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Reconciliar clases del mes
+  async function reconciliarMensualidadUI() {
+    try {
+      setBusy(true);
+      const ref = await getMensualidadDocRef();
+      const mSnap = await ref.get();
+      const m = { id: mSnap.id, ...mSnap.data() };
+
+      const incluidas = Number(m.incluidas || 0);
+      const consumidas = Number(m.consumidas || 0);
+      let consumidasLocal = consumidas;
+
+      const { ini, fin } = rangoMesActual();
+      const clasesSnap = await clasesRef(user, clubId)
+        .where("alumnoIds", "array-contains", alumno.id)
+        .get();
+
+      const clasesMes = [];
+      clasesSnap.forEach((doc) => {
+        const c = { id: doc.id, ...doc.data() };
+        const f =
+          typeof c.fecha === "string"
+            ? new Date(`${c.fecha}T00:00:00`)
+            : c.fecha?.toDate?.() || c.fecha || null;
+        if (f && f >= ini && f < fin) clasesMes.push(c);
+      });
+      clasesMes.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+      const pagosMens = pagosRef(user, clubId);
+
+      for (const c of clasesMes) {
+        if (consumidasLocal >= incluidas) break;
+        const q = await pagosMens
+  .where("claseId", "==", c.id)
+  .get();
+
+const yaExiste = q.docs.some(doc => {
+  const p = doc.data();
+  return p.alumnoId === alumno.id && p.metodo === "Mensual";
+});
+
+        if (!yaExiste) {
+          await pagosMens.add({
+            claseId: c.id,
+            alumnoId: alumno.id,
+            fecha: c.fecha,
+            concepto: `Cubre por abono - ${mesClaveUI}`,
+            monto: "0",
+            metodo: "Mensual",
+          });
+          consumidasLocal++;
+        }
+      }
+
+      const nuevasConsumidas = Math.max(consumidas, consumidasLocal);
+      await ref.set({ consumidas: nuevasConsumidas }, { merge: true });
+      setMensualidad((prev) =>
+        prev ? { ...prev, consumidas: nuevasConsumidas } : prev
+      );
+
+      // refrescar movimientos
+const pagosMesSnap = await pagosRef(user, clubId)
+  .where("alumnoId", "==", alumno.id)
+  .get();
+
+const { ini: ini2, fin: fin2 } = rangoMesActual();
+const mv = [];
+pagosMesSnap.forEach((doc) => {
+  const p = { id: doc.id, ...doc.data() };
+  const f =
+    typeof p.fecha === "string"
+      ? new Date(`${p.fecha}T00:00:00`)
+      : p.fecha?.toDate?.() || p.fecha || null;
+  if (
+    (p.metodo === "Mensual" || p.metodo === "Mensual (débito de saldo)") &&
+    (!f || (f >= ini2 && f < fin2))
+  ) {
+    mv.push(p);
+  }
+});
+
+// ordenar desc por fecha en memoria
+mv.sort((a, b) => {
+  const fa = typeof a.fecha === "string"
+    ? new Date(`${a.fecha}T00:00:00`)
+    : a.fecha?.toDate?.() || a.fecha || 0;
+  const fb = typeof b.fecha === "string"
+    ? new Date(`${b.fecha}T00:00:00`)
+    : b.fecha?.toDate?.() || b.fecha || 0;
+  return fb - fa; // más reciente primero
+});
+
+setMovimientos(mv);
+    } catch (e) {
+      console.error("reconciliarMensualidadUI:", e);
+      setError("No se pudo reconciliar la mensualidad.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // --- Render ---
+  if (!user || !clubId || !alumno) {
+    return (
+      <Card title="Cuenta Corriente">
+        <p>Faltan datos de usuario/club/alumno.</p>
+      </Card>
+    );
+  }
+  if (loading) return <div>Cargando...</div>;
+
+  const incluidas = Number(mensualidad?.incluidas || 0);
+  const consumidas = Number(mensualidad?.consumidas || 0);
+  const restantes = Math.max(incluidas - consumidas, 0);
+  const deudaExtra = Number(mensualidad?.deudaExtra || 0);
+  const pagado = !!mensualidad?.pagado;
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="p-3 rounded bg-red-50 text-red-700 text-sm">{error}</div>
+      )}
+
+      <Card title={`Cuenta Corriente — ${mesClaveUI}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div className="p-3 rounded bg-slate-50">
+            <div className="text-slate-500">Incluidas</div>
+            <div className="text-lg font-semibold">{incluidas}</div>
+          </div>
+          <div className="p-3 rounded bg-slate-50">
+            <div className="text-slate-500">Consumidas</div>
+            <div className="text-lg font-semibold">{consumidas}</div>
+          </div>
+          <div className="p-3 rounded bg-slate-50">
+            <div className="text-slate-500">Restantes</div>
+            <div className="text-lg font-semibold">{restantes}</div>
+          </div>
+          <div className="p-3 rounded bg-slate-50">
+            <div className="text-slate-500">Deuda Extra</div>
+            <div className="text-lg font-semibold">
+              {formatCurrency(deudaExtra)}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
+          <span
+            className={`px-2 py-1 rounded-full text-xs font-semibold ${
+              pagado
+                ? "bg-emerald-100 text-emerald-800"
+                : "bg-amber-100 text-amber-800"
+            }`}
+          >
+            {pagado ? "Cuota Pagada" : "Cuota Pendiente"}
+          </span>
+
+          <div className="ml-auto flex gap-2">
+            {!pagado && (
+              <button
+                disabled={busy}
+                onClick={marcarCuotaPagada}
+                className="px-3 py-1.5 text-sm rounded-lg border bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+              >
+                Marcar cuota como pagada
+              </button>
+            )}
+            <button
+              disabled={busy}
+              onClick={reconciliarMensualidadUI}
+              className="px-3 py-1.5 text-sm rounded-lg border hover:bg-slate-50 disabled:opacity-50"
+            >
+              Reconciliar clases del mes
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="Movimientos del mes (Mensual)">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-left text-slate-600">
+              <th className="p-2">Fecha</th>
+              <th className="p-2">Concepto</th>
+              <th className="p-2">Método</th>
+              <th className="p-2 text-right">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {movimientos.length === 0 ? (
+              <tr>
+                <td colSpan="4" className="text-center py-4 text-slate-400">
+                  Sin movimientos de mensualidad este mes.
+                </td>
+              </tr>
+            ) : (
+              movimientos.map((m) => (
+                <tr key={m.id} className="border-t">
+                  <td className="p-2">{formatDate(m.fecha, "dd/mm/yyyy")}</td>
+                  <td className="p-2">{m.concepto || "Mensualidad"}</td>
+                  <td className="p-2">{m.metodo}</td>
+                  <td className="p-2 text-right">
+                    {formatCurrency(Number(m.monto || 0))}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+
     // ------------------------------ Constantes y Utilidades ------------------------------
     const initialState = { 
       alumnos: [], 
@@ -88,7 +469,7 @@
         precios: { individual: "5000", dupla: "4000", trio: "3500", cuarteto: "3000", escuelita: "2500" },
         preciosMensuales: { "1xSemana": "18000", "2xSemana": "32000", "3xSemana": "45000", libre: "55000" },
         metodoCobro: "porClase",
-        modoTrabajo: "Independiente",
+        modoTrabajo: "Club",
         canchas: "Club A - Cancha 1\nClub B - Cancha 2",
         // --- NUEVOS CAMPOS AÑADIDOS ---
         datosBancarios: {
@@ -170,7 +551,9 @@ const getPrecioSugerido = (tipo, perfil) => {
   const key = PRECIO_KEY_POR_TIPO[tipo] || "individual";
   const tabla = (perfil && perfil.precios) ? perfil.precios : {};
 
-const computePrecioClase = (tipo, alumnoIds, perfil, alumnoMap) => {
+};
+
+function computePrecioClase(tipo, alumnoIds, perfil, alumnoMap) {
   const perAlumno = parseFloat(getPrecioSugerido(tipo, perfil) || 0);
   const ids = (alumnoIds || []).filter(Boolean);
   // Si no hay IDs todavía, usamos la cantidad del tipo como base
@@ -183,9 +566,9 @@ const computePrecioClase = (tipo, alumnoIds, perfil, alumnoMap) => {
   const count = ids.length > 0 ? (noMensuales || ids.length) : fallbackCount;
   return (perAlumno * count).toString();
 };
+window.computePrecioClase = computePrecioClase;
 
-  return tabla[key] ?? "";
-};
+
 
     const TIPOS_CLASE_NOMBRES = { "Clase 1 persona": "Clase 1 persona", "Clase 2 personas": "Clase 2 personas", "Clase 3 personas": "Clase 3 personas", "Clase 4 personas": "Clase 4 personas", Escuelita: "Escuelita" };
     const METODOS_PAGO = ["Efectivo", "Transferencia", "Mixto", "Mensual","Pendiente"];
@@ -239,6 +622,119 @@ function labelSinClase(tipo) {
   if (format === 'dd/mm/yyyy') return `${day}/${month}/${year}`;
   return `${year}-${month}-${day}`;
 };
+
+// === Mensualidades: utilidades y helpers ===
+const FRECUENCIAS_MENSUALES_INCLUIDAS = {
+  "1xSemana": 4,
+  "2xSemana": 8,
+  "3xSemana": 12,
+  "libre": 9999
+};
+
+const mesClave = (date) => {
+  const d = (typeof date === 'string') ? parseYMDLocal(date) : (date instanceof Date ? date : new Date(date));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+};
+
+async function ensureMensualidadParaAlumno({ user, clubId, alumno, fechaRef, perfil }) {
+  if (!user || !clubId || !alumno) return null;
+  const mes = mesClave(fechaRef || new Date());
+  const id = `${alumno.id}_${mes}`;
+  const ref = mensualidadesRef(user, clubId).doc(id);
+
+  const snap = await ref.get();
+  if (snap.exists) return { id, ...snap.data() };
+
+  const freq = alumno.frecuencia || '1xSemana';
+  const incl = FRECUENCIAS_MENSUALES_INCLUIDAS[freq] ?? 4;
+  const monto = String((perfil?.preciosMensuales?.[freq]) || (initialState?.perfil?.preciosMensuales?.[freq]) || "0");
+
+  const nueva = {
+    alumnoId: alumno.id,
+    mes,
+    frecuencia: freq,
+    incluidas: incl,
+    consumidas: 0,
+    monto,
+    deudaExtra: "0",
+    pagado: false,
+    estado: "pendiente",
+    creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  await ref.set(nueva, { merge: true });
+  return { id, ...nueva };
+}
+
+async function consumirClaseMensual({ user, clubId, alumno, fechaClase, perfil, excedentePorClase = "0" }) {
+  const m = await ensureMensualidadParaAlumno({ user, clubId, alumno, fechaRef: fechaClase, perfil });
+  if (!m) return;
+
+
+  const ref = mensualidadesRef(user, clubId).doc(m.id);
+
+  const consumidas = Number(m.consumidas || 0) + 1;
+  let deudaExtra = Number(m.deudaExtra || 0);
+  const incl = Number(m.incluidas || 0);
+
+  const updates = { consumidas };
+  if (consumidas > incl) {
+    deudaExtra += Number(excedentePorClase || 0);
+    updates.deudaExtra = String(deudaExtra);
+  }
+  await ref.set(updates, { merge: true });
+}
+
+async function cubrirClaseConMensualidadSiCorresponde({
+  user, clubId, alumno, claseId, fecha, precioPorAlumno, perfil
+}) {
+  const fechaNorm = typeof fecha === "string" ? new Date(`${fecha}T00:00:00`) : fecha;
+
+  const m = await ensureMensualidadParaAlumno({
+    user, clubId, alumno, perfil, fechaRef: fechaNorm
+  });
+  if (!m) return;
+
+  const incl = Number(m.incluidas || 0);
+  const cons = Number(m.consumidas || 0);
+  const tieneCupo = cons < incl;
+
+  if (tieneCupo) {
+    const q = await pagosRef(user, clubId).where("claseId", "==", claseId).get();
+    const yaExiste = q.docs.some(d => {
+      const p = d.data();
+      return p.alumnoId === alumno.id && p.metodo === "Mensual";
+    });
+    if (!yaExiste) {
+      await pagosRef(user, clubId).add({
+        claseId,
+        alumnoId: alumno.id,
+        fecha: fecha,
+        concepto: `Cubre por abono - ${m.mes || ""}`,
+        monto: "0",
+        metodo: "Mensual",
+      });
+    }
+  }
+
+  const excedente = tieneCupo ? "0" : String(precioPorAlumno || 0);
+  await consumirClaseMensual({
+    user, clubId, alumno, fechaClase: fecha, perfil, excedentePorClase: excedente
+  });
+}
+
+
+async function marcarPagoMensualidad({ user, clubId, alumnoId, mes }) {
+  const id = `${alumnoId}_${mes}`;
+  await mensualidadesRef(user, clubId).doc(id).set({
+    pagado: true,
+    estado: "pagado",
+    fechaPago: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+
     const getNombreCompleto = (a) => a ? `${a.apellido || ''} ${a.nombre || ''}`.trim() : 'Alumno eliminado';
 // --- Searchable alumno picker (reusable) ---
 function AlumnoSearchSelect({ value, onChange, alumnos, excludeIds = [], placeholder = "Buscar alumno...", autoFocus = false }) {
@@ -399,45 +895,232 @@ function Modal({ isOpen, title, children, onConfirm, onCancel, confirmText = "Co
   );
 }
 
-    
-function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubChange, showIndependentOption }) {
-  const tabs = [ { id: "dashboard", label: "Dashboard" }, { id: "alumnos", label: "Alumnos" }, { id: "clases", label: "Clases" },{ id: "grupos", label: "Grupos" }, { id: "pagos", label: "Pagos" }, { id: "gastos", label: "Gastos" }, { id: "reportes", label: "Reportes" }, { id: "perfil", label: "Perfil" } ];
+function Grupos({ alumnos, user, clubActivoId, onCrearClaseDesdeGrupo }) {
+  const [grupos, setGrupos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [q, setQ] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [nombre, setNombre] = useState("");
+  const [color, setColor] = useState("#10b981");
+  const [miembros, setMiembros] = useState([]);
+  const [alumnoQuery, setAlumnoQuery] = useState("");
+  const [agendarPara, setAgendarPara] = useState(null);
+  const [fechaClase, setFechaClase] = useState(formatDate(new Date()));
+  const [horaClase, setHoraClase] = useState("09:00");
+  useEffect(() => {
+    let mounted = true;
+    if (!user || !clubActivoId) { if (mounted){ setGrupos([]); setLoading(false);} return () => { mounted=false; }; }
+    setLoading(true);
+    const ref = db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId).collection('grupos');
+    const unsub = ref.orderBy('nombre', 'asc').onSnapshot(
+      (snap) => { if (!mounted) return; setGrupos(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); },
+      (e) => { if (!mounted) return; console.error('onSnapshot grupos:', e); setError('No se pudieron cargar los grupos'); setLoading(false); }
+    );
+    return () => { mounted=false; unsub && unsub(); };
+  }, [user, clubActivoId]);
+  const refGrupos = useMemo(() => (!user || !clubActivoId) ? null : db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId).collection('grupos'), [user, clubActivoId]);
+  const abrirCrear = () => { setEditing({id:null}); setNombre(""); setColor("#10b981"); setMiembros([]); setAlumnoQuery(""); };
+  const abrirEditar = (g) => { setEditing(g); setNombre(g?.nombre||""); setColor(g?.color||"#10b981"); setMiembros(Array.isArray(g?.alumnoIds)?g.alumnoIds.filter(Boolean):[]); setAlumnoQuery(""); };
+  const guardarGrupo = async (e) => { e&&e.preventDefault(); if(!refGrupos) return; const payload={ nombre:(nombre||"").trim(), color, alumnoIds:(miembros||[]).filter(Boolean) }; if(!payload.nombre){ alert("Ingresá un nombre para el grupo"); return; } if(editing&&editing.id){ await refGrupos.doc(editing.id).update(payload);} else { await refGrupos.add({ ...payload, creadoEn: firebase.firestore.FieldValue.serverTimestamp() }); } setEditing(null); };
+  const eliminarGrupo = async (g) => { if(!refGrupos||!g?.id) return; if(!confirm(`Eliminar el grupo "${g.nombre}"?`)) return; await refGrupos.doc(g.id).delete(); };
+  const gruposFiltrados = useMemo(() => { const t=q.trim().toLowerCase(); const base=grupos||[]; return t? base.filter(g => (g.nombre||"").toLowerCase().includes(t)) : base; }, [q,grupos]);
+  const alumnosFiltrados = useMemo(() => { const t=(alumnoQuery||"").trim().toLowerCase(); const arr=(alumnos||[]).filter(a => a && a.estado!=='inactivo'); if(!t) return arr; const norm = s => (s||"").normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); return arr.filter(a => norm(getNombreCompleto(a)).includes(norm(t))); }, [alumnoQuery, alumnos]);
+  const toggleMiembro = (id) => setMiembros(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const abrirAgendar = (g) => { setAgendarPara(g); setFechaClase(formatDate(new Date())); setHoraClase("09:00"); };
+  const confirmarAgendar = () => { if(!agendarPara) return; const ids=(agendarPara.alumnoIds||[]).filter(Boolean); if(!ids.length){ alert("El grupo no tiene alumnos."); return; } if(!fechaClase||!horaClase){ alert("Elegí fecha y hora."); return; } onCrearClaseDesdeGrupo && onCrearClaseDesdeGrupo({ fecha:fechaClase, hora:horaClase, alumnoIds:ids, grupo:agendarPara }); setAgendarPara(null); };
+  const waHref = (g) => { const nombres=(g.alumnoIds||[]).map(id => getNombreCompleto((alumnos||[]).find(a => a.id===id))).filter(Boolean).join(', '); const text=encodeURIComponent(`Hola! Mensaje para el grupo "${g.nombre}":`); return `https://wa.me/?text=${text}%0A${encodeURIComponent(nombres)}`; };
+  return (<div className="space-y-4">
+    <Card title="Grupos" right={<div className="flex gap-2">
+      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar grupo..." className="border rounded-xl px-3 py-1.5 text-sm" />
+      <button onClick={abrirCrear} className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Nuevo grupo</button>
+    </div>}>
+      {loading && <div className="text-sm text-slate-500">Cargando…</div>}
+      {error && <div className="text-sm text-red-600">{error}</div>}
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600">
+          <th className="p-2">Nombre</th><th className="p-2">Miembros</th><th className="p-2">Acciones</th>
+        </tr></thead><tbody>
+          {(gruposFiltrados||[]).map(g => (<tr key={g.id} className="border-t">
+            <td className="p-2"><span className="inline-flex items-center gap-2">
+              <span className="inline-block w-3 h-3 rounded-full" style={{backgroundColor: g.color || '#10b981'}}></span>
+              <span className="font-medium">{g.nombre}</span></span></td>
+            <td className="p-2">{(g.alumnoIds||[]).filter(Boolean).length}</td>
+            <td className="p-2"><div className="flex flex-wrap gap-2">
+              <button onClick={()=>abrirEditar(g)} className="px-2 py-1 rounded-lg border">Editar</button>
+              <button onClick={()=>abrirAgendar(g)} className="px-2 py-1 rounded-lg border">Nueva clase</button>
+              <a href={waHref(g)} target="_blank" rel="noreferrer" className="px-2 py-1 rounded-lg border">WhatsApp</a>
+              <button onClick={()=>eliminarGrupo(g)} className="px-2 py-1 rounded-lg border text-red-600">Eliminar</button>
+            </div></td>
+          </tr>))}
+          {(!loading && (!gruposFiltrados || gruposFiltrados.length===0)) && (<tr><td className="p-2 text-slate-500" colSpan="3">No hay grupos.</td></tr>)}
+        </tbody></table>
+      </div>
+    </Card>
+    {editing !== null && (
+      <Modal isOpen={true} title={editing?.id ? 'Editar grupo' : 'Nuevo grupo'} onCancel={()=>setEditing(null)} onConfirm={guardarGrupo} confirmText="Guardar">
+        <form onSubmit={guardarGrupo} className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <div><label className="block text-sm text-slate-600 mb-1">Nombre</label>
+              <input value={nombre} onChange={e=>setNombre(e.target.value)} className="w-full border rounded-xl px-3 py-2" /></div>
+            <div><label className="block text-sm text-slate-600 mb-1">Color</label>
+              <input type="color" value={color} onChange={e=>setColor(e.target.value)} className="w-16 h-10 p-0 border rounded" /></div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm text-slate-600">Miembros</label>
+              <input value={alumnoQuery} onChange={e=>setAlumnoQuery(e.target.value)} placeholder="Buscar alumno..." className="border rounded-xl px-3 py-1.5 text-sm" />
+            </div>
+            <div className="max-h-60 overflow-auto border rounded-xl p-2">
+              {(alumnosFiltrados||[]).map(a => (
+                <label key={a.id} className="flex items-center gap-2 py-1">
+                  <input type="checkbox" checked={miembros.includes(a.id)} onChange={()=>toggleMiembro(a.id)} />
+                  <span>{getNombreCompleto(a)}</span>
+                  <span className="ml-auto text-xs text-slate-500">{a.plan || 'porClase'}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </form>
+      </Modal>
+    )}
+    {agendarPara && (
+      <Modal isOpen={true} title={"Nueva clase: " + (agendarPara?.nombre || "")} onCancel={()=>setAgendarPara(null)} onConfirm={confirmarAgendar} confirmText="Crear en Clases">
+        <div className="space-y-4">
+          <div className="grid md:grid-cols-3 gap-4">
+            <div><label className="block text-sm text-slate-600 mb-1">Fecha</label>
+              <input type="date" value={fechaClase} onChange={e=>setFechaClase(e.target.value)} className="w-full border rounded-xl px-3 py-2" /></div>
+            <div><label className="block text-sm text-slate-600 mb-1">Hora</label>
+              <input type="time" value={horaClase} onChange={e=>setHoraClase(e.target.value)} className="w-full border rounded-xl px-3 py-2" /></div>
+          </div>
+          <div className="text-sm text-slate-600">
+            <div>Miembros: {(agendarPara.alumnoIds||[]).map(id => getNombreCompleto((alumnos||[]).find(a => a.id===id))).filter(Boolean).join(', ') || '—'}</div>
+          </div>
+        </div>
+      </Modal>
+    )}
+  </div>);
+}
+
+function Topbar({
+  current,
+  setCurrent,
+  onLogout,
+  clubes,
+  clubActivoId,
+  onClubChange,
+  showIndependentOption = false,
+}) {
+  // ▸ rutas del logo (ajustá según tu estructura)
+  const LOGO_CIRCLE_PRIMARY = "./img/logo_favicon.png";
+  const LOGO_CIRCLE_FALLBACK = "./logo_favicon.png"; // si no está en /img
+
+  const LOGO_WORDMARK_PRIMARY = "./img/logo_coachex_N.png";
+  const LOGO_WORDMARK_FALLBACK = "./assets/img/logo_coachex_N.png"; // por si lo tenés en /assets
+
+  // ▸ defensivo con clubes
+  const clubesArr = Array.isArray(clubes) ? clubes : [];
+  const clubActivo = clubActivoId ? clubesArr.find(c => c.id === clubActivoId) : null;
+
+  const tabs = [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "alumnos", label: "Alumnos" },
+    { id: "clases", label: "Clases" },
+    { id: "grupos", label: "Grupos" },
+    { id: "pagos", label: "Pagos" },
+    { id: "gastos", label: "Gastos" },
+    { id: "reportes", label: "Reportes" },
+    { id: "perfil", label: "Perfil" },
+  ];
+
   return (
     <header className="w-full bg-slate-900 text-white">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between">
+        {/* Izquierda: logo circular + wordmark + slogan */}
         <div className="flex items-center gap-3">
-          <img src={logoCircularBase64} alt="Logo Circular" className="w-8 h-8 sm:w-10 sm:h-10 rounded-full"/>
+          <img
+            src={LOGO_CIRCLE_PRIMARY}
+            alt="Coachex"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full"
+            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = LOGO_CIRCLE_FALLBACK; }}
+          />
           <div>
-            <img src="./assets/img/logo_coachex%20N.png" alt="Coachex-Pro Logo" className="h-5 sm:h-6"/>
+            <img
+              src={LOGO_WORDMARK_PRIMARY}
+              alt="Coachex-Pro Logo"
+              className="h-5 sm:h-6"
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = LOGO_WORDMARK_FALLBACK; }}
+            />
             <p className="text-[10px] sm:text-xs opacity-80 -mt-0.5">Gestión de Profesores</p>
           </div>
         </div>
+
+        {/* Derecha: selector de club + tabs + logout (desktop) */}
         <nav className="hidden md:flex items-center gap-3">
-          {Array.isArray(clubes) && clubes.length > 1 ? (
-  <select 
-    value={clubActivoId || ""}
-    onChange={(e) => onClubChange(e.target.value)}
-    className="text-sm px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 focus:ring-2 focus:ring-white w-full sm:w-auto max-w-[220px]"
-    title="Seleccionar Club de Trabajo"
-  >
-    {clubes.map(club => (
-      <option key={club.id} value={club.id}>{club.nombre}</option>
-    ))}
-  </select>
-) : (
-  <div className="text-slate-200 text-sm px-2 py-1 rounded-md bg-slate-800/40 border border-slate-700/50">
-    {clubActivoId ? (clubes.find(c=>c.id===clubActivoId)?.nombre || "—") : (clubes[0]?.nombre || "—")}
-  </div>
-)}
-          {tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-1.5 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"}`}>{t.label}</button>))}
-          <button onClick={onLogout} className="px-2 py-1 rounded-lg text-sm transition bg-red-600 hover:bg-red-700 text-white ml-4">Cerrar Sesión</button>
+          {clubesArr.length > 1 ? (
+            <select
+              value={clubActivoId || ""}
+              onChange={(e) => onClubChange && onClubChange(e.target.value)}
+              className="text-sm px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 focus:ring-2 focus:ring-white w-full sm:w-auto max-w-[220px]"
+              title="Seleccionar Club de Trabajo"
+            >
+              {clubesArr.map(club => (
+                <option key={club.id} value={club.id}>{club.nombre}</option>
+              ))}
+            </select>
+          ) : (
+            <div className="text-slate-200 text-sm px-2 py-1 rounded-md bg-slate-800/40 border border-slate-700/50">
+              {clubActivo?.nombre || clubesArr[0]?.nombre || "—"}
+            </div>
+          )}
+
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setCurrent && setCurrent(t.id)}
+              className={`px-3 py-1.5 rounded-xl text-sm transition ${
+                current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+
+          <button
+            onClick={onLogout}
+            className="px-2 py-1 rounded-lg text-sm transition bg-red-600 hover:bg-red-700 text-white ml-4"
+          >
+            Cerrar Sesión
+          </button>
         </nav>
       </div>
-      <div className="md:hidden px-2 pb-2 grid grid-cols-3 sm:grid-cols-5 gap-2">{tabs.map((t) => (<button key={t.id} onClick={() => setCurrent(t.id)} className={`px-3 py-2 rounded-xl text-sm transition ${current === t.id ? "bg-white text-slate-900" : "bg-slate-800 text-white"}`}>{t.label}</button>))}</div>
-      <div className="md:hidden px-2 pb-2"><button onClick={onLogout} className="w-full px-3 py-1.5 rounded-lg text-sm transition bg-red-600 hover:bg-red-700 text-white mt-2">Cerrar Sesión</button></div>
+
+      {/* Navegación móvil */}
+      <div className="md:hidden px-2 pb-2 grid grid-cols-3 sm:grid-cols-5 gap-2">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setCurrent && setCurrent(t.id)}
+            className={`px-3 py-2 rounded-xl text-sm transition ${
+              current === t.id ? "bg-white text-slate-900" : "bg-slate-800 text-white"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="md:hidden px-2 pb-2">
+        <button
+          onClick={onLogout}
+          className="w-full px-3 py-1.5 rounded-lg text-sm transition bg-red-600 hover:bg-red-700 text-white mt-2"
+        >
+          Cerrar Sesión
+        </button>
+      </div>
     </header>
   );
 }
+
     
     function ClasesPorTamanoMes({ clases }) {
   const resumen = useMemo(() => {
@@ -478,303 +1161,371 @@ function Topbar({ current, setCurrent, onLogout, clubes, clubActivoId, onClubCha
 
     
     function Dashboard({ perfil, clases, pagos, gastos, alumnos, clubes, clubActivoId, goToNewClass, goToEditClass }) {
-      useEffect(() => {
-  console.log("DATOS RECIBIDOS POR EL DASHBOARD:", { clubId: clubActivoId, nombrePerfil: perfil?.nombre });
-}, [clubActivoId, perfil?.nombre]);
-const [currentDate, setCurrentDate] = useState(new Date());
-        const [mostrarSoloHorarioLaboral, setMostrarSoloHorarioLaboral] = useState(false);
-        const weekStartDate = getWeekStartDate(currentDate);
-        const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
-        
-        const alumnoMap = useMemo(() => new Map((alumnos || []).map(a => [a.id, getNombreCompleto(a)])), [alumnos]);
-        
-        
-        const alumnoObjMap = useMemo(() => new Map((alumnos || []).map(a => [a.id, a])), [alumnos]);
-        const [contactosExpandId, setContactosExpandId] = useState(null);
-        const [contactosMsg, setContactosMsg] = useState("");
-const hoy = formatDate(new Date());
-        const semanaInicio = formatDate(getWeekStartDate(new Date()));
-        const manana = formatDate(addDays(new Date(), 1));
+  useEffect(() => {
+    console.log("DATOS RECIBIDOS POR EL DASHBOARD:", { clubId: clubActivoId, nombrePerfil: perfil?.nombre });
+  }, [clubActivoId, perfil?.nombre]);
 
-        const clasesHoy = useMemo(() => {
-            return (clases || [])
-                .filter(c => c.fecha === hoy)
-                .map(c => ({...c, nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')}))
-                .sort((a, b) => a.hora.localeCompare(b.hora));
-        }, [clases, hoy, alumnoMap]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [mostrarSoloHorarioLaboral, setMostrarSoloHorarioLaboral] = useState(false);
 
-        const clasesManana = useMemo(() => {
-            return (clases || [])
-                .filter(c => c.fecha === manana)
-                .map(c => ({...c, nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')}))
-                .sort((a, b) => a.hora.localeCompare(b.hora));
-        }, [clases, manana, alumnoMap]);
-        // --- Horario disponible para mañana ---
-        const getDayIndex = (d) => (d.getDay() === 0 ? 6 : d.getDay() - 1); // 0..6 (Lun..Dom)
-        const getNombreDiaFromYMD = (yyyy_mm_dd) => {
-          const d = new Date(`${yyyy_mm_dd}T00:00:00`);
-          return DIAS_SEMANA_NOMBRES[getDayIndex(d)];
-        };
-        const generateSlots = (desde, hasta, stepMin = 60) => {
-          const [h1, m1] = (desde || '08:00').split(':').map(Number);
-          const [h2, m2] = (hasta || '20:00').split(':').map(Number);
-          const start = h1 * 60 + m1;
-          const end = h2 * 60 + m2;
-          const res = [];
-          for (let t = start; t + stepMin <= end; t += stepMin) {
-            const hh = String(Math.floor(t / 60)).padStart(2, '0');
-            const mm = String(t % 60).padStart(2, '0');
-            res.push(`${hh}:${mm}`);
-          }
-          return res;
-        };
-        const bloquesManana = useMemo(() => {
-          const nombreDia = getNombreDiaFromYMD(manana);
-          const data = clubActivo ? (clubActivo.horarioLaboral || {}) : (perfil.horarioLaboral || []);
-          if (clubActivo && data && Array.isArray(data.bloques)) {
-            return data.bloques.filter(b => b.dia === nombreDia && (b.activo ?? true)).map(b => ({ desde: b.desde, hasta: b.hasta }));
-          }
-          const arr = Array.isArray(data) ? data : [];
-          return arr.filter(b => b.dia === nombreDia && (b.activo ?? true)).map(b => ({ desde: b.desde, hasta: b.hasta }));
-        }, [clubActivo, perfil, manana]);
-        const horarioDisponibleManana = useMemo(() => {
-          const ocupadas = new Set((clasesManana || []).map(c => c.hora));
-          const slots = [];
-          bloquesManana.forEach(b => {
-            generateSlots(b.desde, b.hasta, 60).forEach(h => {
-              if (!ocupadas.has(h)) slots.push(h);
-            });
-          });
-          return slots.sort((a,b)=>a.localeCompare(b));
-        }, [bloquesManana, clasesManana]);
+  const weekStartDate = getWeekStartDate(currentDate);
+  const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
 
+  // 🔹 club activo y datos de horario (debe ir ANTES de usarlo en useMemo)
+  const clubActivo = clubActivoId ? (clubes || []).find(c => c.id === clubActivoId) : null;
+  const nombreLugar = clubActivo ? clubActivo.nombre : "—";
+  const nombreCompleto = `${perfil?.nombre || ''} ${perfil?.apellido || ''}`.trim();
+  const horarioData = clubActivo ? clubActivo.horarioLaboral : perfil?.horarioLaboral;
 
-        const resumenClasesHoy = useMemo(() => {
-            if (!clasesHoy || clasesHoy.length === 0) return [];
-            const counts = clasesHoy.reduce((acc, clase) => {
-                const tipo = normalizarTipoClase(clase.tipo || 'Clase 1 persona');
-                acc[tipo] = (acc[tipo] || 0) + 1;
-                return acc;
-            }, {});
-            return Object.entries(counts).map(([tipo, cantidad]) => {
-                const nombreClase = labelSinClase(tipo);
-                const textoClase = cantidad > 1 ? 'clases' : 'clase';
-                return `${cantidad} ${textoClase} de ${nombreClase}`;
-            });
-        }, [clasesHoy]);
-        
-        const balanceSemana = useMemo(() => {
-            const ingresos = (pagos || []).filter(p => p.fecha >= semanaInicio && p.metodo !== 'Pendiente').reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
-            const egresos = (gastos || []).filter(g => g.fecha >= semanaInicio).reduce((acc, g) => acc + parseFloat(g.monto || 0), 0);
-            return ingresos - egresos;
-        }, [pagos, gastos, semanaInicio]);
-        
-        const pagosPendientes = useMemo(() => {
-            let pendientes = 0;
-            const alumnosMensuales = (alumnos || []).filter(a => a.plan === 'mensual' && a.estado === 'activo');
-            const pagosMensualesMesActual = (pagos || []).filter(p => p.concepto?.startsWith("Cuota Mensual") && new Date(p.fecha).getMonth() === new Date().getMonth());
-            alumnosMensuales.forEach(alumno => {
-                const cuota = parseFloat((perfil.preciosMensuales || {})[alumno.frecuencia] || 0);
-                const totalPagado = pagosMensualesMesActual.filter(p => p.alumnoId === alumno.id).reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
-                if (cuota > totalPagado) pendientes++;
-            });
-            return pendientes;
-        }, [pagos, alumnos, perfil]);
-        
-        const clubActivo = clubActivoId ? (clubes || []).find(c => c.id === clubActivoId) : null;
-        const nombreLugar = clubActivo ? clubActivo.nombre : "—";
-        const nombreCompleto = `${perfil.nombre || ''} ${perfil.apellido || ''}`.trim();
-        const horarioData = clubActivo ? clubActivo.horarioLaboral : perfil.horarioLaboral;
-        
-        const formatHorario = (data, esClub) => {
-            if (!data) return ["No especificado"];
-            if (esClub && data.bloques) {
-                if (data.bloques.length === 0) return ["No hay horarios definidos para este club."];
-                return data.bloques.map(b => `${b.dia}: ${b.desde} - ${b.hasta}`);
-            }
-            if (!esClub && Array.isArray(data)) {
-                 const activos = data.filter(d => d.activo);
-                 if (activos.length === 0) return ["No hay días de trabajo definidos."];
-                 return activos.map(d => `${d.dia}: ${d.desde} - ${d.hasta}`);
-            }
-            return ["Horario no configurado."];
-        };
-        const horarioFormateado = formatHorario(horarioData, !!clubActivo);
+  const alumnoMap = useMemo(
+    () => new Map((alumnos || []).map(a => [a.id, getNombreCompleto(a)])),
+    [alumnos]
+  );
+  const alumnoObjMap = useMemo(
+    () => new Map((alumnos || []).map(a => [a.id, a])),
+    [alumnos]
+  );
 
-        return (
-            <div className="grid gap-6">
-                <div className="bg-white p-4 rounded-2xl flex flex-wrap justify-between items-start shadow-sm border border-slate-200">
-                    <div className="text-sm space-y-2">
-                        <h3 className="font-semibold text-[#34745B] text-base">Lugar de Trabajo</h3>
-                        <p className="text-slate-600"><strong>Modo actual:</strong> <span className="font-semibold text-slate-800">{nombreLugar}</span></p>
-                        <p className="text-slate-600"><strong>Profesor/a:</strong> {nombreCompleto}</p>
-                    </div>
-                    <div className="text-sm space-y-1 text-right">
-                        <strong className="block text-[#34745B]">Horario Laboral:</strong>
-                        <div className="text-slate-600">
-                            {horarioFormateado.map((linea, index) => (
-                                <div key={index}>{linea}</div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
+  const [contactosExpandId, setContactosExpandId] = useState(null);
+  const [contactosMsg, setContactosMsg] = useState("");
 
-                <div className="grid md:grid-cols-3 gap-4">
-                    <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
-                        <p className="text-sm text-green-800">Clases de Hoy</p>
-                        <p className="text-2xl font-bold text-[#34745B]">{clasesHoy.length}</p>
-                         {resumenClasesHoy.length > 0 && (
-                            <div className="text-xs text-green-700 mt-2 border-t border-green-200 pt-2">
-                                {resumenClasesHoy.map((linea, index) => (<p key={index}>{linea}</p>))}
-                            </div>
-                        )}
-                    </div>
-                    
-<div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+  const hoy = formatDate(new Date());
+  const semanaInicio = formatDate(getWeekStartDate(new Date()));
+  const manana = formatDate(addDays(new Date(), 1));
+
+  const clasesHoy = useMemo(() => {
+    return (clases || [])
+      .filter(c => c.fecha === hoy)
+      .map(c => ({
+        ...c,
+        nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')
+      }))
+      .sort((a, b) => a.hora.localeCompare(b.hora));
+  }, [clases, hoy, alumnoMap]);
+
+  const clasesManana = useMemo(() => {
+    return (clases || [])
+      .filter(c => c.fecha === manana)
+      .map(c => ({
+        ...c,
+        nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')
+      }))
+      .sort((a, b) => a.hora.localeCompare(b.hora));
+  }, [clases, manana, alumnoMap]);
+
+  // --- Horario disponible para mañana ---
+  const getDayIndex = (d) => (d.getDay() === 0 ? 6 : d.getDay() - 1); // 0..6 (Lun..Dom)
+  const getNombreDiaFromYMD = (yyyy_mm_dd) => {
+    const d = new Date(`${yyyy_mm_dd}T00:00:00`);
+    return DIAS_SEMANA_NOMBRES[getDayIndex(d)];
+  };
+  const generateSlots = (desde, hasta, stepMin = 60) => {
+    const [h1, m1] = (desde || '08:00').split(':').map(Number);
+    const [h2, m2] = (hasta || '20:00').split(':').map(Number);
+    const start = h1 * 60 + m1;
+    const end = h2 * 60 + m2;
+    const res = [];
+    for (let t = start; t + stepMin <= end; t += stepMin) {
+      const hh = String(Math.floor(t / 60)).padStart(2, '0');
+      const mm = String(t % 60).padStart(2, '0');
+      res.push(`${hh}:${mm}`);
+    }
+    return res;
+  };
+
+  const bloquesManana = useMemo(() => {
+    const nombreDia = getNombreDiaFromYMD(manana);
+    const data = clubActivo ? (clubActivo.horarioLaboral || {}) : (perfil?.horarioLaboral || []);
+    if (clubActivo && data && Array.isArray(data.bloques)) {
+      return data.bloques
+        .filter(b => b.dia === nombreDia && (b.activo ?? true))
+        .map(b => ({ desde: b.desde, hasta: b.hasta }));
+    }
+    const arr = Array.isArray(data) ? data : [];
+    return arr
+      .filter(b => b.dia === nombreDia && (b.activo ?? true))
+      .map(b => ({ desde: b.desde, hasta: b.hasta }));
+  }, [clubActivo, perfil, manana]);
+
+  const horarioDisponibleManana = useMemo(() => {
+    const ocupadas = new Set((clasesManana || []).map(c => c.hora));
+    const slots = [];
+    bloquesManana.forEach(b => {
+      generateSlots(b.desde, b.hasta, 60).forEach(h => {
+        if (!ocupadas.has(h)) slots.push(h);
+      });
+    });
+    return slots.sort((a, b) => a.localeCompare(b));
+  }, [bloquesManana, clasesManana]);
+
+  const resumenClasesHoy = useMemo(() => {
+    if (!clasesHoy || clasesHoy.length === 0) return [];
+    const counts = clasesHoy.reduce((acc, clase) => {
+      const tipo = normalizarTipoClase(clase.tipo || 'Clase 1 persona');
+      acc[tipo] = (acc[tipo] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.entries(counts).map(([tipo, cantidad]) => {
+      const nombreClase = labelSinClase(tipo);
+      const textoClase = cantidad > 1 ? 'clases' : 'clase';
+      return `${cantidad} ${textoClase} de ${nombreClase}`;
+    });
+  }, [clasesHoy]);
+
+  const balanceSemana = useMemo(() => {
+    const ingresos = (pagos || [])
+      .filter(p => p.fecha >= semanaInicio && p.metodo !== 'Pendiente')
+      .reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
+    const egresos = (gastos || [])
+      .filter(g => g.fecha >= semanaInicio)
+      .reduce((acc, g) => acc + parseFloat(g.monto || 0), 0);
+    return ingresos - egresos;
+  }, [pagos, gastos, semanaInicio]);
+
+  const pagosPendientes = useMemo(() => {
+    let pendientes = 0;
+    const alumnosMensuales = (alumnos || []).filter(a => a.plan === 'mensual' && a.estado === 'activo');
+    const pagosMensualesMesActual = (pagos || [])
+      .filter(p => p.concepto?.startsWith("Cuota Mensual") && new Date(p.fecha).getMonth() === new Date().getMonth());
+    alumnosMensuales.forEach(alumno => {
+      const cuota = parseFloat((perfil?.preciosMensuales || {})[alumno.frecuencia] || 0);
+      const totalPagado = pagosMensualesMesActual
+        .filter(p => p.alumnoId === alumno.id)
+        .reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
+      if (cuota > totalPagado) pendientes++;
+    });
+    return pendientes;
+  }, [pagos, alumnos, perfil]);
+
+  const horarioFormateado = (() => {
+    const data = horarioData;
+    const esClub = !!clubActivo;
+    if (!data) return ["No especificado"];
+    if (esClub && data.bloques) {
+      if (data.bloques.length === 0) return ["No hay horarios definidos para este club."];
+      return data.bloques.map(b => `${b.dia}: ${b.desde} - ${b.hasta}`);
+    }
+    if (!esClub && Array.isArray(data)) {
+      const activos = data.filter(d => d.activo);
+      if (activos.length === 0) return ["No hay días de trabajo definidos."];
+      return activos.map(d => `${d.dia}: ${d.desde} - ${d.hasta}`);
+    }
+    return ["Horario no configurado."];
+  })();
+
+  return (
+    <div className="grid gap-6">
+      <div className="bg-white p-4 rounded-2xl flex flex-wrap justify-between items-start shadow-sm border border-slate-200">
+        <div className="text-sm space-y-2">
+          <h3 className="font-semibold text-[#34745B] text-base">Lugar de Trabajo</h3>
+          <p className="text-slate-600">
+            <strong>Modo actual:</strong>{" "}
+            <span className="font-semibold text-slate-800">{nombreLugar}</span>
+          </p>
+          <p className="text-slate-600"><strong>Profesor/a:</strong> {nombreCompleto}</p>
+        </div>
+        <div className="text-sm space-y-1 text-right">
+          <strong className="block text-[#34745B]">Horario Laboral:</strong>
+          <div className="text-slate-600">
+            {horarioFormateado.map((linea, index) => (
+              <div key={index}>{linea}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
+          <p className="text-sm text-green-800">Clases de Hoy</p>
+          <p className="text-2xl font-bold text-[#34745B]">{clasesHoy.length}</p>
+          {resumenClasesHoy.length > 0 && (
+            <div className="text-xs text-green-700 mt-2 border-t border-green-200 pt-2">
+              {resumenClasesHoy.map((linea, index) => (<p key={index}>{linea}</p>))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
   <p className="text-sm text-slate-600">Horario disponible para mañana</p>
   <div className="mt-1 text-xs text-slate-500">{horarioDisponibleManana.length} libres</div>
+
   {horarioDisponibleManana.length === 0 ? (
-    <p className="text-sm text-slate-500 mt-2">No hay horas libres dentro del horario laboral.</p>
+    <p className="text-sm text-slate-500 mt-2">
+      No hay horas libres dentro del horario laboral.
+    </p>
   ) : (
-    <div className="mt-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-      {horarioDisponibleManana.map(h => (
-  <div key={h} className="flex items-center justify-between border rounded-lg px-2 py-1 bg-white">
-    <span className="text-sm text-slate-700">{h}</span>
-    <button
-      type="button"
-      onClick={() => goToNewClass && goToNewClass({ fecha: manana, hora: h })}
-      className="text-xs px-2 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
-      title="Agendar clase en este horario"
-    >
-      Agendar
-    </button>
-  </div>
-))}
+    <div className="mt-2 min-h-[64px] flex items-center">
+      <div className="ml-auto inline-flex items-center gap-3">
+        <span className="inline-flex h-8 items-center px-3 rounded-full border bg-white text-slate-700 text-sm">
+          {horarioDisponibleManana[0]}
+        </span>
+        <button
+          type="button"
+          onClick={() =>
+            goToNewClass && goToNewClass({ fecha: manana, hora: horarioDisponibleManana[0] })
+          }
+          className="text-xs px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+          title="Agendar clase en este horario"
+        >
+          Agendar
+        </button>
+      </div>
     </div>
   )}
 </div>
 
-                    <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
-                        <p className="text-sm text-green-800">Balance de la Semana</p>
-                        <p className={`text-2xl font-bold ${balanceSemana >= 0 ? 'text-[#34745B]' : 'text-red-900'}`}>{formatCurrency(balanceSemana)}</p>
+
+        <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
+          <p className="text-sm text-green-800">Balance de la Semana</p>
+          <p className={`text-2xl font-bold ${balanceSemana >= 0 ? 'text-[#34745B]' : 'text-red-900'}`}>
+            {formatCurrency(balanceSemana)}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card title={<span className="text-[#34745B]">Agenda del Día</span>}>
+          {clasesHoy.length === 0 ? (
+            <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
+          ) : (
+            <ul className="space-y-2">
+              {clasesHoy.map(c => (
+                <li key={c.id} className="p-2 border-b flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold text-slate-700">{c.hora} - {c.nombresAlumnos}</p>
+                    <p className="text-xs text-slate-500">{c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}</p>
+                  </div>
+                  {c.estado !== 'Programada' && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        c.estado === 'Realizada' ? 'bg-green-100 text-green-800' :
+                        c.estado === 'Ausente'    ? 'bg-orange-100 text-orange-800' :
+                        c.estado === 'Cancelada'  ? 'bg-red-100 text-red-800' : ''
+                      }`}
+                    >
+                      {c.estado}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card title={<span className="text-[#34745B]">Agenda de Mañana · Contactos</span>}>
+          {clasesManana.length === 0 ? (
+            <p className="text-sm text-slate-500">No hay clases programadas para mañana.</p>
+          ) : (
+            <ul className="space-y-2">
+              {clasesManana.map(c => (
+                <li key={c.id} className="p-2 border rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-slate-700">{c.hora} - {c.nombresAlumnos}</p>
+                      <p className="text-xs text-slate-500">{c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}</p>
                     </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                    <Card title={<span className="text-[#34745B]">Agenda del Día</span>}>
-                        {clasesHoy.length === 0 ? (
-                            <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
-                        ) : (
-                            <ul className="space-y-2">
-    {clasesHoy.map(c => (
-        <li key={c.id} className="p-2 border-b flex justify-between items-center">
-            <div>
-                <p className="font-semibold text-slate-700">{c.hora} - {c.nombresAlumnos}</p>
-                <p className="text-xs text-slate-500">{c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}</p>
-            </div>
-            {c.estado !== 'Programada' && (
-                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                    c.estado === 'Realizada' ? 'bg-green-100 text-green-800' :
-                    c.estado === 'Ausente' ? 'bg-orange-100 text-orange-800' :
-                    c.estado === 'Cancelada' ? 'bg-red-100 text-red-800' : ''
-                }`}>
-                    {c.estado}
-                </span>
-            )}
-        </li>
-    ))}
-</ul>
-                        )}
-                    </Card>
-                  
-                    <Card title={<span className="text-[#34745B]">Agenda de Mañana · Contactos</span>}>
-                        {clasesManana.length === 0 ? (
-                            <p className="text-sm text-slate-500">No hay clases programadas para mañana.</p>
-                        ) : (
-                            <ul className="space-y-2">
-                                {clasesManana.map(c => (
-                                    <li key={c.id} className="p-2 border rounded-lg">
-                                        <div className="flex justify-between items-center">
-                                            <div>
-                                                <p className="font-semibold text-slate-700">{c.hora} - {c.nombresAlumnos}</p>
-                                                <p className="text-xs text-slate-500">{c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}</p>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-800`}>{c.estado}</span>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => { const canchaTxt = c.cancha ? ` en ${c.cancha}` : ""; const def=`Hola! Te recuerdo tu clase ${c.tipo}${canchaTxt} el ${c.fecha} a las ${c.hora}.`; setContactosMsg(def); setContactosExpandId(contactosExpandId === c.id ? null : c.id); }}
-                                                  className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50"
-                                                >
-                                                  Contactos
-                                                </button>
-                                            </div>
-                                        </div>
-                                        {contactosExpandId === c.id && (
-                                          <div className="mt-3 p-3 bg-slate-50 rounded-lg border">
-                                            <div className="mb-3"><label className="text-xs text-slate-500 block mb-1">Mensaje (editable)</label><textarea value={contactosMsg} onChange={(e)=>setContactosMsg(e.target.value)} className="w-full border rounded-lg px-2 py-1 text-sm" rows="2"/></div><table className="w-full text-sm">
-                                              <thead>
-                                                <tr className="text-slate-500">
-                                                  <th className="text-left px-2 py-1">Alumno</th>
-                                                  <th className="text-left px-2 py-1">Teléfono</th>
-                                                  <th className="text-left px-2 py-1">Acción</th>
-                                                </tr>
-                                              </thead>
-                                              <tbody>
-                                                {(c.alumnoIds || []).filter(Boolean).map(id => {
-                                                  const a = alumnoObjMap.get(id);
-                                                  if (!a) return null;
-                                                  const nombre = getNombreCompleto(a);
-                                                  const telRaw = (a.telefono || a.contactoPadre || "").toString();
-                                                  const digits = telRaw.replace(/\D/g, "");
-                                                  const canchaTxt = c.cancha ? ` en ${c.cancha}` : ""; const base = `Hola! Te recuerdo tu clase ${c.tipo}${canchaTxt} el ${c.fecha} a las ${c.hora}.`; const msg = contactosExpandId === c.id && contactosMsg ? contactosMsg : base; const wa = `https://api.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(msg)}`;
-                                                  return (
-                                                    <tr key={id} className="border-t">
-                                                      <td className="px-2 py-1">{nombre}</td>
-                                                      <td className="px-2 py-1">{telRaw || '-'}</td>
-                                                      <td className="px-2 py-1"><a className="text-emerald-700 underline" href={wa} target="_blank" rel="noopener">WhatsApp</a></td>
-                                                    </tr>
-                                                  );
-                                                })}
-                                              </tbody>
-                                            </table>
-                                          </div>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </Card>
-
-                </div>
-
-                <Card 
-                  title={<span className="text-[#34745B]">Calendario Semanal</span>}
-                  right={
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" id="vista-compacta" checked={mostrarSoloHorarioLaboral} onChange={(e) => setMostrarSoloHorarioLaboral(e.target.checked)} />
-                        <label htmlFor="vista-compacta" className="text-slate-600">Mostrar solo horario laboral</label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setCurrentDate(prev => addDays(prev, -7))} className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">‹ Ant</button>
-                        <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">Hoy</button>
-                        <button onClick={() => setCurrentDate(prev => addDays(prev, 7))} className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">Sig ›</button>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-800">{c.estado}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const canchaTxt = c.cancha ? ` en ${c.cancha}` : "";
+                          const def = `Hola! Te recuerdo tu clase ${c.tipo}${canchaTxt} el ${c.fecha} a las ${c.hora}.`;
+                          setContactosMsg(def);
+                          setContactosExpandId(contactosExpandId === c.id ? null : c.id);
+                        }}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50"
+                      >
+                        Contactos
+                      </button>
                     </div>
-                  }
-                >
-                  <CalendarioSemanal 
-                    week={weekDates} 
-                    clases={(clases || []).filter(c => weekDates.includes(c.fecha))}
-                    onEdit={goToEditClass}
-                    horarioLaboral={horarioData}
-                    mostrarSoloHorarioLaboral={mostrarSoloHorarioLaboral}
-                  />
-                </Card>
+                  </div>
+
+                  {contactosExpandId === c.id && (
+                    <div className="mt-3 p-3 bg-slate-50 rounded-lg border">
+                      <div className="mb-3">
+                        <label className="text-xs text-slate-500 block mb-1">Mensaje (editable)</label>
+                        <textarea
+                          value={contactosMsg}
+                          onChange={(e)=>setContactosMsg(e.target.value)}
+                          className="w-full border rounded-lg px-2 py-1 text-sm"
+                          rows="2"
+                        />
+                      </div>
+
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-slate-500">
+                            <th className="text-left px-2 py-1">Alumno</th>
+                            <th className="text-left px-2 py-1">Teléfono</th>
+                            <th className="text-left px-2 py-1">Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(c.alumnoIds || []).filter(Boolean).map(id => {
+                            const a = alumnoObjMap.get(id);
+                            if (!a) return null;
+                            const nombre = getNombreCompleto(a);
+                            const telRaw = (a.telefono || a.contactoPadre || "").toString();
+                            const digits = telRaw.replace(/\D/g, "");
+                            const canchaTxt = c.cancha ? ` en ${c.cancha}` : "";
+                            const base = `Hola! Te recuerdo tu clase ${c.tipo}${canchaTxt} el ${c.fecha} a las ${c.hora}.`;
+                            const msg = contactosExpandId === c.id && contactosMsg ? contactosMsg : base;
+                            const wa = `https://api.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(msg)}`;
+                            return (
+                              <tr key={id} className="border-t">
+                                <td className="px-2 py-1">{nombre}</td>
+                                <td className="px-2 py-1">{telRaw || '-'}</td>
+                                <td className="px-2 py-1">
+                                  <a className="text-emerald-700 underline" href={wa} target="_blank" rel="noopener">WhatsApp</a>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      <Card
+        title={<span className="text-[#34745B]">Calendario Semanal</span>}
+        right={
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                id="vista-compacta"
+                checked={mostrarSoloHorarioLaboral}
+                onChange={(e) => setMostrarSoloHorarioLaboral(e.target.checked)}
+              />
+              <label htmlFor="vista-compacta" className="text-slate-600">Mostrar solo horario laboral</label>
             </div>
-        );
-    }
+            <div className="flex items-center gap-2">
+              <button onClick={() => setCurrentDate(prev => addDays(prev, -7))} className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">‹ Ant</button>
+              <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">Hoy</button>
+              <button onClick={() => setCurrentDate(prev => addDays(prev, 7))} className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">Sig ›</button>
+            </div>
+          </div>
+        }
+      >
+        <CalendarioSemanal
+          week={weekDates}
+          clases={(clases || []).filter(c => weekDates.includes(c.fecha))}
+          alumnos={alumnos || []}                  
+          onEdit={goToEditClass}
+          horarioLaboral={horarioData}
+          mostrarSoloHorarioLaboral={mostrarSoloHorarioLaboral}
+        />
+      </Card>
+    </div>
+  );
+}
 
     function AlumnoForm({ initialData, onSubmit, onCancel, onRegisterMonthlyPayment, studentBeingEdited }) {
       const [form, setForm] = useState(initialData)
@@ -836,7 +1587,22 @@ const hoy = formatDate(new Date());
       );
     }
     
-function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayment, clases, pagos, onRegistrarClase, onPagarPendiente, onEditarPago, onDeletePago }) {
+function Alumnos({
+  alumnos,
+  onCreate,
+  onUpdate,
+  onDelete,
+  onRegisterMonthlyPayment,
+  clases,
+  pagos,
+  onRegistrarClase,
+  onPagarPendiente,
+  onEditarPago,
+  onDeletePago,
+  user,
+  clubActivoId,
+  perfil,
+}) {
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -906,7 +1672,25 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
       >
         <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-600"><th className="p-2">Nombre Completo</th><th className="p-2">Teléfono</th><th className="p-2">Plan de Pago</th><th className="p-2">Estado</th><th className="p-2 text-right">Acciones</th></tr></thead><tbody>
           {paginatedAlumnos.length === 0 && (<tr><td colSpan={5} className="text-center py-6 text-slate-400">No se encontraron alumnos.</td></tr>)}
-          {paginatedAlumnos.map((a) => (<tr key={a.id} className="border-t"><td className="p-2 font-semibold">{getNombreCompleto(a)}</td><td className="p-2"><div className="flex items-center gap-2"><span>{a.telefono || "-"}</span>{a.telefono && (<a href={waLink(a.telefono, a.nombre)} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-0.5 text-xs rounded-full border text-green-700 bg-green-50 hover:bg-green-100">WhatsApp</a>)}</div></td><td className="p-2">{a.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</td><td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${a.estado === 'espera' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{a.estado === 'espera' ? 'Espera' : 'Activo'}</span></td><td className="p-2 text-right"><div className="inline-flex gap-2"><button type="button" onClick={() => setAlumnoFicha(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">👁️ Ver ficha</button><button type="button" onClick={() => onRegistrarClase && onRegistrarClase(a.id)} className="px-2 py-1 text-xs rounded-lg border bg-green-50 text-green-800 hover:bg-green-100">🟢 Registrar clase</button><button onClick={() => openEdit(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button><button type="button" onClick={() => onDelete(a.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button></div></td></tr>))}</tbody></table></div>
+          {paginatedAlumnos.map((a) => (<tr key={a.id} className="border-t"><td className="p-2 font-semibold">
+          {getNombreCompleto(a)}</td><td className="p-2"><div className="flex items-center gap-2"><span>{a.telefono || "-"}
+            </span>{a.telefono && (<a href={waLink(a.telefono, a.nombre)} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-0.5 text-xs rounded-full border text-green-700 bg-green-50 hover:bg-green-100">WhatsApp</a>)}
+            </div></td><td className="p-2">{a.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</td><td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${a.estado === 'espera' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{a.estado === 'espera' ? 'Espera' : 'Activo'}
+            </span></td><td className="p-2 text-right"><div className="inline-flex gap-2"><button type="button" onClick={() => setAlumnoFicha(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">👁️ Ver ficha</button><button
+  type="button"
+  onClick={() => onRegistrarClase && onRegistrarClase(a.id)}
+  className="px-2 py-1 text-xs rounded-lg border bg-green-50 text-green-800 hover:bg-green-100 inline-flex items-center gap-1"
+  title="Registrar clase"
+  aria-label="Registrar clase"
+>
+  {/* ícono tilde verde */}
+  <svg viewBox="0 0 20 20" width="18" height="18" xmlns="http://www.w3.org/2000/svg" className="text-green-600" aria-hidden="true" role="img">
+    <path fill="currentColor" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/>
+    <path fill="#fff" d="M8.5 10.7l-.9-.9L6.2 11.2l2.3 2.3c.2.2.5.2.7 0l4.6-4.6-1.4-1.4-3.9 3.9z"/>
+  </svg>
+  Registrar clase
+</button>
+<button onClick={() => openEdit(a)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button><button type="button" onClick={() => onDelete(a.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button></div></td></tr>))}</tbody></table></div>
 
         {totalPages > 1 && (
           <div className="mt-4 flex justify-center items-center gap-2">
@@ -924,17 +1708,22 @@ function Alumnos({ alumnos, onCreate, onUpdate, onDelete, onRegisterMonthlyPayme
       </Card>
     </div>
   
-    <AlumnoFichaModal 
-        alumno={alumnoFicha} 
-        clases={clases} 
-        pagos={pagos} 
-        alumnos={alumnos} 
-        onPagarPendiente={onPagarPendiente} 
-        onClose={() => setAlumnoFicha(null)} 
-        onRegistrarPago={onRegisterMonthlyPayment} 
-        onEditarPago={onEditarPago} 
-        onDeletePago={onDeletePago}
-    />
+<AlumnoFichaModal 
+  alumno={alumnoFicha} 
+  clases={clases} 
+  pagos={pagos} 
+  alumnos={alumnos} 
+  onPagarPendiente={onPagarPendiente} 
+  onClose={() => setAlumnoFicha(null)} 
+  onRegistrarPago={onRegisterMonthlyPayment} 
+  onEditarPago={onEditarPago} 
+  onDeletePago={onDeletePago}
+  /* 👇 AÑADIDOS */
+  user={user}
+  clubActivoId={clubActivoId}   // o el nombre que uses: clubIdActual / currentClubId, etc.
+  perfil={perfil}
+/>
+
   </>);
 }
     
@@ -948,21 +1737,71 @@ function AlumnoFichaModal({
   onRegistrarPago,
   onEditarPago,
   onDeletePago,
+  user,
+  clubActivoId,
+  perfil,
 }) {
-  // Alumno "en vivo" (rehidratado desde la lista completa)
-  const alumnoLive = useMemo(
+  // 1) Derivados básicos (siempre mismos hooks, mismo orden)
+  const alumnoLive = React.useMemo(
     () => (alumnos || []).find(a => a.id === (alumno?.id)) || alumno,
     [alumnos, alumno]
   );
+  const [tab, setTab] = React.useState("clases");
 
-  // ---- Helper: estado de pago por ALUMNO para una clase ----
+  // 2) NUEVO: ids de clases cubiertas por movimiento "Mensual"
+  const [clasesCubiertasConMensual, setClasesCubiertasConMensual] = React.useState(new Set());
+
+  // 3) Derivados dependientes
+  const clasesDelAlumno = React.useMemo(() => {
+    if (!alumnoLive || !clases) return [];
+    return clases.filter(c => (c.alumnoIds || []).includes(alumnoLive.id));
+  }, [alumnoLive, clases]);
+
+  const pagosDelAlumno = React.useMemo(() => {
+    if (!alumnoLive || !pagos) return [];
+    return pagos
+      .filter(p => p.alumnoId === alumnoLive.id)
+      .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+  }, [alumnoLive, pagos]);
+
+  // 4) ÚNICO useEffect del componente (NO declares otro en este componente)
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        if (!alumnoLive || !user || !clubActivoId) return;
+        const snap = await pagosRef(user, clubActivoId)
+          .where("alumnoId", "==", alumnoLive.id)
+          .get();
+
+        const covered = new Set();
+        snap.forEach(doc => {
+          const p = doc.data();
+          if ((p.metodo === "Mensual" || p.metodo === "Mensual (débito de saldo)") && p.claseId) {
+            covered.add(p.claseId);
+          }
+        });
+        if (alive) setClasesCubiertasConMensual(covered);
+      } catch (e) {
+        console.warn("cargar pagos Mensual:", e);
+      }
+    })();
+    return () => { alive = false; };
+  }, [alumnoLive?.id, user, clubActivoId, clasesDelAlumno.length]);
+
+  // 5) Helper: ¿esta clase está pagada por este alumno?
   function isClasePagadaPorAlumno(clase, alumno, pagos) {
     try {
+      // si existe pago $0 "Mensual" para la clase, está pagada
+      if (clasesCubiertasConMensual?.has?.(clase?.id)) return true;
+
       const pagosLista = (pagos || []).filter(
         p => p && p.claseId === (clase?.id) && p.alumnoId === (alumno?.id)
       );
-      // Plan mensual: se considera pagado para ese alumno
-      if (pagosLista.some(p => p.metodo === 'Mensual')) return true;
+
+      if (pagosLista.some(p => p.metodo === 'Mensual' || p.metodo === 'Mensual (débito de saldo)')) {
+        return true;
+      }
 
       const precioClase = parseFloat(clase?.precio ?? 0) || 0;
       const cant = (clase?.alumnoIds?.length || 1);
@@ -975,245 +1814,397 @@ function AlumnoFichaModal({
       return totalAlumno >= precioPorAlumno;
     } catch (e) {
       console.error('isClasePagadaPorAlumno error:', e);
-      // Fallback: usa la bandera global si existiera
       return !!(clase && clase.pagada);
     }
   }
 
-  const [tab, setTab] = useState("clases");
+  // 6) Guardas condicionales DESPUÉS de declarar TODOS los hooks
+  if (!alumnoLive) return null;
 
-    const clasesDelAlumno = useMemo(() => {
-        if (!alumno || !clases) return [];
-        return clases.filter(c => (c.alumnoIds || []).includes(alumno.id));
-    }, [alumno, clases]);
-    
-    const pagosDelAlumno = useMemo(() => {
-        if (!alumno || !pagos) return [];
-        return pagos.filter(p => p.alumnoId === alumno.id).sort((a, b) => b.fecha.localeCompare(a.fecha));
-    }, [alumno, pagos]);
-    
-    if (!alumno) return null;
+  const clasesPendientes = clasesDelAlumno.filter(c => !isClasePagadaPorAlumno(c, alumnoLive, pagos));
+  const clasesPagadas   = clasesDelAlumno.filter(c =>  isClasePagadaPorAlumno(c, alumnoLive, pagos));
+  const totalPagos      = pagosDelAlumno.reduce((sum, p) => sum + (parseFloat(p.monto) || 0), 0);
+  const totalPendiente  = clasesPendientes.reduce((sum, c) => sum + (parseFloat(c.precio) || 0), 0);
 
-    const clasesPendientes = clasesDelAlumno.filter(c => !c.pagada);
-    const clasesPagadas = clasesDelAlumno.filter(c => c.pagada);
-    const totalPagos = pagosDelAlumno.reduce((sum, p) => sum + parseFloat(p.monto), 0);
-    const totalPendiente = clasesPendientes.reduce((sum, c) => sum + c.precio || 0, 0);
+  // 7) UI (dejé tu estructura de tabs y tablas; ajustá las props/funciones si cambian)
+  return (
+    <Modal
+      isOpen={!!alumno}
+      title={`Ficha de ${getNombreCompleto(alumnoLive || alumno)}`}
+      size="5xl"
+      confirmText="Cerrar"
+      onConfirm={onClose}
+      onCancel={onClose}
+    >
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Columna izquierda (datos alumno) — deja tu contenido original aquí */}
+        {/* ... */}
 
-    return (
-        <Modal isOpen={!!alumno}
-  title={`Ficha de ${getNombreCompleto(alumno)}`}
-  size="5xl"
-  confirmText="Cerrar"
-  onConfirm={onClose}
-  onCancel={onClose}
->
-            <div className="flex flex-col md:flex-row gap-6">
-                <div className="md:w-1/3 p-4 bg-slate-50 rounded-xl space-y-4">
-                    <h3 className="text-xl font-bold text-[#34745B]">{getNombreCompleto(alumno)}</h3>
-                    <div className="text-sm space-y-2 text-slate-700">
-                        {alumno.telefono && <p>📞 Teléfono: <a href={waLink(alumno.telefono, alumno.nombre)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{alumno.telefono}</a></p>}
-                        {alumno.contactoPadre && <p>👪 Contacto Padre/Madre: {alumno.contactoPadre}</p>}
-                        <p>🎾 Deporte: {alumno.deporte || 'Pádel'}</p>
-                        <p>✅ Estado: <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${alumno.estado === 'espera' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{alumno.estado === 'espera' ? 'En Espera' : 'Activo'}</span></p>
-                        <p>💵 Plan de Pago: {alumno.plan === 'mensual' ? 'Mensual' : 'Por Clase'}</p>
-                        {alumno.notas && <p>✍️ Notas: <span className="italic">{alumno.notas}</span></p>}
-                        {alumno.precios && (
-                            <div>
-                                <h4 className="font-semibold mt-2">Precios Personalizados:</h4>
-                                <ul className="list-disc pl-5 text-xs">
-                                    {Object.entries(alumno.precios).map(([tipo, precio]) => (
-                                        <li key={tipo}>{TIPO_CLASE_PRECIO[tipo]}: ${precio}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-                </div>
+        <div className="md:w-2/3">
+          {/* Tabs */}
+          <div className="border-b border-slate-200">
+            <nav className="-mb-px flex space-x-8 text-sm">
+              <button
+                onClick={() => setTab("clases")}
+                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${
+                  tab === 'clases'
+                    ? 'border-[#34745B] text-[#34745B]'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                Clases ({clasesDelAlumno.length})
+              </button>
 
-                <div className="md:w-2/3">
-                    <div className="border-b border-slate-200">
-                        <nav className="-mb-px flex space-x-8 text-sm">
-                            <button onClick={() => setTab("clases")} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${tab === 'clases' ? 'border-[#34745B] text-[#34745B]' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`}>Clases ({clasesDelAlumno.length})</button>
-                            <button onClick={() => setTab("pagos")} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${tab === 'pagos' ? 'border-[#34745B] text-[#34745B]' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`}>Pagos ({pagosDelAlumno.length})</button>
-                        </nav>
-                    </div>
+              <button
+                onClick={() => setTab("pagos")}
+                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${
+                  tab === 'pagos'
+                    ? 'border-[#34745B] text-[#34745B]'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                Pagos ({pagosDelAlumno.length})
+              </button>
 
-                    {tab === "clases" && (
-                        <div className="mt-4">
-                            <h4 className="font-bold text-lg text-slate-800 mb-2">Historial de Clases</h4>
-                            <table className="min-w-full text-sm">
-                                <thead>
-                                    <tr className="text-left text-slate-600">
-                                        <th className="p-2">Fecha</th>
-                                        <th className="p-2">Tipo</th>
-                                        <th className="p-2">Precio</th>
-                                        <th className="p-2">Estado</th>
-                                        <th className="p-2 text-right">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {clasesDelAlumno.length === 0 ? (
-                                        <tr><td colSpan="5" className="text-center py-4 text-slate-400">No hay clases registradas.</td></tr>
-                                    ) : (
-                                        clasesDelAlumno.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).map(clase => (
-                                            <tr key={clase.id} className="border-t">
-                                                <td className="p-2">{formatDate(clase.fecha, 'dd/mm/yyyy')}</td>
-                                                <td className="p-2">{clase.tipo}</td>
-                                                <td className="p-2">${clase.precio || 0}</td>
-                                                <td className="p-2">
-                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${isClasePagadaPorAlumno(clase, alumno, pagos) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                                        {isClasePagadaPorAlumno(clase, alumno, pagos) ? 'Pagada' : 'Pendiente'}
-                                                    </span>
-                                                </td>
-                                                <td className="p-2 text-right">
-                                                    {!isClasePagadaPorAlumno(clase, alumno, pagos) && <button onClick={() => onPagarPendiente(clase, alumno.id)} className="px-2 py-1 text-xs rounded-lg border bg-green-50 text-green-800 hover:bg-green-100">Registrar Pago</button>}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                            
-                        </div>
-                    )}
-                    
-                    {tab === "pagos" && (
-                        <div className="mt-4">
-                            <h4 className="font-bold text-lg text-slate-800 mb-2">Historial de Pagos</h4>
-                            <table className="min-w-full text-sm">
-                                <thead>
-                                    <tr className="text-left text-slate-600">
-                                        <th className="p-2">Fecha</th>
-                                        <th className="p-2">Concepto</th>
-                                        <th className="p-2">Monto</th>
-                                        <th className="p-2">Método</th>
-                                        <th className="p-2 text-right">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {pagosDelAlumno.length === 0 ? (
-                                        <tr><td colSpan="5" className="text-center py-4 text-slate-400">No hay pagos registrados.</td></tr>
-                                    ) : (
-                                        pagosDelAlumno.map(pago => (
-                                            <tr key={pago.id} className="border-t">
-                                                <td className="p-2">{formatDate(pago.fecha, 'dd/mm/yyyy')}</td>
-                                                <td className="p-2">{pago.concepto}</td>
-                                                <td className="p-2">${pago.monto}</td>
-                                                <td className="p-2">{pago.metodo}</td>
-                                                <td className="p-2 text-right"><button onClick={() => onEditarPago({ id: pago.id, ...pago })} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button></td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
+              {alumnoLive?.plan === "mensual" && (
+                <button
+                  onClick={() => setTab("cuenta")}
+                  className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${
+                    tab === 'cuenta'
+                      ? 'border-[#34745B] text-[#34745B]'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  Cuenta Corriente
+                </button>
+              )}
+            </nav>
+          </div>
+
+          {/* Contenido CLASES */}
+          {tab === "clases" && (
+            <div className="mt-4">
+              <h4 className="font-bold text-lg text-slate-800 mb-2">Historial de Clases</h4>
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-600">
+                    <th className="p-2">Fecha</th>
+                    <th className="p-2">Tipo</th>
+                    <th className="p-2">Precio</th>
+                    <th className="p-2">Estado</th>
+                    <th className="p-2 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clasesDelAlumno.length === 0 ? (
+                    <tr><td colSpan="5" className="text-center py-4 text-slate-400">No hay clases registradas.</td></tr>
+                  ) : (
+                    clasesDelAlumno
+                      .slice()
+                      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+                      .map(clase => {
+                        const pagada = isClasePagadaPorAlumno(clase, alumnoLive, pagos);
+                        return (
+                          <tr key={clase.id} className="border-t">
+                            <td className="p-2">{formatDate(clase.fecha, 'dd/mm/yyyy')}</td>
+                            <td className="p-2">{clase.tipo}</td>
+                            <td className="p-2">${clase.precio || 0}</td>
+                            <td className="p-2">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                pagada ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}>
+                                {pagada ? 'Pagada' : 'Pendiente'}
+                              </span>
+                            </td>
+                            <td className="p-2 text-right">
+                              {!pagada && (
+                                <button
+                                  onClick={() => onPagarPendiente(clase, alumnoLive.id)}
+                                  className="px-2 py-1 text-xs rounded-lg border bg-green-50 text-green-800 hover:bg-green-100"
+                                >
+                                  Registrar Pago
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                </tbody>
+              </table>
             </div>
-        </Modal>
-    );
+          )}
+
+          {/* Contenido PAGOS */}
+          {tab === "pagos" && (
+            <div className="mt-4">
+              <h4 className="font-bold text-lg text-slate-800 mb-2">Historial de Pagos</h4>
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-600">
+                    <th className="p-2">Fecha</th>
+                    <th className="p-2">Concepto</th>
+                    <th className="p-2">Monto</th>
+                    <th className="p-2">Método</th>
+                    <th className="p-2 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagosDelAlumno.length === 0 ? (
+                    <tr><td colSpan="5" className="text-center py-4 text-slate-400">No hay pagos registrados.</td></tr>
+                  ) : (
+                    pagosDelAlumno.map(pago => (
+                      <tr key={pago.id} className="border-t">
+                        <td className="p-2">{formatDate(pago.fecha, 'dd/mm/yyyy')}</td>
+                        <td className="p-2">{pago.concepto}</td>
+                        <td className="p-2">${pago.monto}</td>
+                        <td className="p-2">{pago.metodo}</td>
+                        <td className="p-2 text-right">
+  <div className="inline-flex gap-2">
+    <button
+      onClick={() => onEditarPago({ id: pago.id, ...pago })}
+      className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+    >
+      ✏️
+    </button>
+    <button
+      onClick={() => (window.coachexComprobante && window.coachexComprobante.generarPDF) && window.coachexComprobante.generarPDF({
+        alumno: alumnoLive || alumno || null,
+        pago: pago,
+        clase: (clases || []).find(c => c.id === pago.claseId),
+        perfil
+      })}
+      className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+      title="Descargar comprobante PDF"
+    >
+      📄
+    </button>
+    {(() => {
+      const al = alumnoLive || alumno;
+      const url = window.coachexComprobante?.waLink?.(al, "Te envío el comprobante de pago");
+      return url ? (
+        <a
+          href={url}
+          target="_blank" rel="noopener noreferrer"
+          className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+          title="Enviar por WhatsApp"
+        >
+          🟢
+        </a>
+               ) : null;
+              })()}
+           </div>
+         </td>
+       </tr>
+      ))
+      )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Contenido CUENTA */}
+          {tab === "cuenta" && alumnoLive?.plan === "mensual" && (
+            <div className="mt-4">
+              <CuentaCorrienteAlumno
+                alumno={alumnoLive}
+                user={user}
+                clubId={clubActivoId}
+                perfil={perfil}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
 }
 
-function CalendarioSemanal({ week, clases, onEdit, horarioLaboral, mostrarSoloHorarioLaboral }) {
+function CalendarioSemanal({
+  week,
+  clases,
+  alumnos = [],   // 👈 agregado (con default)
+  onEdit,
+  horarioLaboral,
+  mostrarSoloHorarioLaboral
+}) {  // Colores por estado
   const getStatusColor = (status) => {
     switch (status) {
       case "Realizada": return "bg-emerald-100 border-emerald-300 text-emerald-800";
       case "Cancelada": return "bg-red-100 border-red-300 text-red-800";
-      case "Ausente": return "bg-amber-100 border-amber-300 text-amber-800";
-      default: return "bg-green-50 border-[#89C5B2] text-[#34745B]";
+      case "Ausente":   return "bg-amber-100 border-amber-300 text-amber-800";
+      default:          return "bg-green-50 border-[#89C5B2] text-[#34745B]";
     }
   };
 
-  const clasesPorDiaHora = useMemo(() => { 
-    const map = {}; 
-    (clases || []).forEach(clase => { 
-      const key = `${clase.fecha}_${clase.hora}`; 
-      if (!map[key]) map[key] = []; 
-      map[key].push(clase); 
-    }); 
-    return map; 
-  }, [clases]);
-  
-  // --- FUNCIÓN CORREGIDA Y MÁS ROBUSTA ---
-  const esHoraLaboral = (fecha, hora) => {
-    if (!horarioLaboral) return true;
-    const d = new Date(`${fecha}T00:00:00`);
-    const diaNombre = DIAS_SEMANA_NOMBRES[d.getDay() === 0 ? 6 : d.getDay() - 1];
-
-    // Lógica para el modo Club (objeto con 'bloques')
-    if (horarioLaboral.bloques) {
-        return horarioLaboral.bloques.some(b => b.dia === diaNombre && hora >= b.desde && hora < b.hasta);
-    }
-    // Lógica para el modo Independiente (array de 7 días)
-    if (Array.isArray(horarioLaboral)) {
-        const diaSemana = horarioLaboral.find(d => d.dia === diaNombre);
-        if (!diaSemana || !diaSemana.activo) return false;
-        return hora >= diaSemana.desde && hora < diaSemana.hasta;
-    }
-    return true; // Si no hay formato conocido, se muestra todo.
-  };
-
-  const horasParaMostrar = useMemo(() => {
-    if (!mostrarSoloHorarioLaboral || !horarioLaboral) return HORAS;
-    
-    let horasActivas = [];
-    if (horarioLaboral.bloques) { // Modo Club
-        horasActivas = horarioLaboral.bloques.flatMap(b => [b.desde, b.hasta]);
-    } else if (Array.isArray(horarioLaboral)) { // Modo Independiente
-        horasActivas = horarioLaboral.filter(d => d.activo).flatMap(d => [d.desde, d.hasta]);
-    }
-
-    if (horasActivas.length === 0) return HORAS;
-    const minHora = horasActivas.reduce((a, b) => a < b ? a : b);
-    const maxHora = horasActivas.reduce((a, b) => a > b ? a : b);
-    
-    return HORAS.filter(h => h >= minHora && h < maxHora);
-  }, [mostrarSoloHorarioLaboral, horarioLaboral]);
-
-  return (
-    <div className="grid grid-cols-[auto_repeat(7,1fr)] gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">
-      <div className="bg-white p-2"></div>
-      {week.map(day => (
-        <div key={day} className="bg-white p-2 text-center font-semibold text-sm">
-            <div>{DIAS_SEMANA_NOMBRES[new Date(`${day}T00:00:00`).getDay() === 0 ? 6 : new Date(`${day}T00:00:00`).getDay() - 1]}</div>
-            <div className="text-xs text-slate-500">{formatDate(new Date(`${day}T00:00:00`), 'dd/mm')}</div>
-        </div>
-      ))}
-      
-      {horasParaMostrar.map(hora => (
-        <React.Fragment key={hora}>
-          <div className="bg-white text-center text-xs p-2 flex items-center justify-center">
-            <span className="text-slate-500">{hora}</span>
-          </div>
-          {week.map(day => {
-            const esLaboral = esHoraLaboral(day, hora);
-            return (
-              <div key={`${day}-${hora}`} className={`${esLaboral ? 'bg-white hover:bg-slate-50' : 'bg-slate-100'} min-h-[70px] p-1 border-t border-l border-slate-200`}>
-                {(clasesPorDiaHora[`${day}_${hora}`] || []).map(clase => (
-                  <div 
-                    key={clase.id} 
-                    onClick={() => onEdit(clase)} 
-                    className={`text-xs p-2 rounded-md border cursor-pointer mb-1 transition-all hover:shadow-md ${getStatusColor(clase.estado)}`}
-                  >
-                    <p className="font-bold">{clase.tipo}</p>
-                    <p className="text-[11px] opacity-80">{clase.nombresAlumnos}</p>
-                    {clase.cancha && <p className="text-[10px] opacity-60 mt-1">{clase.cancha}</p>}
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </React.Fragment>
-      ))}
-    </div>
+  // Mapa id -> alumno (se recalcula si cambia la lista)
+  const alumnoMap = React.useMemo(
+    () => Object.fromEntries((alumnos || []).map(a => [a.id, a])),
+    [alumnos]
   );
+
+  // Nombre corto para mostrar
+  function getNombreCorto(a) {
+    if (!a) return "Sin alumno";
+    const base = `${a.nombre || ""} ${a.apellido || ""}`.trim();
+    if (!base) return "Sin alumno";
+    return base.split(" ")[0];
+  }
+
+  // Indexar clases por día/hora
+  const clasesPorDiaHora = React.useMemo(() => {
+    const map = {};
+    (clases || []).forEach(clase => {
+      const key = `${clase.fecha}_${clase.hora}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(clase);
+    });
+    return map;
+  }, [clases, alumnos]); // 👈 depende de alumnos para re-renderizar nombres
+
+  // Horas a mostrar (fallback si no vienen desde configuración)
+  const horasParaMostrar = React.useMemo(() => {
+    // Si tu app ya provee un array de horas desde "horarioLaboral.horas", se usa ese
+    if (Array.isArray(horarioLaboral?.horas) && horarioLaboral.horas.length) return horarioLaboral.horas;
+    // Fallback 08:00–22:00 cada 1h
+    const hs = [];
+    for (let h = 8; h <= 22; h++) hs.push(String(h).padStart(2, "0") + ":00");
+    return hs;
+  }, [horarioLaboral]);
+
+// --- helper: nombre del día desde "YYYY-MM-DD" (Lunes..Domingo)
+
+function nombreDiaFromYMD(ymd) {
+  const d = new Date(`${ymd}T00:00:00`);
+  const idx = (d.getDay() + 6) % 7; // 0..6 => Lun..Dom
+  return ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"][idx];
 }
+
+// --- mostrar solo horario laboral (lee bloques o inicio/fin)
+function esHoraLaboral(day, hora) {
+  if (!mostrarSoloHorarioLaboral || !horarioLaboral) return true;
+
+  // Puede venir como { bloques:[{dia,desde,hasta,activo}] } o como array directo
+  const bloques = Array.isArray(horarioLaboral?.bloques)
+    ? horarioLaboral.bloques
+    : (Array.isArray(horarioLaboral) ? horarioLaboral : []);
+
+  if (bloques.length) {
+    const diaNombre = nombreDiaFromYMD(day);
+    const activos = bloques.filter(b => (b?.activo ?? true) && b?.dia === diaNombre);
+    if (!activos.length) return false;
+    // válido si la hora cae dentro de algún bloque activo del día
+    return activos.some(b => {
+      const desde = b?.desde || "00:00";
+      const hasta = b?.hasta || "23:59";
+      return hora >= desde && hora < hasta;
+    });
+  }
+
+  // Fallback: rango general
+  const inicio = horarioLaboral?.inicio || "08:00";
+  const fin    = horarioLaboral?.fin    || "22:00";
+  return hora >= inicio && hora < fin;
+}
+
+return (
+  <div className="grid grid-cols-[80px_repeat(7,1fr)]">
+    {/* encabezado de días */}
+    <div />
+    {week.map(day => (
+      <div key={`head-${day}`} className="text-center font-semibold p-2">
+        {day}
+      </div>
+    ))}
+
+    {/* grilla por horas x días */}
+    {horasParaMostrar.map(hora => (
+      <React.Fragment key={hora}>
+        {/* columna de horas */}
+        <div className="bg-white text-center text-xs p-2 flex items-center justify-center">
+          <span className="text-slate-500">{hora}</span>
+        </div>
+
+        {/* celdas por día */}
+        {week.map(day => {
+          const laboral = esHoraLaboral(day, hora);
+          const key = `${day}_${hora}`;
+          const arr = clasesPorDiaHora[key] || [];
+
+          return (
+            <div
+              key={`${day}-${hora}`}
+              className={`${
+                laboral
+                  ? "bg-white hover:bg-slate-50"
+                  : (mostrarSoloHorarioLaboral
+                      ? "bg-slate-100 opacity-50 pointer-events-none"
+                      : "bg-slate-100")
+              } min-h-[70px] p-1 border-t border-l border-slate-200`}
+            >
+              {arr.map(clase => (
+                <div
+                  key={clase.id}
+                  onClick={() => onEdit && onEdit(clase)}
+                  className={`cursor-pointer border rounded-md px-2 py-1 mb-1 text-xs ${getStatusColor(clase.estado)}`}
+                >
+                  <div className="font-semibold">
+                    {clase.tipo || "Clase"} · {
+                      (clase.alumnoIds || [])
+                        .filter(Boolean)
+                        .map(id => getNombreCorto(alumnoMap[id]))
+                        .join(", ") || "Sin alumno"
+                    }
+                  </div>
+                  {clase.notas ? (
+                    <div className="text-[11px] opacity-80 truncate">{clase.notas}</div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </React.Fragment>
+    ))}
+  </div>
+);
+}
+
     
-function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar, nuevoAlumnoId, setNuevoAlumnoId , prefillClase, onPrefillConsumed }) {
+function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, onPay, user, claseParaEditar, setClaseParaEditar, nuevoAlumnoId, setNuevoAlumnoId , prefillClase, onPrefillConsumed, grupos }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const emptyForm = { alumnoIds: [""], fecha: formatDate(new Date()), hora: "18:00", tipo: "Clase 1 persona", estado: "Programada", precio: (parseFloat((perfil.precios || {}).individual || 0)).toString(), notas: "", cancha: "" };
   const [form, setForm] = useState(emptyForm);
+  const [grupoSeleccionadoId, setGrupoSeleccionadoId] = useState("");
+  const handleSelectGrupo = (e) => {
+    const id = e.target.value;
+    setGrupoSeleccionadoId(id);
+    const grupo = grupos.find(g => g.id === id);
+    if (grupo) {
+      // Si se selecciona un grupo válido, se actualiza el estado del formulario
+      // con los IDs de los alumnos del grupo y se recalcula el precio.
+      setForm(prev => {
+        const nuevosAlumnos = grupo.alumnoIds || [];
+        const nuevoTipoClase = normalizarTipoClase(`Clase ${nuevosAlumnos.length} personas`);
+        return {
+          ...prev,
+          alumnoIds: nuevosAlumnos,
+          tipo: nuevoTipoClase,
+          // Recalcula el precio basado en el nuevo tipo y la cantidad de alumnos
+          precio: computePrecioClase(nuevoTipoClase, nuevosAlumnos, perfil, alumnoMap)
+        };
+      });
+      // Avanza al siguiente paso del formulario
+      setFormStep(3);
+    } else {
+      // Si se deselecciona un grupo, se limpia el campo de alumnos y se vuelve al paso inicial.
+      setForm(prev => ({...prev, alumnoIds: [""]}));
+      setFormStep(1);
+    }
+  };
+
+
   useEffect(() => {
     if (prefillClase && prefillClase.fecha && prefillClase.hora) {
       setShowForm(true);
@@ -1225,20 +2216,12 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
   const [formStep, setFormStep] = useState(1);
   const [alumnoSearchQuery, setAlumnoSearchQuery] = useState("");
   const [isAlumnosListOpen, setIsAlumnosListOpen] = useState(false);
-  const [grupos, setGrupos] = useState([]);
   const [filtroAlumno, setFiltroAlumno] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("");
   const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
   const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
 
-  useEffect(() => {
-    if (!user) return;
-    const unsub = db.collection('users').doc(user.uid).collection('grupos').onSnapshot(snapshot => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setGrupos(data);
-    });
-    return () => unsub();
-  }, [user]);
+  
 
   useEffect(() => {
     if (claseParaEditar) {
@@ -1427,7 +2410,7 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
             {(formStep === 1) && (
               <div className="md:col-span-6 relative">
                 <label className="text-sm text-slate-600 font-semibold">Selecciona Alumno/a</label>
-                <input type="text" value={alumnoSearchQuery} onChange={(e) => { setAlumnoSearchQuery(e.target.value); setIsAlumnosListOpen(true); }} onFocus={() => setIsAlumnosListOpen(true)} onBlur={() => setTimeout(() => setIsAlumnosListOpen(false), 200)} placeholder="Escribe para buscar..." className="w-full mt-1 border rounded-lg px-3 py-2" />
+                <input type="text" value={alumnoSearchQuery} onChange={(e) => { setAlumnoSearchQuery(e.target.value); setIsAlumnosListOpen(true); }} onFocus={() => setIsAlumnosListOpen(true)} onBlur={() => setTimeout(() => setIsAlumnosListOpen(false), 200)} placeholder="Escribe para buscar un alumno..." className="w-full mt-1 border rounded-lg px-3 py-2" />
                 {isAlumnosListOpen && (
                   <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
                     {alumnosFiltrados.length > 0 ? (
@@ -1435,6 +2418,19 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
                     ) : (<li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>)}
                   </ul>
                 )}
+                <div className="mt-4">
+                  <label className="block text-sm text-slate-600">O selecciona un grupo:</label>
+                  <select
+                    value={grupoSeleccionadoId}
+                    onChange={handleSelectGrupo}
+                    className="w-full mt-1 border rounded-lg px-3 py-2"
+                  >
+                    <option value="">-- Selecciona un grupo --</option>
+                    {grupos.map(g => (
+                      <option key={g.id} value={g.id}>{g.nombre}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
             {(formStep === 2 && alumnoMap.get(form.alumnoIds[0])) && (
@@ -1604,135 +2600,6 @@ function Clases({ clases, alumnos, pagos, perfil, onCreate, onUpdate, onDelete, 
     </div>
   );
 }
-       function Grupos({ alumnos, user }) {
-      // --- Estados del Componente ---
-      const [grupos, setGrupos] = useState([]);
-      const [nombreGrupo, setNombreGrupo] = useState("");
-      const [alumnosSeleccionados, setAlumnosSeleccionados] = useState([]);
-      const [loading, setLoading] = useState(true);
-      
-      const gruposCollection = useMemo(() => {
-        if (!user) return null;
-        return db.collection('users').doc(user.uid).collection('grupos');
-      }, [user]);
-
-      useEffect(() => {
-        if (!gruposCollection) return;
-        
-        const unsubscribe = gruposCollection.onSnapshot(snapshot => {
-          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setGrupos(data);
-          setLoading(false);
-        });
-
-        return () => unsubscribe();
-      }, [gruposCollection]);
-
-      const handleCrearGrupo = () => {
-        if (!nombreGrupo.trim() || alumnosSeleccionados.length === 0) {
-          alert("Por favor, ingresa un nombre para el grupo y selecciona al menos un alumno.");
-          return;
-        }
-
-        const nuevoGrupo = {
-          nombre: nombreGrupo,
-          alumnoIds: alumnosSeleccionados
-        };
-
-        gruposCollection.add(nuevoGrupo)
-          .then(() => {
-            setNombreGrupo("");
-            setAlumnosSeleccionados([]);
-            alert("¡Grupo creado con éxito!");
-          })
-          .catch(error => {
-            console.error("Error al crear el grupo: ", error);
-            alert("Hubo un error al crear el grupo.");
-          });
-      };
-      
-      const handleEliminarGrupo = (id) => {
-          if(window.confirm("¿Estás seguro de que quieres eliminar este grupo?")){
-              gruposCollection.doc(id).delete().catch(error => {
-                  console.error("Error al eliminar el grupo: ", error);
-                  alert("Hubo un error al eliminar el grupo.");
-              });
-          }
-      }
-
-      return (
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="flex flex-col gap-6">
-            <Card title={<span className="text-[#34745B]">Nuevo Grupo</span>}>
-              <div className="grid gap-4">
-                <div>
-                    <label className="text-sm text-slate-600">Nombre del Grupo</label>
-                    <input
-                      type="text"
-                      value={nombreGrupo}
-                      onChange={(e) => setNombreGrupo(e.target.value)}
-                      placeholder="Ej: Escuelita Martes y Jueves"
-                      className="w-full mt-1 border rounded-lg px-3 py-2"
-                    />
-                </div>
-                <div>
-                    <label className="text-sm text-slate-600">Selecciona los Alumnos</label>
-                    <p className="text-xs text-slate-500 mb-1">Mantén presionada la tecla Ctrl (o Cmd en Mac) para seleccionar varios.</p>
-                    <select
-                      multiple
-                      value={alumnosSeleccionados}
-                      onChange={(e) => {
-                        const opciones = Array.from(e.target.selectedOptions, option => option.value);
-                        setAlumnosSeleccionados(opciones);
-                      }}
-                      className="w-full border rounded-lg p-2 h-48"
-                    >
-                      {alumnos.map(a => (
-                        <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>
-                      ))}
-                    </select>
-                </div>
-                <button 
-                  onClick={handleCrearGrupo} 
-                  className="px-4 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white font-semibold"
-                >
-                  Guardar Grupo
-                </button>
-              </div>
-            </Card>
-          </div>
-
-          <div>
-            <Card title={<span className="text-[#34745B]">Grupos Existentes</span>}>
-                {loading && <p>Cargando grupos...</p>}
-                {!loading && grupos.length === 0 && <p className="text-sm text-slate-500">Aún no has creado ningún grupo.</p>}
-                <ul className="space-y-3">
-                    {grupos.map(grupo => {
-                        const nombresAlumnos = grupo.alumnoIds.map(id => {
-                            const alumno = alumnos.find(a => a.id === id);
-                            return alumno ? getNombreCompleto(alumno) : 'Alumno no encontrado';
-                        }).join(', ');
-
-                        return (
-                            <li key={grupo.id} className="p-3 border rounded-lg bg-slate-50">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="font-bold text-slate-800">{grupo.nombre}</h4>
-                                    <button onClick={() => handleEliminarGrupo(grupo.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">
-                                        🗑️ Eliminar
-                                    </button>
-                                </div>
-                                <p className="text-xs text-slate-600 mt-1">
-                                    <strong>Integrantes:</strong> {nombresAlumnos}
-                                </p>
-                            </li>
-                        );
-                    })}
-                </ul>
-            </Card>
-          </div>
-        </div>
-      );
-    }
     
     function Pagos({ pagos, alumnos, perfil, onPayMensual, clases, onEditarPago, onDeletePago }) {
         const [vista, setVista] = useState(perfil.metodoCobro === 'mensual' ? 'mensual' : 'historial');
@@ -1886,6 +2753,30 @@ function HistorialPagos({ pagos, alumnos, clases, onEditarPago, onDeletePago }) 
                                 <div className="inline-flex gap-2">
                                     <button onClick={() => onEditarPago(p)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button>
                                     <button onClick={() => onDeletePago(p.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button>
+                                
+    <button
+      onClick={() => (window.coachexComprobante && window.coachexComprobante.generarPDF) && window.coachexComprobante.generarPDF({
+        alumno: (alumnos||[]).find(a => a.id === p.alumnoId),
+        pago: p,
+        clase: (clases||[]).find(c => c.id === p.claseId),
+        perfil: (typeof state !== 'undefined' ? state.perfil : undefined)
+      })}
+      className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+      title="Descargar comprobante PDF"
+    >📄 Comprobante</button>
+    {(() => {
+      const al = (alumnos||[]).find(a => a.id === p.alumnoId);
+      const url = window.coachexComprobante?.waLink?.(al, "Te envío el comprobante de pago");
+      return url ? (
+        <a
+          href={url}
+          target="_blank" rel="noopener noreferrer"
+          className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+          title="Enviar por WhatsApp"
+        >🟢 WhatsApp</a>
+      ) : null;
+    })()}
+
                                 </div>
                             </td>
                         </tr>
@@ -2054,6 +2945,7 @@ function HistorialPagos({ pagos, alumnos, clases, onEditarPago, onDeletePago }) 
             </Card>
         );
     }
+
 
 function Gastos({ gastos, onCreate, onUpdate, onDelete }) {
       const [showForm, setShowForm] = useState(false);
@@ -2234,7 +3126,96 @@ const resumenClasesMes = useMemo(() => {
     valorTotalGeneral: clasesFiltradas.reduce((acc, c) => acc + parseFloat(c.precio || 0), 0),
     detalle: Object.entries(conteoPorTipo).sort((a, b) => b[1].cantidad - a[1].cantidad)
   };
-}, [clasesFiltradas]);
+},
+
+function PagosMensuales({ user, clubActivoId, alumnos }) {
+  const [rows, setRows] = useState([]);
+  const [mes, setMes] = useState(mesClave(new Date()));
+  const [loading, setLoading] = useState(true);
+  const alumnosMensuales = React.useMemo(() => {
+  if (!Array.isArray(alumnos)) return [];
+  return alumnos.filter(a => a && a.plan === 'mensual' && a.estado !== 'inactivo');
+}, [alumnos]);
+
+  useEffect(() => {
+    if (!user || !clubActivoId || !mes) return;
+    setLoading(true);
+    const ref = mensualidadesRef(user, clubActivoId).where('mes', '==', mes);
+    const unsub = ref.onSnapshot(snap => {
+      setRows(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (e) => { console.error('PagosMensuales->onSnapshot', e); setLoading(false); });
+    return () => unsub && unsub();
+  }, [user, clubActivoId, mes]);
+
+  const nombreAlumno = (id) => getNombreCompleto((alumnos||[]).find(a => a.id === id));
+
+  const generarMesActual = async () => {
+    try {
+      for (const a of alumnosMensuales) {
+        await ensureMensualidadParaAlumno({ user, clubId: clubActivoId, alumno: a, fechaRef: new Date(), perfil: (window.__perfilCache || null) });
+      }
+      alert('Mensualidades del mes generadas/actualizadas.');
+    } catch (e) {
+      console.error('generarMesActual:', e);
+      alert('Error al generar mensualidades.');
+    }
+  };
+
+  return (
+    <Card title="Mensualidades" right={
+      <div className="flex gap-2 items-center">
+        <input type="month" value={mes} onChange={e=>setMes(e.target.value)} className="border rounded-lg px-3 py-2"/>
+        <button onClick={generarMesActual} className="px-3 py-2 rounded-lg bg-emerald-600 text-white">Generar mes actual</button>
+      </div>
+    }>
+      {loading ? <div className="text-sm text-slate-500">Cargando…</div> : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-600">
+                <th className="p-2">Alumno</th>
+                <th className="p-2">Mes</th>
+                <th className="p-2">Frecuencia</th>
+                <th className="p-2">Incluidas</th>
+                <th className="p-2">Consumidas</th>
+                <th className="p-2">Monto</th>
+                <th className="p-2">Deuda extra</th>
+                <th className="p-2">Estado</th>
+                <th className="p-2">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className="border-t">
+                  <td className="p-2">{nombreAlumno(r.alumnoId) || r.alumnoId}</td>
+                  <td className="p-2">{r.mes}</td>
+                  <td className="p-2">{r.frecuencia}</td>
+                  <td className="p-2">{r.incluidas}</td>
+                  <td className="p-2">{r.consumidas}</td>
+                  <td className="p-2">{formatCurrency(r.monto)}</td>
+                  <td className="p-2">{formatCurrency(r.deudaExtra || "0")}</td>
+                  <td className="p-2">{r.pagado ? "Pagado" : (r.estado || "pendiente")}</td>
+                  <td className="p-2">
+                    {!r.pagado && (
+                      <button className="px-2 py-1 rounded-lg bg-emerald-600 text-white"
+                        onClick={() => marcarPagoMensualidad({ user, clubId: clubActivoId, alumnoId: r.alumnoId, mes: r.mes })}>
+                        Marcar pago
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!rows.length && <tr><td className="p-2 text-slate-500" colSpan="9">Sin mensualidades para {mes}.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+, [clasesFiltradas]);
 
       const PeriodoButton = ({ value, children }) => (
         <button 
@@ -2605,6 +3586,7 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
             ...defaultPerfil, ...perfil,
             datosBancarios: { ...defaultPerfil.datosBancarios, ...(perfil.datosBancarios || {}) },
             horarioLaboral: perfil.horarioLaboral || defaultPerfil.horarioLaboral,
+            modoTrabajo: 'Club',
         });
       }, [perfil]);
 
@@ -2851,7 +3833,6 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
                 <div>
                   <label className="text-sm text-slate-600">Modo de Trabajo Principal</label>
                   <select name="modoTrabajo" value={form.modoTrabajo} onChange={handleChange} className="w-full mt-1 border rounded-lg px-3 py-2">
-                    <option value="Independiente">Independiente y Clubes</option>
                     <option value="Club">Solo Clubes</option>
                   </select>
                 </div>
@@ -3318,17 +4299,22 @@ const handleAuthAction = async (e) => {
 
         return (
             <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4">
-                <div className="w-full max-w-sm mx-auto">
-                    <div className="flex flex-col items-center mb-8"> {/* Aumentamos un poco el margen inferior */}
-    <img 
-      src="./assets/img/logo_coachex%20N.png" // <-- EL NOMBRE DE TU NUEVO ARCHIVO
-      alt="Coachex-Pro Logo" 
-      className="w-64" // Ajusta el ancho aquí si es necesario
-    />
-    <p className="text-slate-500 text-lg mt-2">Gestión de Profesores</p>
-</div>
-                    
-                    <div className="bg-white rounded-2xl shadow-lg p-8">
+  <div className="w-full max-w-sm mx-auto">
+    {/* encabezado: logo arriba + texto debajo, alineado a la izquierda */}
+    <div className="flex flex-col items-start mb-8">
+      <img
+        src="./logo_coachex_N.png"   // si el archivo no está en /img, usa "./logo_coachex_N.png"
+        alt="Coachex"
+        className="h-9 w-auto"
+        onError={(e) => {
+          e.currentTarget.onerror = null;
+          e.currentTarget.src = "./logo_coachex_N.png"; // fallback si luego lo movés a la raíz
+        }}
+      />
+      <p className="text-slate-500 text-lg mt-2">Gestiona tus clases</p>
+    </div>
+
+    <div className="bg-white rounded-2xl shadow-lg p-8">
                         {view === 'login' && (
                             <div>
                                 <h2 className="text-2xl font-bold text-center text-slate-800 mb-6">Iniciar Sesión</h2>
@@ -3464,7 +4450,7 @@ function OnboardingClubSetup({ user, setHasClubs, onLogout }) {
       {/* Header */}
       <div className="pt-8 pb-6 text-center">
         <img
-          src="./assets/img/logo_coachex%20N.png"
+          src="./assets/img/img/logo_coachex_N.png"
           alt="Coachex-Pro Logo"
           className="h-10 mx-auto object-contain opacity-90"
           onError={(e)=>{ e.currentTarget.style.display='none'; }}
@@ -3687,6 +4673,12 @@ function MainApp({ user, onLogout }) {
   const [prefillClase, setPrefillClase] = useState(null);
 
   const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
+  // Crear una clase desde un grupo (prefill en Clases y navegar)
+  const crearClaseDesdeGrupo = ({ fecha, hora, alumnoIds, grupo }) => {
+    setCurrent('clases');
+    setPrefillClase({ fecha, hora, alumnoIds });
+  };
+
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
   const [deletingInfo, setDeletingInfo] = useState({ id: null, type: null, collection: null });
@@ -3771,21 +4763,21 @@ function MainApp({ user, onLogout }) {
   };
   
   const alumnoCrud = {
-    create: async (data) => {
-      const collectionRef = getCollection('alumnos');
-      if (!collectionRef) return;
-      const docRef = await collectionRef.add(data);
-      setToast("Alumno creado");
-      return { ...data, id: docRef.id };
-    },
-    update: ({ id, ...data }) => {
-      const collectionRef = getCollection('alumnos');
-      if (!collectionRef) return;
-      return collectionRef.doc(id).update(data).then(() => setToast("Alumno actualizado"));
-    },
-    delete: (id) => setDeletingInfo({ id, type: 'alumno', collection: 'alumnos' }),
-  };
-
+  create: async (data) => {
+    const collectionRef = getCollection('alumnos');
+    if (!collectionRef) return;
+    const docRef = await collectionRef.add(data);
+    setToast("Alumno creado");
+    return { ...data, id: docRef.id };
+  },
+  update: async ({ id, data }) => {
+    const collectionRef = getCollection('alumnos');
+    if (!collectionRef) return;
+    await collectionRef.doc(id).update(data);
+    setToast("Alumno actualizado");
+  },
+  delete: (id) => setDeletingInfo({ id, type: 'alumno', collection: 'alumnos' }),
+};
   const pagoCrud = {
     createPagosClase: async (pagosData) => {
       const batch = db.batch();
@@ -3850,18 +4842,51 @@ function MainApp({ user, onLogout }) {
         setRegistrandoAbono(null);
       });
     },
-    createMensual: (pagoData) => {
-      const collectionRef = getCollection('pagos');
-      if (!collectionRef) return;
-      const { alumno, mes } = payingCuota;
-      const fecha = new Date();
-      fecha.setMonth(mes);
-      const newPago = { alumnoId: alumno.id, fecha: formatDate(fecha), concepto: `Cuota Mensual - ${MESES_NOMBRES[mes]}`, ...pagoData };
-      collectionRef.add(newPago).then(() => {
-        setToast("Pago de cuota registrado");
-        setPayingCuota({ alumno: null, mes: null });
-      });
-    },
+    createMensual: async (pagoData) => {
+  const collectionRef = getCollection('pagos');
+  if (!collectionRef) return;
+
+  const { alumno, mes } = payingCuota || {};
+  if (!alumno || mes == null) {
+    setToast("Seleccioná alumno y mes");
+    return;
+  }
+
+  // Fecha segura del mes (día 1 y hora 12:00 para evitar issues de TZ)
+  const fecha = new Date();
+  fecha.setHours(12, 0, 0, 0);
+  fecha.setMonth(mes, 1); // mes es 0..11
+
+  const newPago = {
+    alumnoId: alumno.id,
+    fecha: formatDate(fecha),
+    concepto: `Cuota Mensual - ${MESES_NOMBRES[mes]}`,
+    ...pagoData, // { monto, metodo, notas, etc. }
+  };
+
+  try {
+    // 1) Guardar el pago
+    await collectionRef.add(newPago);
+
+    // 2) Marcar la mensualidad como pagada (YYYY-MM)
+    const y = fecha.getFullYear();
+    const mm = String(fecha.getMonth() + 1).padStart(2, "0");
+    await marcarPagoMensualidad({
+      user,
+      clubId: clubActivoId,
+      alumnoId: alumno.id,
+      mes: `${y}-${mm}`,
+    });
+
+    setToast("Pago de cuota registrado");
+  } catch (e) {
+    console.error("createMensual error:", e);
+    setToast("No se pudo registrar el pago");
+  } finally {
+    setPayingCuota({ alumno: null, mes: null });
+  }
+},
+
     update: ({ id, ...data }) => {
       const collectionRef = getCollection('pagos');
       if (!collectionRef) return;
@@ -3909,23 +4934,68 @@ function MainApp({ user, onLogout }) {
     }
 
     if (shouldPay && nuevaClaseId) {
-        const claseParaPagar = { ...claseData, id: nuevaClaseId };
-        setPayingClase(claseParaPagar);
+  // Precio prorrateado por alumno
+  const count = (claseData.alumnoIds || []).length || 1;
+  const total = Number(claseData.precio) || 0;
+  const precioPorAlumno = Math.round((total / count) * 100) / 100;
+
+  for (const alumnoId of (claseData.alumnoIds || [])) {
+    const alumnoObj = (state.alumnos || []).find(a => a.id === alumnoId);
+    if (!alumnoObj) continue;
+
+    // Sólo para planes mensuales
+    if (alumnoObj.plan === "mensual") {
+      await cubrirClaseConMensualidadSiCorresponde({
+        user,
+        clubId: clubActivoId,
+        alumno: alumnoObj,
+        claseId: nuevaClaseId,
+        fecha: claseData.fecha,        // mismo formato que usás en 'pagos'
+        precioPorAlumno,               // excedente si no hay cupo
+        perfil: state.perfil,
+      });
     }
+  }
+}
   },
-  update: ({ id, ...data }) => {
-    const collectionRef = getCollection('clases');
-    if (!collectionRef) return;
+update: async ({ id, ...data }) => {
+  const collectionRef = getCollection('clases');
+  if (!collectionRef) return;
 
-    const shouldPay = data.estado === 'Realizada' || data.estado === 'Ausente';
+  await collectionRef.doc(id).update(data);
+  setToast("Clase actualizada");
 
-    return collectionRef.doc(id).update(data).then(() => {
-        setToast("Clase actualizada");
-        if (shouldPay) {
-            onPay({ ...data, id });
-        }
+  const shouldPay = data.estado === 'Realizada' || data.estado === 'Ausente';
+  if (shouldPay) {
+    try {
+      // ✅ Nuevo bloque
+const fechaClase = claseData.fecha;
+const precioTotal = parseFloat(claseData.precio || 0) || 0;
+const cant = (claseData.alumnoIds || []).length || 1;
+const precioPorAlumno = cant > 0 ? (precioTotal / cant) : precioTotal;
+
+for (const idAl of (claseData.alumnoIds || [])) {
+  const alumno = (state.alumnos || []).find(a => a.id === idAl);
+  if (alumno && alumno.plan === 'mensual') {
+    await cubrirClaseConMensualidadSiCorresponde({
+      user,
+      clubId: clubActivoId,
+      alumno,
+      claseId: nuevaClaseId,
+      fecha: fechaClase,
+      precioPorAlumno,
+      perfil: state.perfil,
     });
-  },
+  }
+}
+
+    } catch (e) {
+      console.error('consumirClaseMensual(update):', e);
+    }
+    onPay({ ...data, id });
+  }
+},
+
   delete: (id) => setDeletingInfo({ id, type: 'clase', collection: 'clases' }),
 };
   const gastoCrud = {
@@ -4039,7 +5109,7 @@ function MainApp({ user, onLogout }) {
         clubes={clubes}
         clubActivoId={clubActivoId}
         onClubChange={setClubActivoId}
-        showIndependentOption={state.perfil.modoTrabajo !== 'Club'}
+        showIndependentOption={false}
       />
       <main className="max-w-6xl mx-auto px-4 py-6 grid gap-4">
         {current === "dashboard" && <Dashboard
@@ -4053,19 +5123,25 @@ function MainApp({ user, onLogout }) {
           goToNewClass={(prefill) => { setPrefillClase(prefill || null); setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }}
           goToEditClass={goToEditClass}
         />}
-        {current === "alumnos" && <Alumnos
-          clases={state.clases}
-          pagos={state.pagos}
-          alumnos={state.alumnos}
-          onCreate={alumnoCrud.create}
-          onUpdate={alumnoCrud.update}
-          onDelete={alumnoCrud.delete}
-          onRegisterMonthlyPayment={handleRegisterMonthlyPayment}
-          onRegistrarClase={openRegistrarClaseForAlumno}
-          onPagarPendiente={openPagoPendiente}
-          onEditarPago={(pago) => setPagoParaEditar(pago)}
-          onDeletePago={handleDeletePago}
-        />}
+        {current === "alumnos" && (
+  <Alumnos
+    clases={state.clases}
+    pagos={state.pagos}
+    alumnos={state.alumnos}
+    onCreate={alumnoCrud.create}
+    onUpdate={alumnoCrud.update}
+    onDelete={alumnoCrud.delete}
+    onRegisterMonthlyPayment={handleRegisterMonthlyPayment}
+    onRegistrarClase={openRegistrarClaseForAlumno}
+    onPagarPendiente={openPagoPendiente}
+    onEditarPago={(pago) => setPagoParaEditar(pago)}
+    onDeletePago={handleDeletePago}
+    /* 👇 añadidos */
+    user={user}
+    clubActivoId={clubActivoId}
+    perfil={state.perfil}
+  />
+)}
         {current === "clases" && <Clases
           clases={state.clases}
           alumnos={state.alumnos}
@@ -4082,8 +5158,9 @@ function MainApp({ user, onLogout }) {
           setNuevoAlumnoId={setNuevoAlumnoId}
           prefillClase={prefillClase}
           onPrefillConsumed={() => setPrefillClase(null)}
+          grupos={state.grupos}
         />}
-        {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} />}
+        {current === "grupos" && <Grupos alumnos={state.alumnos} user={user} clubActivoId={clubActivoId} />}
         {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({ alumno, mes })} onEditarPago={(pago) => setPagoParaEditar(pago)} onDeletePago={handleDeletePago} />}
         {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
         {current === "reportes" && <Reportes pagos={state.pagos} gastos={state.gastos} alumnos={state.alumnos} clases={state.clases} clubActivoId={clubActivoId} clubes={clubes} perfil={state.perfil} />}
@@ -4307,6 +5384,70 @@ class ErrorBoundary extends React.Component {
 }
 
 ReactDOM.render(<ErrorBoundary><AppGPadel /></ErrorBoundary>, document.getElementById('root'));
+
+
+// === Comprobante de pago (PDF) + WhatsApp ===
+if (!window.coachexComprobante) {
+  window.coachexComprobante = {};
+}
+(function(){
+  // Safe guard for jsPDF
+  const hasJsPDF = !!(window.jspdf && window.jspdf.jsPDF);
+  function asMoney(n){ try { return Number(n || 0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2}); } catch(e){ return String(n || 0); } }
+  function safeDateStr(d){ try { return formatDate(d, 'dd/mm/yyyy'); } catch(e){ return formatDate(d); } }
+
+  // Genera y descarga el PDF del comprobante
+  window.coachexComprobante.generarPDF = function({ alumno, pago, clase, perfil }){
+    if (!hasJsPDF) { alert("No se encontró jsPDF. Verificá la conexión o el script de jsPDF."); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const nombreAlumno = (typeof getNombreCompleto === 'function') ? (getNombreCompleto(alumno) || 'Alumno') : (alumno?.nombre || 'Alumno');
+    const fechaClase = clase?.fecha ? safeDateStr(clase.fecha) : (pago?.fecha ? safeDateStr(pago.fecha) : '-');
+    const metodo = pago?.metodo || 'Efectivo';
+    const monto = asMoney(pago?.monto ?? clase?.precio ?? 0);
+    const concepto = pago?.concepto || (clase?.tipo ? `Pago de ${clase.tipo}` : 'Pago de clase');
+
+    doc.setFontSize(14);
+    doc.text("COMPROBANTE DE PAGO", 14, 18);
+    doc.setFontSize(11);
+
+    const filas = [
+      ["Alumno", nombreAlumno],
+      ["Fecha", fechaClase],
+      ["Concepto", concepto],
+      ["Método", metodo],
+      ["Monto", `$ ${monto}`],
+      ["Profesor", `${perfil?.nombre || "Profe"} ${perfil?.apellido || ""}`.trim()],
+    ];
+    let y = 30;
+    filas.forEach(([k,v]) => { doc.text(`${k}: ${v}`, 14, y); y += 8; });
+    doc.setLineWidth(0.4); doc.line(14, y, 196, y); y += 10;
+    doc.setFontSize(10); doc.text("¡Gracias por entrenar!", 14, y);
+
+    const fname = `comprobante_${nombreAlumno.replace(/\s+/g,'_')}_${Date.now()}.pdf`;
+    doc.save(fname);
+  };
+
+  // Link de WhatsApp con texto prellenado
+  window.coachexComprobante.waLink = function(alumno, texto){
+    try {
+      const digits = String(alumno?.telefono || alumno?.whatsapp || "").replace(/[^0-9]/g, "");
+      if (!digits) return null;
+      const msg = texto || "Te envío el comprobante de pago.";
+      return `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
+    } catch(e){
+      return null;
+    }
+  };
+})();
+</script>
+
+
+<script>
+  window.addEventListener('load', function(){
+    var el = document.getElementById('app-loader');
+    if (el) el.style.display = 'none';
+  });
 </script>
 
 </body>
