@@ -1011,14 +1011,9 @@ function Topbar({
   onClubChange,
   showIndependentOption = false,
 }) {
-  // ▸ rutas del logo (ajustá según tu estructura)
-  const LOGO_CIRCLE_PRIMARY = "./img/logo_favicon.png";
-  const LOGO_CIRCLE_FALLBACK = "./logo_favicon.png"; // si no está en /img
+  const LOGO_WORDMARK = "./logo_coachex_N.png";
+  const BUILD_VER = "v3";
 
-  const LOGO_WORDMARK_PRIMARY = "./img/logo_coachex_N.png";
-  const LOGO_WORDMARK_FALLBACK = "./assets/img/logo_coachex_N.png"; // por si lo tenés en /assets
-
-  // ▸ defensivo con clubes
   const clubesArr = Array.isArray(clubes) ? clubes : [];
   const clubActivo = clubActivoId ? clubesArr.find(c => c.id === clubActivoId) : null;
 
@@ -1034,24 +1029,20 @@ function Topbar({
   ];
 
   return (
-    <header className="w-full bg-slate-900 text-white">
+    <header className="w-full bg-[#484848] text-white">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between">
-        {/* Izquierda: logo circular + wordmark + slogan */}
-        <div className="flex items-center gap-3">
-          <img
-            src={LOGO_CIRCLE_PRIMARY}
-            alt="Coachex"
-            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full"
-            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = LOGO_CIRCLE_FALLBACK; }}
-          />
-          <div>
+        {/* Izquierda: solo wordmark + subtítulo */}
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col">
             <img
-              src={LOGO_WORDMARK_PRIMARY}
-              alt="Coachex-Pro Logo"
-              className="h-5 sm:h-6"
-              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = LOGO_WORDMARK_FALLBACK; }}
+              src={`${LOGO_WORDMARK}?${BUILD_VER}`}
+              alt="COACHEX·PRO"
+              className="h-3 sm:h-4 md:h-5 w-auto shrink-0"
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "./logo_favicon.png"; }}
             />
-            <p className="text-[10px] sm:text-xs opacity-80 -mt-0.5">Gestión de Profesores</p>
+            <p className="text-[10px] sm:text-xs opacity-80 -mt-0.5 leading-tight">
+              Gestión de Profesores
+            </p>
           </div>
         </div>
 
@@ -1061,7 +1052,7 @@ function Topbar({
             <select
               value={clubActivoId || ""}
               onChange={(e) => onClubChange && onClubChange(e.target.value)}
-              className="text-sm px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 focus:ring-2 focus:ring-white w-full sm:w-auto max-w-[220px]"
+              className="text-sm px-2 py-1 rounded-lg bg-neutral-700 hover:bg-neutral-600 text-white border border-neutral-600 focus:ring-2 focus:ring-white w-full sm:w-auto max-w-[220px]"
               title="Seleccionar Club de Trabajo"
             >
               {clubesArr.map(club => (
@@ -1069,7 +1060,7 @@ function Topbar({
               ))}
             </select>
           ) : (
-            <div className="text-slate-200 text-sm px-2 py-1 rounded-md bg-slate-800/40 border border-slate-700/50">
+            <div className="text-neutral-200 text-sm px-2 py-1 rounded-md bg-neutral-800/40 border border-neutral-700/50">
               {clubActivo?.nombre || clubesArr[0]?.nombre || "—"}
             </div>
           )}
@@ -1079,7 +1070,7 @@ function Topbar({
               key={t.id}
               onClick={() => setCurrent && setCurrent(t.id)}
               className={`px-3 py-1.5 rounded-xl text-sm transition ${
-                current === t.id ? "bg-white text-slate-900" : "hover:bg-slate-800"
+                current === t.id ? "bg-white text-neutral-900" : "hover:bg-neutral-800"
               }`}
             >
               {t.label}
@@ -1102,13 +1093,14 @@ function Topbar({
             key={t.id}
             onClick={() => setCurrent && setCurrent(t.id)}
             className={`px-3 py-2 rounded-xl text-sm transition ${
-              current === t.id ? "bg-white text-slate-900" : "bg-slate-800 text-white"
+              current === t.id ? "bg-white text-neutral-900" : "bg-neutral-800 text-white"
             }`}
           >
             {t.label}
           </button>
         ))}
       </div>
+
       <div className="md:hidden px-2 pb-2">
         <button
           onClick={onLogout}
@@ -1549,12 +1541,54 @@ function Topbar({
       const addHorario = () => setForm(f => ({ ...f, horarios: [...(f.horarios || []), { dia: "Lunes", hora: "18:00" }] }));
       const delHorario = (idx) => setForm(f => ({ ...f, horarios: f.horarios.filter((_, i) => i !== idx) }));
       const setHorario = (idx, key, val) => setForm(f => ({ ...f, horarios: f.horarios.map((h, i) => i === idx ? { ...h, [key]: val } : h) }));
-      function handleSubmit(e) { e.preventDefault(); if (!form.nombre.trim()) return alert("Ingresá un nombre"); onSubmit(form); }
-      return (
+      function alumnoDocRef(id) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("No hay sesión (auth.currentUser es null).");
+  // Guardamos bajo el usuario autenticado
+  return db.collection("users").doc(uid).collection("alumnos").doc(id);
+}
+async function handleSubmit(e) {
+  e.preventDefault();
+  if (!form.nombre?.trim()) return alert("Ingresá un nombre");
+
+  try {
+    // normalizo teléfono (evito undefined)
+    const tel = (form.telefono ?? "").toString().trim();
+    const data = { ...form, telefono: tel || null };
+
+    if (data.id) {
+      // EDICIÓN: guardamos directo en Firestore
+      await guardarAlumnoEditado(data);
+    } else {
+      // CREACIÓN: dejá que el padre lo maneje como ya lo tenías
+      onSubmit(data);
+    }
+
+    // ✅ feedback/cierre del editor
+    onCancel?.();                  // cierra el formulario de edición
+    // Si querés un aviso rápido:
+    // alert("Alumno actualizado");
+    // (o pasá un setToast desde el padre y llamalo acá)
+  } catch (err) {
+    console.error("Error guardando alumno:", err);
+    alert(err.message || "No se pudo guardar. Intentá nuevamente.");
+  }
+}
+ return (
         <form onSubmit={handleSubmit} className="grid md:grid-cols-6 gap-3">
           <div className="md:col-span-3"><label className="text-sm text-slate-600">Nombre</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Sofía" required /></div>
           <div className="md:col-span-3"><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Pérez" /></div>
-          <div className="md:col-span-3"><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: 549381..." /></div>
+          <div className="md:col-span-3">
+  <label className="text-sm text-slate-600">Teléfono</label>
+  <input
+    type="tel"
+    name="telefono"
+    value={form.telefono ?? ""}                     // 👈 evita undefined
+    onChange={handleChange}
+    className="w-full border rounded-lg px-3 py-2"
+    placeholder="Ej: 549381..."
+  />
+</div>
           <div className="md:col-span-3"><label className="text-sm text-slate-600">Contacto Padre/Madre (Escuelita)</label><input name="contactoPadre" value={form.contactoPadre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Nombre y teléfono" /></div>
           <div><label className="text-sm text-slate-600">Deporte</label><select name="deporte" value={form.deporte} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{DEPORTES.map(d => <option key={d}>{d}</option>)}</select></div>
           <div><label className="text-sm text-slate-600">Estado</label><select name="estado" value={form.estado} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{ESTADOS_ALUMNO.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}</select></div>
@@ -1586,6 +1620,35 @@ function Topbar({
         </form>
       );
     }
+    
+async function guardarAlumnoEditado(data) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) {
+    alert("No hay sesión. Volvé a iniciar sesión.");
+    return;
+  }
+
+  const tel = (data.telefono ?? "").toString().trim();
+
+  const payload = {
+    ...data,
+    telefono: tel || null, // nunca undefined
+    ownerId: uid,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  // Guarda en users/{uid}/alumnos/{id} (suele cumplir reglas)
+  const ref = db.collection("users").doc(uid).collection("alumnos").doc(data.id);
+
+  console.log("Escribiendo en:", ref.path, payload); // debug opcional
+  await ref.set(payload, { merge: true });
+
+  // Si NO usás onSnapshot, refrescá el estado local:
+  if (typeof setAlumnos === "function") {
+    setAlumnos(prev => prev.map(a => (a.id === data.id ? { ...a, ...payload } : a)));
+  }
+}
+
     
 function Alumnos({
   alumnos,
@@ -4761,6 +4824,33 @@ function MainApp({ user, onLogout }) {
     }
     return db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId).collection(collectionName);
   };
+  // 🔹 Overlay de alumnos de users/{uid}/alumnos sobre los alumnos del club (por id)
+useEffect(() => {
+  if (!user) return;
+
+  const uid = user.uid;
+  const unsub = db
+    .collection("users").doc(uid)
+    .collection("alumnos")
+    .onSnapshot(
+      (snap) => {
+        // Mapeo rápido id -> datos (teléfono, etc.)
+        const byId = new Map(snap.docs.map(d => [d.id, d.data()]));
+
+        // Hago merge sobre lo que ya trae el club (solo si hay coincidencia de id)
+        setState(prev => ({
+          ...prev,
+          alumnos: (prev.alumnos || []).map(a =>
+            byId.has(a.id) ? { ...a, ...byId.get(a.id) } : a
+          ),
+        }));
+      },
+      (err) => console.error("onSnapshot alumnos (users/{uid}/alumnos):", err)
+    );
+
+  return () => unsub();
+}, [user, clubActivoId]);
+
   
   const alumnoCrud = {
   create: async (data) => {
