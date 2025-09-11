@@ -906,34 +906,32 @@ function Topbar({
     </nav>
   </div>
 
-{/* Navegación móvil (scroll horizontal) */}
+{/* Navegación móvil */}
 <div className="md:hidden px-2 pb-2">
   <nav
-    className="flex gap-2 overflow-x-auto whitespace-nowrap px-2 py-2 rounded-lg
-               bg-[rgba(0,0,0,0.04)] hover:bg-[rgba(0,0,0,0.06)] transition"
+    className="flex gap-2 overflow-x-auto whitespace-nowrap -mx-2 px-2 py-2
+               rounded-lg bg-[rgba(0,0,0,0.04)] hover:bg-[rgba(0,0,0,0.06)] transition"
   >
     {tabs.map((t) => (
       <button
         key={t.id}
         onClick={() => setCurrent(t.id)}
         className={
-          "shrink-0 px-3 py-1.5 rounded-md text-sm font-medium " +
+          "shrink-0 px-3 py-2 rounded-xl text-sm transition " +
           (current === t.id
-            ? "bg-white/80 text-[#34745B] shadow-sm"
-            : "text-slate-700 hover:bg-white/60")
+            ? "bg-white text-slate-900 shadow-sm"
+            : "bg-slate-800 text-white/90")
         }
       >
         {t.label}
       </button>
     ))}
   </nav>
-</div>
 
-{/* Botón cerrar sesión */}
-<div className="md:hidden px-2 pb-2">
   <button
     onClick={onLogout}
-    className="w-full px-3 py-1.5 rounded-lg text-sm transition bg-red-600 hover:bg-red-700 text-white mt-2"
+    className="mt-3 w-full px-3 py-1.5 rounded-lg text-sm transition
+               bg-red-600 hover:bg-red-700 text-white"
   >
     Cerrar Sesión
   </button>
@@ -1219,7 +1217,7 @@ function Topbar({
     return (
       <li key={c.id} className="p-2 border-b flex justify-between items-center">
         <div>
-          <p className="font-semibold text-slate-700">{c.hora} - {nombres}</p>
+          <p className="font-semibold text-slate-700 break-words">{c.hora} - {nombres}</p>
           <p className="text-xs text-slate-500">
             {c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}
           </p>
@@ -1258,7 +1256,7 @@ function Topbar({
           <li key={c.id} className="p-2 border rounded-lg">
             <div className="flex justify-between items-center">
               <div>
-                <p className="font-semibold text-slate-700">{c.hora} - {nombres}</p>
+                <p className="font-semibold text-slate-700 break-words">{c.hora} - {nombres}</p>
                 <p className="text-xs text-slate-500">
                   {c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}
                 </p>
