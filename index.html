@@ -22,7 +22,7 @@
   <style>
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    overflow-x: hidden;
+    
   }
 </style>
 <link rel="icon" type="image/png" href="./img/logo_favicon.png">
@@ -679,13 +679,45 @@ function toArrayHorarioLaboral(hl) {
 
     // ------------------------------ UI Básicos ------------------------------
     function Card({ title, right, children }) {
+  const bodyRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+
+    // ¿Hay una o más tablas dentro del Card?
+    const tables = el.querySelectorAll('table');
+    const hasTable = tables.length > 0;
+
+    // Aplico clases sólo si hay tablas (scroll horizontal + padding negativo en mobile)
+    el.classList.toggle('overflow-x-auto', hasTable);
+    el.classList.toggle('-mx-2', hasTable);   // ensancha en mobile
+    el.classList.toggle('sm:mx-0', hasTable); // normal en >= sm
+    if (hasTable) {
+      // Suaviza scroll en iOS
+      el.style.webkitOverflowScrolling = 'touch';
+      tables.forEach(t => {
+        // Fuerza ancho mínimo para que aparezca el scroll horizontal en pantallas chicas
+        if (!t.classList.contains('min-w-[720px]')) {
+          t.classList.add('min-w-[720px]');
+        }
+        // Asegura tipografía consistente
+        if (!t.classList.contains('text-sm')) {
+          t.classList.add('text-sm');
+        }
+      });
+    }
+  }, [children]);
+
   return (
     <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4">
       <div className="flex items-center justify-between mb-2 sm:mb-3">
         <h3 className="text-sm sm:text-base font-semibold text-slate-800">{title}</h3>
         {right}
       </div>
-      <div className="text-[13px] sm:text-sm">
+
+      {/* Contenedor del contenido del Card (se autoajusta si detecta tablas) */}
+      <div ref={bodyRef} className="text-[13px] sm:text-sm">
         {children}
       </div>
     </section>
@@ -947,33 +979,122 @@ function SideNav({
   clubes = [],
   clubActivoId,
   onClubChange,
-  expanded = false,              // ← nuevo
-  onExpandChange,                // ← nuevo
+  expanded = false,
+  onExpandChange,
 }) {
+  // ===== Fallback icons (monocromo, stroke=currentColor) =====
+  const ic = {
+    Home: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 10.5 12 3l9 7.5" />
+        <path d="M5 10v10h14V10" />
+        <path d="M9 20v-6h6v6" />
+      </svg>
+    ),
+    Users: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+    Calendar: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    ),
+    Layers: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <polygon points="12 2 2 7 12 12 22 7 12 2" />
+        <polyline points="2 12 12 17 22 12" />
+        <polyline points="2 17 12 22 22 17" />
+      </svg>
+    ),
+    Cash: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <circle cx="12" cy="12" r="3" />
+        <path d="M18 8h.01M6 16h.01" />
+      </svg>
+    ),
+    Receipt: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 2v20l3-2 3 2 3-2 3 2 3-2V2z" />
+        <path d="M8 7h8M8 11h8M8 15h5" />
+      </svg>
+    ),
+    Chart: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 3v18h18" />
+        <rect x="7" y="8" width="3" height="8" />
+        <rect x="12" y="5" width="3" height="11" />
+        <rect x="17" y="11" width="3" height="5" />
+      </svg>
+    ),
+    User: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M20 21a8 8 0 0 0-16 0" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    ),
+    Trophy: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M8 21h8" />
+        <path d="M12 17v4" />
+        <path d="M7 4h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5V4z" />
+        <path d="M5 7a3 3 0 0 1-3-3V3h5v4" />
+        <path d="M19 7a3 3 0 0 0 3-3V3h-5v4" />
+      </svg>
+    ),
+    Brackets: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M6 4H4v6h2c2 0 4 2 4 4v6H8v-6c0-1.1-.9-2-2-2H4" />
+        <path d="M18 4h2v6h-2c-2 0-4 2-4 4v6h2v-6c0-1.1.9-2 2-2h2" />
+      </svg>
+    ),
+    Logout: ({ className = "" }) => (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <polyline points="16 17 21 12 16 7" />
+        <line x1="21" y1="12" x2="9" y2="12" />
+      </svg>
+    ),
+  };
+
+  // Usa set de íconos si existe; sino, fallback
+  const I = (name, fallback) => (window.NavIcons && window.NavIcons[name]) || fallback;
+
   const tabs = [
-  { id: "dashboard", label: "Dashboard", icon: window.NavIcons.Home },
-  { id: "alumnos",  label: "Alumnos",   icon: window.NavIcons.Users },
-  { id: "clases",   label: "Clases",    icon: window.NavIcons.Calendar },
-  { id: "grupos",   label: "Grupos",    icon: window.NavIcons.Layers },
-  { id: "pagos",    label: "Pagos",     icon: window.NavIcons.Cash },
-  { id: "gastos",   label: "Gastos",    icon: window.NavIcons.Receipt },
-  { id: "reportes", label: "Reportes",  icon: window.NavIcons.Chart },
-  { id: "perfil",   label: "Perfil",    icon: window.NavIcons.User },
-];
+    { id: "dashboard", label: "Dashboard", icon: I("Home", ic.Home) },
+    { id: "alumnos",  label: "Alumnos",   icon: I("Users", ic.Users) },
+    { id: "clases",   label: "Clases",    icon: I("Calendar", ic.Calendar) },
+    { id: "grupos",   label: "Grupos",    icon: I("Layers", ic.Layers) },
+    { id: "torneos",  label: "Torneos",   icon: (window.NavIcons && (window.NavIcons.Tournament || window.NavIcons.Brackets)) || ic.Brackets },
+    { id: "rankings", label: "Ranking",   icon: I("Trophy", ic.Trophy) },
+    { id: "pagos",    label: "Pagos",     icon: I("Cash", ic.Cash) },
+    { id: "gastos",   label: "Gastos",    icon: I("Receipt", ic.Receipt) },
+    { id: "reportes", label: "Reportes",  icon: I("Chart", ic.Chart) },
+    { id: "perfil",   label: "Perfil",    icon: I("User", ic.User) },
+  ];
 
   const onTab = (id) => setCurrent && setCurrent(id);
 
   return (
     <>
       {/* Sidebar izquierda (Desktop/Tablet) */}
-            <aside
+      <aside
         className={
+          // 👇 aquí estaba el typo antes: "bg[#303030]"; debe ser "bg-[#303030]"
           "hidden md:flex fixed inset-y-0 left-0 z-40 bg-[#303030] text-white " +
-          (expanded ? "w-56" : "w-16") +          // ← ancho según estado
+          (expanded ? "w-56" : "w-16") +
           " transition-[width] duration-300 pt-5"
         }
-        onMouseEnter={() => onExpandChange && onExpandChange(true)}   // ← avisa al padre
-        onMouseLeave={() => onExpandChange && onExpandChange(false)}  // ← avisa al padre
+        onMouseEnter={() => onExpandChange && onExpandChange(true)}
+        onMouseLeave={() => onExpandChange && onExpandChange(false)}
       >
         <div className="flex flex-col w-full">
           {/* Header / logo */}
@@ -1011,39 +1132,40 @@ function SideNav({
 
           {/* Navegación */}
           <nav className="flex-1 mt-2">
-  {tabs.map((t) => {
-    const active = current === t.id;
-    return (
-      <button
-        key={t.id}
-        onClick={() => setCurrent && setCurrent(t.id)}
-        title={t.label}
-        className={
-          "relative w-full mx-2 my-1 flex items-center gap-3 px-3 py-2 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 " +
-          (active ? "bg-white/15" : "hover:bg-white/10")
-        }
-      >
-        {/* Indicador activo: barrita a la izquierda */}
-        <span
-          aria-hidden
-          className={
-            "absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r transition-all " +
-            (active ? "bg-white" : "bg-transparent")
-          }
-        />
-        <t.icon className="h-5 w-5 shrink-0" />
-        <span
-          className={
-            "text-sm transition-opacity whitespace-nowrap " +
-            (expanded ? "opacity-100" : "opacity-0")
-          }
-        >
-          {t.label}
-        </span>
-      </button>
-    );
-  })}
-</nav>
+            {tabs.map((t) => {
+              const active = current === t.id;
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setCurrent && setCurrent(t.id)}
+                  title={t.label}
+                  className={
+                    "relative w-full mx-2 my-1 flex items-center gap-3 px-3 py-2 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 " +
+                    (active ? "bg-white/15" : "hover:bg-white/10")
+                  }
+                >
+                  {/* Indicador activo */}
+                  <span
+                    aria-hidden
+                    className={
+                      "absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r transition-all " +
+                      (active ? "bg-white" : "bg-transparent")
+                    }
+                  />
+                  <Icon className="h-5 w-5 shrink-0" />
+                  <span
+                    className={
+                      "text-sm transition-opacity whitespace-nowrap " +
+                      (expanded ? "opacity-100" : "opacity-0")
+                    }
+                  >
+                    {t.label}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
 
           {/* Logout */}
           <div className="p-2 border-t border-white/10">
@@ -1052,7 +1174,7 @@ function SideNav({
               className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/30"
               title="Cerrar sesión"
             >
-              {React.createElement((window.NavIcons && window.NavIcons.Logout) || (() => null), {
+              {React.createElement((window.NavIcons && window.NavIcons.Logout) || ic.Logout, {
                 className: "h-5 w-5",
               })}
               <span
@@ -1069,30 +1191,37 @@ function SideNav({
       </aside>
 
       {/* Barra inferior (Mobile) */}
-<nav
-  className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#303030] text-white flex items-stretch justify-around border-t border-white/10"
-  style={{
-    height: "calc(56px + env(safe-area-inset-bottom))",
-    paddingBottom: "env(safe-area-inset-bottom)",
-  }}
->
-  {tabs.map((t) => (
-    <button
-      key={t.id}
-      onClick={() => onTab(t.id)}
-      className={
-        "flex-1 flex flex-col items-center justify-center text-[11px] transition-colors " +
-        (current === t.id ? "bg-white/10" : "active:bg-white/5")
-      }
-    >
-      <t.icon className="h-5 w-5 mb-0.5" />
-      <span className="leading-none">{t.label}</span>
-    </button>
-  ))}
-</nav>
+      <nav
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#303030] text-white flex items-stretch justify-around border-t border-white/10"
+        style={{
+          height: "calc(56px + env(safe-area-inset-bottom))",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              onClick={() => onTab(t.id)}
+              className={
+                "flex-1 flex flex-col items-center justify-center text-[11px] transition-colors " +
+                (current === t.id ? "bg-white/10" : "active:bg-white/5")
+              }
+            >
+              <Icon className="h-5 w-5 mb-0.5" />
+              <span className="leading-none">{t.label}</span>
+            </button>
+          );
+        })}
+      </nav>
     </>
   );
 }
+
+
+
+
     
     function ClasesPorTamanoMes({ clases }) {
   const resumen = useMemo(() => {
@@ -3360,6 +3489,7 @@ function Clases({
     }
   };
 
+
   const { abrirModalPago, Modal: ModalAbono } = useModalPagoAbono();
 
   useEffect(() => {
@@ -3545,6 +3675,21 @@ function Clases({
   // ⚙️ clubId razonable sin tocar props
   const clubId = perfil?.clubActivoId || perfil?.clubId || perfil?.clubActivo || null;
 
+const normHour = (h) => String(h || '').slice(0, 5); // "18:00"
+const existeClaseEnHorario = ({ fecha, hora, cancha, excluirId = null }) => {
+  const f = String(fecha);
+  const h = normHour(hora);
+  return (clases || []).find(c => {
+    if (c?.id === excluirId) return false;
+    if ((c?.estado || '') === 'Cancelada') return false; // las canceladas no bloquean
+    const mismoDiaHora = String(c?.fecha) === f && normHour(c?.hora) === h;
+    if (!mismoDiaHora) return false;
+    // si indicás cancha, exige misma cancha; si no, bloquea globalmente esa franja
+    const mismaCancha = cancha ? String(c?.cancha || '') === String(cancha || '') : true;
+    return mismaCancha;
+  }) || null;
+};
+
   // ✅ submit con integración de mensualidad (después de persistir)
 async function submit(e) {
   e.preventDefault();
@@ -3567,6 +3712,28 @@ async function submit(e) {
     precio: precioCanon,
     alumnoIds: validAlumnos
   };
+
+  // ✅ 3.1) Bloqueo de superposición (misma fecha + hora, y misma cancha si aplica)
+  const conflicto = existeClaseEnHorario({
+    fecha: finalForm.fecha,
+    hora: finalForm.hora,
+    cancha: finalForm.cancha,         // si no usás cancha, igual bloquea por fecha+hora
+    excluirId: editing?.id || null    // al editar, ignoramos la propia
+  });
+
+  if (conflicto) {
+    const nombres = (conflicto.alumnoIds || [])
+      .map(id => getNombreCompleto(alumnoMap.get(id)))
+      .filter(Boolean)
+      .join(', ');
+    const canchaTxt = finalForm.cancha ? ` en ${finalForm.cancha}` : '';
+    alert(
+      `Conflicto de horario:\n` +
+      `Ya existe una clase el ${finalForm.fecha} a las ${normHour(finalForm.hora)}${canchaTxt}` +
+      (nombres ? ` (alumnos: ${nombres}).` : '.')
+    );
+    return; // 🚫 no seguimos con el guardado
+  }
 
   // 4) Flags y contexto
   const shouldOpenPayModal = ['realizada', 'ausente'].includes(String(finalForm.estado || '').toLowerCase());
@@ -3833,130 +4000,248 @@ async function submit(e) {
 
       <div>
         {(() => {
-          const [semanaVisible, setSemanaVisible] = useState(getWeekStartDate(new Date()));
-          const cambiarSemana = (dias) => setSemanaVisible(prev => addDays(prev, dias));
-          const hoyString = formatDate(new Date());
-          const semanaActualStrings = Array.from({ length: 7 }, (_, i) => formatDate(addDays(semanaVisible, i)));
-          const clasesDeLaSemana = clasesFiltradas.filter(c => semanaActualStrings.includes(c.fecha));
-          const clasesDeHoy = clasesFiltradas.filter(c => c.fecha === hoyString);
-          const clasesAgrupadas = clasesDeLaSemana.reduce((acc, clase) => {
-            if (clase.fecha !== hoyString) {
-              if (!acc[clase.fecha]) acc[clase.fecha] = [];
-              acc[clase.fecha].push(clase);
-            }
-            return acc;
-          }, {});
-          const diasLaborales = toArrayHorarioLaboral(perfil?.horarioLaboral).filter(d => d.activo).map(d => d.dia);
+  // === Calendario semanal como componente dedicado ===
+function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit }) {
+  const [semanaVisible, setSemanaVisible] = React.useState(getWeekStartDate(new Date()));
+  const cambiarSemana = (dias) => setSemanaVisible(prev => addDays(prev, dias));
 
-          const ClaseItem = ({ clase }) => {
-  // 🔹 calcular nombres SIEMPRE desde alumnoIds + alumnoMap (no usar clase.nombresAlumnos)
-  const nombresAlumnos = (clase.alumnoIds || [])
-    .filter(Boolean)
-    .map(id => getNombreCompleto(alumnoMap.get(id)))
-    .filter(Boolean)
-    .join(', ');
+  const hoyString = formatDate(new Date());
+  const semanaActualStrings = Array.from({ length: 7 }, (_, i) => formatDate(addDays(semanaVisible, i)));
 
-  // Estado de pago (esto lo dejás igual)
-  const totalPagado = (clase.pagos || []).reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
-  const precioClase = parseFloat(clase.precio || 0);
-  const estadoPago = totalPagado >= precioClase ? 'Pagada' : 'Pendiente';
+  const clasesDeLaSemana = React.useMemo(
+    () => clasesFiltradas.filter(c => semanaActualStrings.includes(c.fecha)),
+    [clasesFiltradas, semanaVisible]
+  );
+  const clasesDeHoy = React.useMemo(
+    () => clasesFiltradas.filter(c => c.fecha === hoyString),
+    [clasesFiltradas, hoyString]
+  );
 
-  const estadoClaseBg =
-    clase.estado === 'Realizada' ? 'bg-green-100 text-green-800' :
-    clase.estado === 'Ausente'   ? 'bg-orange-100 text-orange-800' :
-    clase.estado === 'Cancelada' ? 'bg-red-100 text-red-800' : '';
+  const grupoMap = React.useMemo(
+    () => new Map((grupos || []).map(g => [g.id, g])),
+    [grupos]
+  );
 
-  const estadoPagoBg = estadoPago === 'Pagada'
-    ? 'bg-green-100 text-green-800'
-    : 'bg-red-100 text-red-800';
+  const clasesAgrupadas = React.useMemo(() => {
+    const acc = {};
+    for (const clase of clasesDeLaSemana) {
+      if (clase.fecha !== hoyString) (acc[clase.fecha] ||= []).push(clase);
+    }
+    return acc;
+  }, [clasesDeLaSemana, hoyString]);
 
-  return (
-    <div
-      onClick={() => openEdit(clase)}
-      className="p-3 bg-white rounded-lg shadow-sm border border-slate-200 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
-    >
-      <div className="flex justify-between items-center">
-        <p className="font-semibold text-slate-800">
-          {clase.hora} - {nombresAlumnos}
+  const diasLaborales = React.useMemo(
+    () => toArrayHorarioLaboral(perfil?.horarioLaboral).filter(d => d.activo).map(d => d.dia),
+    [perfil]
+  );
+
+  // Etiqueta uniforme: "Clase para N" (acepta número o grupo)
+  const labelClasePara = (input) => {
+    let n = 0;
+    if (typeof input === 'number') {
+      n = Number(input) || 0;
+    } else if (input && typeof input === 'object') {
+      n = Number(input?.alumnoIds?.length || input?.cupo || input?.capacidad || 0);
+    }
+    return n > 0 ? `Clase para ${n}` : 'Clase grupal';
+  };
+
+  // === GRUPOS con múltiples horarios ===
+  // Expande un grupo en varias "instancias virtuales" por día/hora
+  const expandSchedules = React.useCallback((g) => {
+    if (Array.isArray(g.horarios) && g.horarios.length) {
+      return g.horarios
+        .filter(h => h && h.diaSemana && h.hora)
+        .map(h => ({
+          ...g,
+          _sched: { diaSemana: Number(h.diaSemana), hora: String(h.hora).slice(0, 5) }
+        }));
+    }
+    if (g.diaSemana && g.hora) {
+      return [{
+        ...g,
+        _sched: { diaSemana: Number(g.diaSemana), hora: String(g.hora).slice(0, 5) }
+      }];
+    }
+    return [];
+  }, []);
+
+  const gruposAgrupados = React.useMemo(() => {
+    const acc = {};
+    for (const fechaStr of semanaActualStrings) {
+      const jsDay = new Date(`${fechaStr}T00:00:00`).getDay(); // 0..6 (Dom..Sab)
+      const dia1a7 = jsDay === 0 ? 7 : jsDay;
+
+      const delDia = (grupos || []).flatMap(g => expandSchedules(g))
+        .filter(gx => gx._sched.diaSemana === Number(dia1a7))
+        .map(gx => ({
+          _isGrupoVirtual: true,
+          id: `grp_${gx.id || 'x'}_${fechaStr}`,
+          _grupoRealId: gx.id,
+          fecha: fechaStr,
+          hora: gx._sched.hora,
+          tipo: labelClasePara(gx),
+          nombreGrupo: gx.nombre || 'Grupo',
+          alumnoIds: gx.alumnoIds || []
+        }));
+
+      if (delDia.length) acc[fechaStr] = delDia;
+    }
+    return acc;
+  }, [grupos, semanaActualStrings, expandSchedules]);
+
+  const ClaseItem = ({ clase }) => {
+    // nombres de alumnos desde alumnoIds + alumnoMap
+    const nombresAlumnos = (clase.alumnoIds || [])
+      .filter(Boolean)
+      .map(id => getNombreCompleto(alumnoMap.get(id)))
+      .filter(Boolean)
+      .join(', ');
+
+    const nombreGrupoDeClase = clase.origenGrupoId
+      ? (grupoMap.get(clase.origenGrupoId)?.nombre || 'Grupo')
+      : null;
+
+    const totalPagado = (clase.pagos || []).reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
+    const precioClase = parseFloat(clase.precio || 0);
+    const estadoPago = totalPagado >= precioClase ? 'Pagada' : 'Pendiente';
+
+    const estadoClaseBg =
+      clase.estado === 'Realizada' ? 'bg-green-100 text-green-800' :
+      clase.estado === 'Ausente'   ? 'bg-orange-100 text-orange-800' :
+      clase.estado === 'Cancelada' ? 'bg-red-100 text-red-800' : '';
+
+    const estadoPagoBg = estadoPago === 'Pagada'
+      ? 'bg-green-100 text-green-800'
+      : 'bg-red-100 text-red-800';
+
+    return (
+      <div
+        onClick={() => openEdit(clase)}
+        className="p-3 bg-white rounded-lg shadow-sm border border-slate-200 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
+      >
+        <div className="flex justify-between items-center">
+          <p className="font-semibold text-slate-800">
+            {clase.hora} - {nombreGrupoDeClase ? <>CLASE GRUPAL — {nombreGrupoDeClase}</> : nombresAlumnos}
+          </p>
+          <div className="flex gap-2">
+            {clase.estado !== 'Programada' && (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoClaseBg}`}>
+                {clase.estado}
+              </span>
+            )}
+            {clase.estado === 'Realizada' && (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoPagoBg}`}>
+                {estadoPago}
+              </span>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-slate-500 mt-1">
+          {(clase.origenGrupoId ? labelClasePara((clase.alumnoIds || []).length) : (clase.tipo || 'Clase'))}
+          {clase.cancha ? ` en ${clase.cancha}` : ''}
         </p>
-        <div className="flex gap-2">
-          {clase.estado !== 'Programada' && (
-            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoClaseBg}`}>
-              {clase.estado}
-            </span>
-          )}
-          {clase.estado === 'Realizada' && (
-            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoPagoBg}`}>
-              {estadoPago}
-            </span>
+      </div>
+    );
+  };
+
+  const GrupoItem = ({ grupo }) => (
+    <div className="p-2 rounded-md border border-violet-300 bg-violet-50">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-violet-800">{grupo.nombreGrupo}</span>
+        <span className="text-xs text-violet-700">{grupo.hora}</span>
+      </div>
+      <div className="text-xs text-violet-700 mt-0.5">
+        {labelClasePara(grupo)}
+        {grupo.alumnoIds?.length ? ` • ${grupo.alumnoIds.length} alumnos` : ''}
+      </div>
+    </div>
+  );
+
+  const DiaGroup = ({ fecha, clasesDelDia = [], gruposDelDia = [] }) => {
+    const d = new Date(`${fecha}T00:00:00`);
+    const diaNombre = DIAS_SEMANA_NOMBRES[d.getDay() === 0 ? 6 : d.getDay() - 1];
+    const diaNumero = d.getDate();
+    return (
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 min-h-[120px]">
+        <h3 className="font-bold text-slate-700">{diaNombre}, {diaNumero}</h3>
+        <div className="space-y-2 mt-2">
+          {/* GRUPOS primero */}
+          {gruposDelDia.length > 0 &&
+            gruposDelDia.sort((a, b) => a.hora.localeCompare(b.hora))
+                        .map(g => <GrupoItem key={g.id} grupo={g} />)}
+
+          {/* CLASES */}
+          {clasesDelDia.length > 0 ? (
+            clasesDelDia.sort((a, b) => a.hora.localeCompare(b.hora))
+                        .map(c => <ClaseItem key={c.id} clase={c} />)
+          ) : (
+            <p className="text-sm text-slate-400 pt-2">No hay clases.</p>
           )}
         </div>
       </div>
-      <p className="text-xs text-slate-500 mt-1">
-        {clase.tipo}{clase.cancha ? ` en ${clase.cancha}` : ''}
-      </p>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-[#34745B] mb-2">Agenda de Hoy</h2>
+        <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
+          {clasesDeHoy.length > 0 ? (
+            <div className="space-y-2">
+              {clasesDeHoy.sort((a, b) => a.hora.localeCompare(b.hora)).map(c => (
+                <ClaseItem key={c.id} clase={c} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex justify-between items-center mb-3">
+          <button onClick={() => cambiarSemana(-7)} className="px-4 py-2 text-sm rounded-lg border bg-white shadow-sm hover:bg-slate-50">‹ Sem. Anterior</button>
+          <p className="font-semibold text-slate-600">
+            Semana del {formatDate(semanaVisible, 'dd/mm')} al {formatDate(addDays(semanaVisible, 6), 'dd/mm')}
+          </p>
+          <button onClick={() => cambiarSemana(7)} className="px-4 py-2 text-sm rounded-lg border bg-white shadow-sm hover:bg-slate-50">Sem. Siguiente ›</button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {semanaActualStrings.map((fechaString, index) => {
+            const diaNombre = DIAS_SEMANA_NOMBRES[index];
+            if (diasLaborales.includes(diaNombre) && fechaString !== hoyString) {
+              return (
+                <DiaGroup
+                  key={fechaString}
+                  fecha={fechaString}
+                  clasesDelDia={clasesAgrupadas[fechaString] || []}
+                  gruposDelDia={gruposAgrupados[fechaString] || []}
+                />
+              );
+            }
+            return null;
+          })}
+        </div>
+      </div>
     </div>
   );
-};
+}
 
 
-          const DiaGroup = ({ fecha, clasesDelDia = [] }) => {
-            const d = new Date(`${fecha}T00:00:00`);
-            const diaNombre = DIAS_SEMANA_NOMBRES[d.getDay() === 0 ? 6 : d.getDay() - 1];
-            const diaNumero = d.getDate();
-            return (
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 min-h-[120px]">
-                <h3 className="font-bold text-slate-700">{diaNombre}, {diaNumero}</h3>
-                <div className="space-y-2 mt-2">
-                  {clasesDelDia.length > 0 ? (
-                    clasesDelDia.sort((a, b) => a.hora.localeCompare(b.hora)).map(c => <ClaseItem key={c.id} clase={c} />)
-                  ) : (
-                    <p className="text-sm text-slate-400 pt-2">No hay clases.</p>
-                  )}
-                </div>
-              </div>
-            );
-          };
-
-          return (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-xl font-bold text-[#34745B] mb-2">Agenda de Hoy</h2>
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
-                  {clasesDeHoy.length > 0 ? (
-                    <div className="space-y-2">
-                      {clasesDeHoy.sort((a, b) => a.hora.localeCompare(b.hora)).map(c => (
-                        <ClaseItem key={c.id} clase={c} />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <button onClick={() => cambiarSemana(-7)} className="px-4 py-2 text-sm rounded-lg border bg-white shadow-sm hover:bg-slate-50">‹ Sem. Anterior</button>
-                  <p className="font-semibold text-slate-600">
-                    Semana del {formatDate(semanaVisible, 'dd/mm')} al {formatDate(addDays(semanaVisible, 6), 'dd/mm')}
-                  </p>
-                  <button onClick={() => cambiarSemana(7)} className="px-4 py-2 text-sm rounded-lg border bg-white shadow-sm hover:bg-slate-50">Sem. Siguiente ›</button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {semanaActualStrings.map((fechaString, index) => {
-                    const diaNombre = DIAS_SEMANA_NOMBRES[index];
-                    if (diasLaborales.includes(diaNombre) && fechaString !== hoyString) {
-                      return <DiaGroup key={fechaString} fecha={fechaString} clasesDelDia={clasesAgrupadas[fechaString] || []} />;
-                    }
-                    return null;
-                  })}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+  // montar el componente
+  return (
+    <SemanaCalendario
+      clasesFiltradas={clasesFiltradas}
+      perfil={perfil}
+      grupos={grupos}
+      alumnoMap={alumnoMap}
+      openEdit={openEdit}
+    />
+  );
+})()}
       </div>
       <ModalAbono />
     </div>
@@ -3970,29 +4255,47 @@ async function submit(e) {
   const [alumnosSeleccionados, setAlumnosSeleccionados] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
-  const [diaSemana, setDiaSemana] = React.useState(""); // "1".."7" o ""
-  const [horaGrupo, setHoraGrupo] = React.useState(""); // "HH:MM" o ""
-
-  const [editDiaSemana, setEditDiaSemana] = React.useState("");
-  const [editHora, setEditHora] = React.useState("");
+  // 🔹 NUEVO: múltiples horarios (crear)
+  const [horarios, setHorarios] = React.useState([{ diaSemana: "", hora: "" }]);
 
   // === Estado para EDITAR ===
   const [editOpen, setEditOpen] = React.useState(false);
   const [editGrupoId, setEditGrupoId] = React.useState(null);
   const [editNombre, setEditNombre] = React.useState("");
   const [editSeleccionados, setEditSeleccionados] = React.useState([]);
+  // 🔹 NUEVO: múltiples horarios (editar)
+  const [editHorarios, setEditHorarios] = React.useState([{ diaSemana: "", hora: "" }]);
 
-  // ===== Helpers locales (mínimos) =====
-  const resolveTipoEfectivo = (alumnoIds = []) => {
-    const n = (alumnoIds || []).filter(Boolean).length;
-    return n >= 4 ? "Escuelita" : "Trio"; // por defecto cuando <4
+  // ===== Helpers locales =====
+  // Próxima fecha sugerida para un día 1..7 (1=Lun, 7=Dom)
+  const nextDateForDiaSemana = (n) => {
+    if (!n) return "";
+    const today = new Date();
+    const todayIdx = today.getDay();           // 0=Dom..6=Sab
+    const targetIdx = (n === 7) ? 0 : n;       // 7->0 (domingo)
+    let diff = targetIdx - todayIdx;
+    if (diff <= 0) diff += 7;
+    const d = new Date(today);
+    d.setDate(today.getDate() + diff);
+    return formatDate(d);
   };
 
+  // Precios sugeridos (tu lógica actual)
+  const resolveTipoEfectivo = (alumnoIds = []) => {
+    const n = (alumnoIds || []).filter(Boolean).length;
+    return n >= 4 ? "Escuelita" : "Trio";
+  };
   const getPrecioSugeridoLocal = (tipo, perfilObj) => {
     const precios = perfilObj?.preciosClase || perfilObj?.precios || {};
-    const key = String(tipo).toLowerCase(); // "escuelita", "trio", etc.
+    const key = String(tipo).toLowerCase();
     const v = precios?.[key];
     return Number.isFinite(+v) ? Number(v) : 0;
+  };
+
+  // Etiqueta para mostrar SIEMPRE “Clase para N”
+  const labelClasePara = (grupo) => {
+    const n = Number(grupo?.alumnoIds?.length || grupo?.cupo || grupo?.capacidad || 0);
+    return n > 0 ? `Clase para ${n}` : 'Clase grupal';
   };
 
   const alumnosMap = React.useMemo(() => {
@@ -4001,6 +4304,7 @@ async function submit(e) {
     return m;
   }, [alumnos]);
 
+  // Preview de precios (usa tipoEfectivo solo para $)
   const computePreview = (alumnoIds = []) => {
     const tipoEfectivo = resolveTipoEfectivo(alumnoIds);
     const precioUnit = getPrecioSugeridoLocal(tipoEfectivo, perfil);
@@ -4016,12 +4320,12 @@ async function submit(e) {
 
   // ===== Firestore =====
   const gruposCollection = React.useMemo(() => {
-  if (!user || !clubActivoId) return null;
-  return db
-    .collection('users').doc(user.uid)
-    .collection('clubs').doc(clubActivoId)
-    .collection('grupos');
-}, [user, clubActivoId]);
+    if (!user || !clubActivoId) return null;
+    return db
+      .collection('users').doc(user.uid)
+      .collection('clubs').doc(clubActivoId)
+      .collection('grupos');
+  }, [user, clubActivoId]);
 
   React.useEffect(() => {
     if (!gruposCollection) return;
@@ -4041,39 +4345,51 @@ async function submit(e) {
     return () => { mounted = false; unsubscribe && unsubscribe(); };
   }, [gruposCollection]);
 
+  // 🔹 util: limpiar horarios vacíos
+  const cleanHorarios = (arr) =>
+    (arr || [])
+      .map(h => ({ diaSemana: Number(h.diaSemana) || "", hora: (h.hora || "").slice(0,5) }))
+      .filter(h => h.diaSemana && h.hora);
+
   // ===== Crear =====
-const handleCrearGrupo = async () => {
-  if (!nombreGrupo.trim() || alumnosSeleccionados.length === 0) {
-    alert("Por favor, ingresa un nombre para el grupo y selecciona al menos un alumno.");
-    return;
-  }
+  const handleCrearGrupo = async () => {
+    if (!nombreGrupo.trim() || alumnosSeleccionados.length === 0) {
+      alert("Por favor, ingresa un nombre para el grupo y selecciona al menos un alumno.");
+      return;
+    }
 
-  const preview = computePreview(alumnosSeleccionados);
-  const nuevoGrupo = {
-    nombre: nombreGrupo,
-    alumnoIds: alumnosSeleccionados,
-    tipoEfectivo: preview.tipoEfectivo,
-    precioUnit: preview.precioUnit,
-    diaSemana: diaSemana ? Number(diaSemana) : null, // ← NUEVO
-    hora: horaGrupo || null,                          // ← NUEVO
-    updatedAt: Date.now(),
+    const preview = computePreview(alumnosSeleccionados);
+    const horariosLimpios = cleanHorarios(horarios);
+    const first = horariosLimpios[0] || {};
+
+    const nuevoGrupo = {
+      nombre: nombreGrupo,
+      alumnoIds: alumnosSeleccionados,
+      // precios sugeridos
+      tipoEfectivo: preview.tipoEfectivo,
+      precioUnit: preview.precioUnit,
+      // 🔹 NUEVO: múltiples horarios
+      horarios: horariosLimpios,                 // ← array [{diaSemana,hora}]
+      // back-compat (por si hay vistas viejas)
+      diaSemana: first.diaSemana ?? null,
+      hora: first.hora ?? null,
+      updatedAt: Date.now(),
+    };
+
+    try {
+      await gruposCollection.add(nuevoGrupo);
+
+      // reset
+      setNombreGrupo("");
+      setAlumnosSeleccionados([]);
+      setHorarios([{ diaSemana: "", hora: "" }]);
+
+      alert("¡Grupo creado con éxito!");
+    } catch (error) {
+      console.error("Error al crear el grupo: ", error);
+      alert("Hubo un error al crear el grupo.");
+    }
   };
-
-  try {
-    await gruposCollection.add(nuevoGrupo);
-
-    // reset
-    setNombreGrupo("");
-    setAlumnosSeleccionados([]);
-    setDiaSemana("");   // ← NUEVO
-    setHoraGrupo("");   // ← NUEVO
-
-    alert("¡Grupo creado con éxito!");
-  } catch (error) {
-    console.error("Error al crear el grupo: ", error);
-    alert("Hubo un error al crear el grupo.");
-  }
-};
 
   // ===== Eliminar =====
   const handleEliminarGrupo = (id) => {
@@ -4087,49 +4403,98 @@ const handleCrearGrupo = async () => {
 
   // ===== EDITAR =====
   const abrirEditar = (grupo) => {
-  setEditGrupoId(grupo.id);
-  setEditNombre(grupo.nombre || "");
-  setEditSeleccionados(grupo.alumnoIds || []);
-  setEditDiaSemana(grupo.diaSemana ? String(grupo.diaSemana) : "");
-  setEditHora(grupo.hora || "");
-  setEditOpen(true);
-};
+    setEditGrupoId(grupo.id);
+    setEditNombre(grupo.nombre || "");
+    setEditSeleccionados(grupo.alumnoIds || []);
+    // si hay array, usarlo; si no, derivar del legacy
+    const arr = Array.isArray(grupo.horarios) && grupo.horarios.length
+      ? grupo.horarios.map(h => ({ diaSemana: String(h.diaSemana || ""), hora: h.hora || "" }))
+      : [{ diaSemana: grupo.diaSemana ? String(grupo.diaSemana) : "", hora: grupo.hora || "" }];
+    setEditHorarios(arr);
+    setEditOpen(true);
+  };
 
   const cerrarEditar = () => {
-  setEditOpen(false);
-  setEditGrupoId(null);
-  setEditNombre("");
-  setEditSeleccionados([]);
-  setEditDiaSemana("");
-  setEditHora("");
-};
+    setEditOpen(false);
+    setEditGrupoId(null);
+    setEditNombre("");
+    setEditSeleccionados([]);
+    setEditHorarios([{ diaSemana: "", hora: "" }]);
+  };
 
   const guardarEdicion = async (e) => {
-  e?.preventDefault?.();
-  if (!editGrupoId || !editNombre.trim() || editSeleccionados.length === 0) {
-    alert("Completá nombre y al menos un alumno.");
-    return;
-  }
+    e?.preventDefault?.();
+    if (!editGrupoId || !editNombre.trim() || editSeleccionados.length === 0) {
+      alert("Completá nombre y al menos un alumno.");
+      return;
+    }
 
-  const preview = computePreview(editSeleccionados); // ← usa tu helper vigente
-  try {
-    await gruposCollection.doc(editGrupoId).update({
-      nombre: editNombre,
-      alumnoIds: editSeleccionados,
-      tipoEfectivo: preview.tipoEfectivo,
-      precioUnit: preview.precioUnit,
-      diaSemana: editDiaSemana ? Number(editDiaSemana) : null,
-      hora: editHora || null,
-      updatedAt: Date.now(),
-    });
-    cerrarEditar(); // limpiar estados y cerrar modal
-  } catch (error) {
-    console.error("Error al actualizar el grupo: ", error);
-    alert("Hubo un error al actualizar el grupo.");
-  }
-};
+    const preview = computePreview(editSeleccionados);
+    const horariosLimpios = cleanHorarios(editHorarios);
+    const first = horariosLimpios[0] || {};
+
+    try {
+      await gruposCollection.doc(editGrupoId).update({
+        nombre: editNombre,
+        alumnoIds: editSeleccionados,
+        tipoEfectivo: preview.tipoEfectivo,
+        precioUnit: preview.precioUnit,
+        // 🔹 NUEVO
+        horarios: horariosLimpios,
+        // back-compat
+        diaSemana: first.diaSemana ?? null,
+        hora: first.hora ?? null,
+        updatedAt: Date.now(),
+      });
+      cerrarEditar();
+    } catch (error) {
+      console.error("Error al actualizar el grupo: ", error);
+      alert("Hubo un error al actualizar el grupo.");
+    }
+  };
 
   // ===== Render =====
+  const PeriodoHorarioRow = ({ value, onChange, onRemove, disableRemove }) => (
+    <div className="grid md:grid-cols-12 gap-3 items-end">
+      <div className="md:col-span-6">
+        <label className="text-sm text-slate-600">Día</label>
+        <select
+          value={value.diaSemana}
+          onChange={e => onChange({ ...value, diaSemana: e.target.value })}
+          className="w-full mt-1 border rounded-lg px-3 py-2"
+        >
+          <option value="">— Seleccionar —</option>
+          <option value="1">Lunes</option>
+          <option value="2">Martes</option>
+          <option value="3">Miércoles</option>
+          <option value="4">Jueves</option>
+          <option value="5">Viernes</option>
+          <option value="6">Sábado</option>
+          <option value="7">Domingo</option>
+        </select>
+      </div>
+      <div className="md:col-span-4">
+        <label className="text-sm text-slate-600">Hora</label>
+        <input
+          type="time"
+          value={value.hora}
+          onChange={e => onChange({ ...value, hora: e.target.value })}
+          className="w-full mt-1 border rounded-lg px-3 py-2"
+        />
+      </div>
+      <div className="md:col-span-2">
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disableRemove}
+          className={`w-full mt-6 px-3 py-2 rounded-lg border ${disableRemove ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-50'}`}
+        >
+          🗑️
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="grid md:grid-cols-2 gap-6">
       {/* Crear nuevo */}
@@ -4142,11 +4507,12 @@ const handleCrearGrupo = async () => {
                 type="text"
                 value={nombreGrupo}
                 onChange={(e) => setNombreGrupo(e.target.value)}
-                placeholder="Ej: Escuelita Martes y Jueves"
+                placeholder="Ej: Martes/Jueves 18hs"
                 className="w-full mt-1 border rounded-lg px-3 py-2"
               />
             </div>
-                        <div>
+
+            <div>
               <label className="text-sm text-slate-600">Selecciona los Alumnos</label>
               <p className="text-xs text-slate-500 mb-1">Ctrl/Cmd para seleccionar varios.</p>
               <select
@@ -4166,60 +4532,52 @@ const handleCrearGrupo = async () => {
               </select>
             </div>
 
-            {/* ⬇️ INSERTAR AQUÍ el PASO 2.2 (Día + Hora) ⬇️ */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-slate-600">Día del grupo</label>
-                <select
-                  value={diaSemana}
-                  onChange={e => setDiaSemana(e.target.value)}
-                  className="w-full mt-1 border rounded-lg px-3 py-2"
-                >
-                  <option value="">— Sin día fijo —</option>
-                  <option value="1">Lunes</option>
-                  <option value="2">Martes</option>
-                  <option value="3">Miércoles</option>
-                  <option value="4">Jueves</option>
-                  <option value="5">Viernes</option>
-                  <option value="6">Sábado</option>
-                  <option value="7">Domingo</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm text-slate-600">Hora</label>
-                <input
-                  type="time"
-                  value={horaGrupo}
-                  onChange={e => setHoraGrupo(e.target.value)}
-                  className="w-full mt-1 border rounded-lg px-3 py-2"
-                  placeholder="HH:MM"
+            {/* 🔹 NUEVO: Múltiples horarios */}
+            <div className="grid gap-3">
+              <label className="text-sm text-slate-600">Días y horarios del grupo</label>
+              {horarios.map((h, i) => (
+                <PeriodoHorarioRow
+                  key={i}
+                  value={h}
+                  onChange={(nv) => setHorarios(arr => arr.map((x, idx) => idx === i ? nv : x))}
+                  onRemove={() => setHorarios(arr => arr.filter((_, idx) => idx !== i))}
+                  disableRemove={horarios.length === 1}
                 />
+              ))}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setHorarios(arr => [...arr, { diaSemana: "", hora: "" }])}
+                  className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50"
+                >
+                  + Añadir día/horario
+                </button>
+              </div>
+              {/* Tips rápidos */}
+              <div className="text-xs text-slate-500">
+                {cleanHorarios(horarios).map((h, i) => (
+                  <span key={i} className="inline-block mr-2 mb-1 px-2 py-0.5 rounded bg-slate-100 border">
+                    {DIAS_ABBR[h.diaSemana]} {h.hora} • próxima: {nextDateForDiaSemana(Number(h.diaSemana))}
+                  </span>
+                ))}
               </div>
             </div>
-
-            {diaSemana && horaGrupo && (
-              <p className="text-xs text-slate-500">
-                Próxima fecha sugerida: <b>{nextDateForDiaSemana(Number(diaSemana))}</b> • Hora: <b>{horaGrupo}</b>
-              </p>
-            )}
-            {/* ⬆️ FIN INSERCIÓN 2.2 ⬆️ */}
 
             {/* Preview en vivo */}
             {alumnosSeleccionados.length > 0 && (() => {
               const p = computePreview(alumnosSeleccionados);
+              const etiqueta = labelClasePara({ alumnoIds: alumnosSeleccionados });
               return (
                 <div className="rounded-xl border bg-slate-50 p-3 text-sm">
-                  <div>Tipo efectivo: <b>{p.tipoEfectivo}</b> {p.tipoEfectivo === 'Escuelita' && alumnosSeleccionados.length >= 4 && (
+                  <div>Tipo: <b>{etiqueta}</b> {p.tipoEfectivo === 'Escuelita' && alumnosSeleccionados.length >= 4 && (
                     <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Auto 4+</span>
                   )}</div>
-                  <div>Precio unitario: <b>${p.precioUnit}</b></div>
+                  <div>Precio unitario sugerido: <b>${p.precioUnit}</b> <span className="text-xs text-slate-500">(según {p.tipoEfectivo})</span></div>
                   <div>No mensuales: <b>{p.noMensuales}</b></div>
-                  <div>Total (cobra a no mensuales): <b>${p.total}</b></div>
+                  <div>Total (cobrar a no mensuales): <b>${p.total}</b></div>
                 </div>
               );
             })()}
-
 
             <button
               onClick={handleCrearGrupo}
@@ -4238,7 +4596,7 @@ const handleCrearGrupo = async () => {
           {!loading && grupos.length === 0 && <p className="text-sm text-slate-500">Aún no has creado ningún grupo.</p>}
 
           <ul className="space-y-3">
-            {grupos.map(grupo => {
+            {grupos.map((grupo) => {
               const nombresAlumnos = (grupo.alumnoIds || []).map(id => {
                 const alumno = alumnos.find(a => a.id === id);
                 return alumno ? getNombreCompleto(alumno) : 'Alumno no encontrado';
@@ -4246,6 +4604,10 @@ const handleCrearGrupo = async () => {
 
               const { tipoEfectivo, precioUnit, noMensuales, total } = computePreview(grupo.alumnoIds || []);
               const cant = (grupo.alumnoIds || []).length;
+
+              const horariosShow = Array.isArray(grupo.horarios) && grupo.horarios.length
+                ? grupo.horarios
+                : (grupo.diaSemana && grupo.hora ? [{ diaSemana: grupo.diaSemana, hora: grupo.hora }] : []);
 
               return (
                 <li key={grupo.id} className="p-3 border rounded-lg bg-slate-50">
@@ -4257,20 +4619,30 @@ const handleCrearGrupo = async () => {
                           <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Auto 4+</span>
                         )}
                       </h4>
+
                       <p className="text-xs text-slate-600 mt-1">
                         <strong>Integrantes ({cant}):</strong> {nombresAlumnos}
                       </p>
-                      {(grupo.diaSemana || grupo.hora) && (
-              <p className="text-xs text-slate-600 mt-1">
-                <strong>Horario:</strong>{" "}
-                {grupo.diaSemana ? `${DIAS_ABBR[grupo.diaSemana]} ` : ""}
-                {grupo.hora ? grupo.hora : ""}
-              </p>
-            )}
+
+                      {horariosShow.length > 0 && (
+                        <p className="text-xs text-slate-600 mt-1">
+                          <strong>Horarios:</strong>{" "}
+                          {horariosShow.map((h, i) => (
+                            <span key={i} className="inline-block mr-2 mb-1 px-2 py-0.5 rounded bg-slate-100 border">
+                              {DIAS_ABBR[h.diaSemana]} {String(h.hora).slice(0,5)}
+                            </span>
+                          ))}
+                        </p>
+                      )}
+
                       <p className="text-xs text-slate-600 mt-1">
-                        <strong>Tipo efectivo:</strong> {tipoEfectivo} • <strong>Precio unitario:</strong> ${precioUnit} • <strong>No mensuales:</strong> {noMensuales} • <strong>Total:</strong> ${total}
+                        <strong>Tipo:</strong> {labelClasePara(grupo)} •{" "}
+                        <strong>Precio unitario:</strong> ${precioUnit} •{" "}
+                        <strong>No mensuales:</strong> {noMensuales} •{" "}
+                        <strong>Total:</strong> ${total}
                       </p>
                     </div>
+
                     <div className="flex gap-2">
                       <button
                         onClick={() => abrirEditar(grupo)}
@@ -4293,37 +4665,31 @@ const handleCrearGrupo = async () => {
         </Card>
       </div>
 
-{/* Modal EDITAR */}
-{editOpen && (
-  <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-    <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xl">
-      <form onSubmit={guardarEdicion} className="p-4 md:p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Editar grupo</h3>
-          <button type="button" onClick={cerrarEditar} className="text-slate-500 hover:text-slate-700">✕</button>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4">
+      {/* Modal de edición */}
+      <Modal
+        isOpen={!!editOpen}
+        title="Editar grupo"
+        onConfirm={guardarEdicion}
+        onCancel={cerrarEditar}
+      >
+        <div className="grid gap-3 text-sm">
           <div>
-            <label className="block text-sm text-slate-600 dark:text-slate-300 mb-1">Nombre</label>
+            <label className="text-sm text-slate-600">Nombre</label>
             <input
-              className="w-full border rounded-lg px-3 py-2 bg-white dark:bg-slate-900"
+              type="text"
               value={editNombre}
               onChange={(e) => setEditNombre(e.target.value)}
-              placeholder="Ej: Escuelita Martes 18hs"
+              className="w-full mt-1 border rounded-lg px-3 py-2"
             />
           </div>
 
-          <div className="md:col-span-2">
-            <label className="block text-sm text-slate-600 dark:text-slate-300 mb-1">Alumnos</label>
+          <div>
+            <label className="text-sm text-slate-600">Alumnos</label>
             <select
               multiple
               value={editSeleccionados}
-              onChange={(e) => {
-                const opciones = Array.from(e.target.selectedOptions, o => o.value);
-                setEditSeleccionados(opciones);
-              }}
-              className="w-full border rounded-lg p-2 h-48 bg-white dark:bg-slate-900"
+              onChange={(e) => setEditSeleccionados(Array.from(e.target.selectedOptions, o => o.value))}
+              className="w-full border rounded-lg p-2 h-40"
             >
               {alumnos.map(a => (
                 <option key={a.id} value={a.id}>
@@ -4333,83 +4699,1901 @@ const handleCrearGrupo = async () => {
             </select>
           </div>
 
-          {/* ⬇️ AGREGA AQUÍ Día + Hora (usa editDiaSemana / editHora) ⬇️ */}
-          <div>
-            <label className="block text-sm text-slate-600 dark:text-slate-300 mb-1">Día del grupo</label>
-            <select
-              className="w-full border rounded-lg px-3 py-2 bg-white dark:bg-slate-900"
-              value={editDiaSemana}
-              onChange={e => setEditDiaSemana(e.target.value)}
-            >
-              <option value="">— Sin día fijo —</option>
-              <option value="1">Lunes</option>
-              <option value="2">Martes</option>
-              <option value="3">Miércoles</option>
-              <option value="4">Jueves</option>
-              <option value="5">Viernes</option>
-              <option value="6">Sábado</option>
-              <option value="7">Domingo</option>
-            </select>
+          {/* 🔹 NUEVO: Múltiples horarios (editar) */}
+          <div className="grid gap-3">
+            <label className="text-sm text-slate-600">Días y horarios</label>
+            {editHorarios.map((h, i) => (
+              <PeriodoHorarioRow
+                key={i}
+                value={h}
+                onChange={(nv) => setEditHorarios(arr => arr.map((x, idx) => idx === i ? nv : x))}
+                onRemove={() => setEditHorarios(arr => arr.filter((_, idx) => idx !== i))}
+                disableRemove={editHorarios.length === 1}
+              />
+            ))}
+            <div>
+              <button
+                type="button"
+                onClick={() => setEditHorarios(arr => [...arr, { diaSemana: "", hora: "" }])}
+                className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50"
+              >
+                + Añadir día/horario
+              </button>
+            </div>
           </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
 
-          <div>
-            <label className="block text-sm text-slate-600 dark:text-slate-300 mb-1">Hora</label>
+function Rankings({ alumnos, user, clubActivoId }) {
+  const [rankings, setRankings] = React.useState([]);
+  const [selectedId, setSelectedId] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  // Crear ranking
+  const [newNombre, setNewNombre] = React.useState("");
+  const [newNotas, setNewNotas] = React.useState("");
+
+  // Detalle ranking
+  const [participantes, setParticipantes] = React.useState([]); // array alumnoIds
+  const [puntosCfg, setPuntosCfg] = React.useState({ win: 3, draw: 1, loss: 0 });
+  const [ajustes, setAjustes] = React.useState({}); // { alumnoId: number }
+
+  // Partidos
+  const [matches, setMatches] = React.useState([]);
+  const [matchForm, setMatchForm] = React.useState({
+    fecha: formatDate(new Date()),
+    jugadorA: "",
+    jugadorB: "",
+    resultado: "A", // "A" | "B" | "D" (empate/Draw)
+    score: ""
+  });
+
+  const alumnosMap = React.useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
+
+  const rankingsCol = React.useMemo(() => {
+    if (!user || !clubActivoId) return null;
+    return db
+      .collection('users').doc(user.uid)
+      .collection('clubs').doc(clubActivoId)
+      .collection('rankings');
+  }, [user, clubActivoId]);
+
+  // === Cargar rankings
+  React.useEffect(() => {
+    if (!rankingsCol) return;
+    let mounted = true;
+    const unsub = rankingsCol.orderBy('createdAt', 'desc').onSnapshot(
+      snap => {
+        if (!mounted) return;
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setRankings(items);
+        setLoading(false);
+        // si no hay seleccionado, elegir el primero
+        if (!selectedId && items[0]) setSelectedId(items[0].id);
+      },
+      err => { console.error('rankings onSnapshot', err); setLoading(false); }
+    );
+    return () => { mounted = false; unsub && unsub(); };
+  }, [rankingsCol]);
+
+  const selectedRanking = React.useMemo(
+    () => rankings.find(r => r.id === selectedId) || null,
+    [rankings, selectedId]
+  );
+
+  // === Cargar detalle del ranking seleccionado
+  const matchesCol = React.useMemo(() => {
+    if (!rankingsCol || !selectedRanking) return null;
+    return rankingsCol.doc(selectedRanking.id).collection('matches');
+  }, [rankingsCol, selectedRanking]);
+
+  React.useEffect(() => {
+    if (!selectedRanking) {
+      setParticipantes([]);
+      setPuntosCfg({ win: 3, draw: 1, loss: 0 });
+      setAjustes({});
+      setMatches([]);
+      return;
+    }
+    // estado local desde documento
+    setParticipantes(Array.isArray(selectedRanking.participantes) ? selectedRanking.participantes : []);
+    setPuntosCfg(selectedRanking.puntosCfg || { win: 3, draw: 1, loss: 0 });
+    setAjustes(selectedRanking.ajustes || {});
+
+    if (!matchesCol) return;
+    const unsub = matchesCol.orderBy('fecha', 'desc').onSnapshot(
+      snap => setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      err => console.error('matches onSnapshot', err)
+    );
+    return () => unsub && unsub();
+  }, [selectedRanking, matchesCol]);
+
+  // === CRUD Rankings
+  const createRanking = async () => {
+    if (!rankingsCol) return;
+    if (!newNombre.trim()) return alert("Poné un nombre para el ranking.");
+    await rankingsCol.add({
+      nombre: newNombre.trim(),
+      notas: newNotas.trim(),
+      participantes: [],
+      puntosCfg: { win: 3, draw: 1, loss: 0 },
+      ajustes: {},
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    });
+    setNewNombre(""); setNewNotas("");
+  };
+
+  const updateRanking = async () => {
+    if (!rankingsCol || !selectedRanking) return;
+    const payload = {
+      participantes,
+      puntosCfg,
+      ajustes,
+      updatedAt: Date.now()
+    };
+    await rankingsCol.doc(selectedRanking.id).set(payload, { merge: true });
+    alert("Ranking guardado");
+  };
+
+  const deleteRanking = async (id) => {
+    if (!rankingsCol) return;
+    if (!confirm("¿Eliminar este ranking? Se borrarán también los partidos.")) return;
+    // borrar matches
+    const col = rankingsCol.doc(id).collection('matches');
+    const snap = await col.get();
+    const batch = db.batch();
+    snap.forEach(doc => batch.delete(doc.ref));
+    batch.delete(rankingsCol.doc(id));
+    await batch.commit();
+    if (selectedId === id) setSelectedId(null);
+  };
+
+  // === Partidos
+  const submitMatch = async (e) => {
+    e.preventDefault();
+    if (!matchesCol) return;
+    const { jugadorA, jugadorB, resultado } = matchForm;
+    if (!jugadorA || !jugadorB || jugadorA === jugadorB) {
+      return alert("Elegí dos alumnos distintos.");
+    }
+    if (!participantes.includes(jugadorA) || !participantes.includes(jugadorB)) {
+      return alert("Ambos jugadores deben estar en el ranking.");
+    }
+
+    const cfg = puntosCfg || { win: 3, draw: 1, loss: 0 };
+    let puntosA = 0, puntosB = 0, ganador = null;
+    if (resultado === "A") { puntosA = cfg.win; puntosB = cfg.loss; ganador = "A"; }
+    else if (resultado === "B") { puntosA = cfg.loss; puntosB = cfg.win; ganador = "B"; }
+    else { puntosA = cfg.draw; puntosB = cfg.draw; ganador = "D"; }
+
+    await matchesCol.add({
+      fecha: matchForm.fecha || formatDate(new Date()),
+      jugadorA, jugadorB,
+      resultado: ganador, // "A" | "B" | "D"
+      score: matchForm.score || "",
+      puntosA, puntosB,
+      createdAt: Date.now()
+    });
+    setMatchForm(f => ({ ...f, score: "" }));
+  };
+
+  const deleteMatch = async (id) => {
+    if (!matchesCol) return;
+    await matchesCol.doc(id).delete();
+  };
+
+  // === Standings (tabla)
+  const standings = React.useMemo(() => {
+    const ids = participantes || [];
+    const base = new Map(ids.map(id => [id, {
+      alumnoId: id, PJ: 0, G: 0, E: 0, P: 0, PTS: 0
+    }]));
+
+    for (const m of matches) {
+      const A = base.get(m.jugadorA); const B = base.get(m.jugadorB);
+      if (!A || !B) continue;
+      A.PJ += 1; B.PJ += 1;
+      if (m.resultado === "A") { A.G += 1; B.P += 1; A.PTS += (m.puntosA || 0); B.PTS += (m.puntosB || 0); }
+      else if (m.resultado === "B") { B.G += 1; A.P += 1; A.PTS += (m.puntosA || 0); B.PTS += (m.puntosB || 0); }
+      else { A.E += 1; B.E += 1; A.PTS += (m.puntosA || 0); B.PTS += (m.puntosB || 0); }
+    }
+
+    // ajustes manuales
+    for (const [id, extra] of Object.entries(ajustes || {})) {
+      const row = base.get(id);
+      if (row) row.PTS += Number(extra) || 0;
+    }
+
+    const arr = Array.from(base.values());
+    arr.sort((a, b) => {
+      if (b.PTS !== a.PTS) return b.PTS - a.PTS;
+      if (b.G !== a.G) return b.G - a.G;
+      const nameA = (getNombreCompleto(alumnosMap.get(a.alumnoId)) || "").toLowerCase();
+      const nameB = (getNombreCompleto(alumnosMap.get(b.alumnoId)) || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+    return arr;
+  }, [participantes, matches, ajustes, puntosCfg, alumnosMap]);
+
+  const addParticipante = (id) => {
+    if (!id) return;
+    setParticipantes(prev => prev.includes(id) ? prev : [...prev, id]);
+  };
+  const removeParticipante = (id) => setParticipantes(prev => prev.filter(x => x !== id));
+
+  return (
+    <div className="grid md:grid-cols-12 gap-6">
+      {/* Lista de Rankings */}
+      <div className="md:col-span-4">
+        <Card title={<span className="text-[#34745B]">Rankings</span>}
+              right={null}>
+          {loading && <p className="text-sm text-slate-500">Cargando...</p>}
+          <ul className="space-y-2">
+            {rankings.map(r => (
+              <li key={r.id}
+                  className={`p-2 rounded-lg border cursor-pointer ${selectedId === r.id ? 'bg-green-50 border-green-300' : 'bg-white'}`}
+                  onClick={() => setSelectedId(r.id)}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold text-slate-800">{r.nombre}</p>
+                    {r.notas && <p className="text-xs text-slate-500 mt-0.5">{r.notas}</p>}
+                  </div>
+                  <button
+                    className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
+                    onClick={(e) => { e.stopPropagation(); deleteRanking(r.id); }}
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-4 border-t pt-4">
+            <p className="text-sm font-semibold text-slate-700 mb-1">Nuevo ranking</p>
             <input
-              type="time"
-              className="w-full border rounded-lg px-3 py-2 bg-white dark:bg-slate-900"
-              value={editHora}
-              onChange={e => setEditHora(e.target.value)}
-              placeholder="HH:MM"
+              type="text" value={newNombre}
+              onChange={e => setNewNombre(e.target.value)}
+              placeholder="Ej: Ranking Avanzados 2024"
+              className="w-full border rounded-lg px-3 py-2 mb-2"
             />
+            <input
+              type="text" value={newNotas}
+              onChange={e => setNewNotas(e.target.value)}
+              placeholder="Notas (opcional)"
+              className="w-full border rounded-lg px-3 py-2 mb-2"
+            />
+            <button
+              onClick={createRanking}
+              className="px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm"
+            >
+              + Crear
+            </button>
           </div>
-          {/* ⬆️ FIN Día + Hora ⬆️ */}
+        </Card>
+      </div>
+
+      {/* Detalle */}
+      <div className="md:col-span-8">
+        {selectedRanking ? (
+          <Card title={<span className="text-[#34745B]">{selectedRanking.nombre}</span>}
+                right={<button onClick={updateRanking} className="px-3 py-1.5 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">Guardar</button>}>
+            {/* Participantes */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-700 mb-1">Agregar participante</p>
+                <select
+                  value=""
+                  onChange={e => addParticipante(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2"
+                >
+                  <option value="">— Seleccionar alumno —</option>
+                  {alumnos.map(a => (
+                    <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>
+                  ))}
+                </select>
+                {participantes.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {participantes.map(id => (
+                      <li key={id} className="flex justify-between items-center border rounded-lg px-2 py-1">
+                        <span>{getNombreCompleto(alumnosMap.get(id))}</span>
+                        <button className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50" onClick={() => removeParticipante(id)}>Quitar</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Config de puntos y ajustes */}
+              <div>
+                <p className="text-sm font-semibold text-slate-700 mb-1">Puntos</p>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  <div><label className="text-xs">Ganar</label><input type="number" value={puntosCfg.win} onChange={e => setPuntosCfg(cfg => ({...cfg, win: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
+                  <div><label className="text-xs">Empatar</label><input type="number" value={puntosCfg.draw} onChange={e => setPuntosCfg(cfg => ({...cfg, draw: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
+                  <div><label className="text-xs">Perder</label><input type="number" value={puntosCfg.loss} onChange={e => setPuntosCfg(cfg => ({...cfg, loss: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
+                </div>
+
+                <p className="text-sm font-semibold text-slate-700 mb-1">Ajustes manuales</p>
+                <div className="space-y-1">
+                  {participantes.map(id => (
+                    <div key={id} className="flex items-center gap-2">
+                      <span className="text-sm w-44 truncate">{getNombreCompleto(alumnosMap.get(id))}</span>
+                      <input
+                        type="number"
+                        value={Number(ajustes?.[id] || 0)}
+                        onChange={e => setAjustes(prev => ({ ...prev, [id]: Number(e.target.value) })) }
+                        className="w-24 border rounded-lg px-2 py-1 text-sm"
+                        placeholder="+/-"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Registrar partido */}
+            <div className="mt-6 border-t pt-4">
+              <p className="text-sm font-semibold text-slate-700 mb-2">Registrar partido</p>
+              <form onSubmit={submitMatch} className="grid md:grid-cols-6 gap-2 items-end">
+                <div className="md:col-span-2">
+                  <label className="text-xs">Fecha</label>
+                  <input type="date" value={matchForm.fecha} onChange={e => setMatchForm(f => ({ ...f, fecha: e.target.value }))} className="w-full border rounded-lg px-2 py-1" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs">Jugador A</label>
+                  <select value={matchForm.jugadorA} onChange={e => setMatchForm(f => ({ ...f, jugadorA: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                    <option value="">—</option>
+                    {participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs">Jugador B</label>
+                  <select value={matchForm.jugadorB} onChange={e => setMatchForm(f => ({ ...f, jugadorB: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                    <option value="">—</option>
+                    {participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs">Resultado</label>
+                  <select value={matchForm.resultado} onChange={e => setMatchForm(f => ({ ...f, resultado: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                    <option value="A">Gana A</option>
+                    <option value="B">Gana B</option>
+                    <option value="D">Empate</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs">Score (opcional)</label>
+                  <input type="text" value={matchForm.score} onChange={e => setMatchForm(f => ({ ...f, score: e.target.value }))} className="w-full border rounded-lg px-2 py-1" placeholder="Ej: 6-4 4-6 10-8" />
+                </div>
+                <div className="md:col-span-2">
+                  <button type="submit" className="w-full px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">+ Registrar</button>
+                </div>
+              </form>
+            </div>
+
+            {/* Tabla de posiciones */}
+            <div className="mt-6 border-t pt-4">
+              <p className="text-sm font-semibold text-slate-700 mb-2">Tabla de Posiciones</p>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-600">
+                      <th className="p-2">#</th>
+                      <th className="p-2">Alumno</th>
+                      <th className="p-2">PJ</th>
+                      <th className="p-2">G</th>
+                      <th className="p-2">E</th>
+                      <th className="p-2">P</th>
+                      <th className="p-2">PTS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {standings.length === 0 && (
+                      <tr><td colSpan={7} className="text-center py-6 text-slate-400">Sin participantes o partidos</td></tr>
+                    )}
+                    {standings.map((row, idx) => (
+                      <tr key={row.alumnoId} className="border-t">
+                        <td className="p-2">{idx + 1}</td>
+                        <td className="p-2">{getNombreCompleto(alumnosMap.get(row.alumnoId))}</td>
+                        <td className="p-2">{row.PJ}</td>
+                        <td className="p-2">{row.G}</td>
+                        <td className="p-2">{row.E}</td>
+                        <td className="p-2">{row.P}</td>
+                        <td className="p-2 font-bold">{row.PTS}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Historial de partidos */}
+            <div className="mt-6 border-t pt-4">
+              <p className="text-sm font-semibold text-slate-700 mb-2">Partidos</p>
+              {matches.length === 0 && <p className="text-sm text-slate-500">Sin partidos registrados.</p>}
+              <ul className="space-y-2">
+                {matches.map(m => (
+                  <li key={m.id} className="p-2 border rounded-lg bg-white flex justify-between items-center">
+                    <div className="text-sm">
+                      <span className="text-slate-500 mr-2">{m.fecha}</span>
+                      <b>{getNombreCompleto(alumnosMap.get(m.jugadorA))}</b> vs <b>{getNombreCompleto(alumnosMap.get(m.jugadorB))}</b>
+                      {m.score ? <> — <span className="text-slate-600">{m.score}</span></> : null}
+                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                        {m.resultado === "A" ? "Gana A" : m.resultado === "B" ? "Gana B" : "Empate"}
+                      </span>
+                    </div>
+                    <button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
+                            onClick={() => deleteMatch(m.id)}>
+                      🗑️
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </Card>
+        ) : (
+          <Card title={<span className="text-[#34745B]">Detalle</span>}>
+            <p className="text-sm text-slate-500">Seleccioná o creá un ranking para comenzar.</p>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =========================
+// RulesEditor (usa props)
+// =========================
+function RulesEditor({ zona, title, reglas, setReglas }) {
+  const r = (reglas && reglas[zona]) || {};
+  const setR = (patch) =>
+    setReglas(prev => ({ ...prev, [zona]: { ...prev[zona], ...patch } }));
+
+  const isMatchOnly = !!r.matchOnly;
+
+  return (
+    <div className="border rounded-xl p-3 bg-white">
+      <p className="text-sm font-semibold text-slate-700 mb-2">{title}</p>
+
+      {/* Reglas base */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div>
+          <label className="text-xs text-slate-600">Modalidad</label>
+          <select
+            className="w-full border rounded-lg px-2 py-1 text-sm"
+            value={r.modalidad || "singles"}
+            onChange={e => setR({ modalidad: e.target.value })}
+          >
+            <option value="singles">Singles</option>
+            <option value="dobles">Dobles</option>
+          </select>
         </div>
 
-              
-              {/* Preview edición */}
-              {editSeleccionados.length > 0 && (() => {
-                const p = computePreview(editSeleccionados);
-                return (
-                  <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded-xl p-3 text-sm">
-                    <div>
-                      <div>Tipo efectivo: <b>{p.tipoEfectivo}</b> {p.tipoEfectivo==="Escuelita" && editSeleccionados.length>=4 && (
-                        <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-800/30 dark:text-emerald-300">Auto 4+</span>
-                      )}</div>
-                      <div>Precio unitario: <b>${p.precioUnit}</b></div>
-                      <div>Total (cobra a no mensuales): <b>${p.total}</b></div>
-                    </div>
-                    <button type="submit" className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
-                      Guardar cambios
-                    </button>
-                  </div>
-                );
-              })()}
-            </form>
+        <div>
+          <label className="text-xs text-slate-600">Formato</label>
+          <select
+            className="w-full border rounded-lg px-2 py-1 text-sm"
+            value={r.formatoSets || "bo3"}
+            onChange={e => setR({ formatoSets: e.target.value })}
+            disabled={isMatchOnly}
+            title={isMatchOnly ? "Deshabilitado: partido al match tie-break" : ""}
+          >
+            <option value="bo1">1 set</option>
+            <option value="bo3">Mejor de 3</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs text-slate-600">Games por set</label>
+          <input
+            type="number"
+            min="1"
+            className="w-full border rounded-lg px-2 py-1 text-sm"
+            value={r.gamesPorSet ?? 6}
+            onChange={e => setR({ gamesPorSet: Number(e.target.value) || 6 })}
+            disabled={isMatchOnly}
+            title={isMatchOnly ? "Deshabilitado: partido al match tie-break" : ""}
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-slate-600">Tie-break</label>
+          <select
+            className="w-full border rounded-lg px-2 py-1 text-sm"
+            value={r.tieBreak || "TB7"}
+            onChange={e => setR({ tieBreak: e.target.value })}
+            disabled={isMatchOnly}
+            title={isMatchOnly ? "Deshabilitado: partido al match tie-break" : ""}
+          >
+            <option value="TB7">TB a 7</option>
+            <option value="TB10">TB a 10</option>
+            <option value="SinTB">Sin tie-break</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Decider / Match TB */}
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-slate-600 mb-1 block">Set decisivo</label>
+          <div className="space-y-1 text-sm">
+            <label className="flex flex-wrap items-center gap-2 leading-tight">
+              <input
+                type="radio"
+                name={`decider-${zona}`}
+                checked={(r.decider || "set") === "set" && !isMatchOnly}
+                onChange={() => setR({ decider: "set", matchOnly: false })}
+                disabled={isMatchOnly}
+              />
+              <span className={isMatchOnly ? "opacity-50" : ""}>Otro set normal</span>
+            </label>
+
+            <label className="flex flex-wrap items-center gap-2 leading-tight">
+              <input
+                type="radio"
+                name={`decider-${zona}`}
+                checked={(r.decider || "set") === "matchTB" && !isMatchOnly}
+                onChange={() => setR({ decider: "matchTB", matchOnly: false })}
+                disabled={isMatchOnly}
+              />
+              <span className={isMatchOnly ? "opacity-50" : ""}>Match tie-break a</span>
+              <input
+                type="number"
+                min={7}
+                step={1}
+                className="w-20 border rounded px-2 py-1"
+                value={Number(r.matchTBPoints || 10)}
+                onChange={e => setR({ matchTBPoints: Number(e.target.value) || 10 })}
+                disabled={isMatchOnly}
+              />
+              <span className={isMatchOnly ? "opacity-50" : ""}>puntos</span>
+            </label>
           </div>
+        </div>
+
+        <div className="sm:pl-2">
+          <label className="text-xs text-slate-600 mb-1 block">Partido al match tie-break</label>
+          <label className="flex flex-wrap items-center gap-2 text-sm leading-tight">
+            <input
+              type="checkbox"
+              checked={isMatchOnly}
+              onChange={e => setR({ matchOnly: e.target.checked })}
+            />
+            <span>Usar sólo un match tie-break a</span>
+            <input
+              type="number"
+              min={7}
+              step={1}
+              className="w-20 border rounded px-2 py-1"
+              value={Number(r.matchTBPoints || 10)}
+              onChange={e => setR({ matchTBPoints: Number(e.target.value) || 10 })}
+              disabled={!isMatchOnly}
+            />
+            <span>puntos</span>
+          </label>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Ignora games por set y tie-breaks de set cuando está activado.
+          </p>
+        </div>
+      </div>
+
+      {/* Solo grupos: ida y vuelta */}
+      {zona === "grupos" && (
+        <div className="mt-2">
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={!!r.idaVuelta}
+              onChange={e => setR({ idaVuelta: e.target.checked })}
+              disabled={isMatchOnly}
+              title={isMatchOnly ? "No aplica cuando el partido es sólo match TB" : ""}
+            />
+            <span className={isMatchOnly ? "opacity-50" : ""}>Ida y vuelta</span>
+          </label>
         </div>
       )}
     </div>
   );
 }
+
+// =========================
+// Torneos (pasa reglas/setReglas)
+// =========================
+function Torneos({ alumnos = [], user, clubActivoId }) {
+  // ====== Estado principal ======
+  const [torneos, setTorneos] = React.useState([]);
+  const [selectedId, setSelectedId] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+
+  // Crear torneo
+  const [newNombre, setNewNombre] = React.useState("");
+  const [newModalidad, setNewModalidad] = React.useState("grupos"); // "grupos" | "cuadros" | "grupos+elim"
+
+  // Detalle editable del torneo (cuando hay seleccionado)
+  const [participantes, setParticipantes] = React.useState([]); // array de alumnoIds
+  const [puntosCfg, setPuntosCfg] = React.useState({ win: 3, draw: 1, loss: 0 });
+  const [gruposCount, setGruposCount] = React.useState(2);
+  const [topK, setTopK] = React.useState(2);
+
+  // Reglas (padre para RulesEditor)
+  const defaultReglas = React.useMemo(() => ({
+    grupos: {
+      modalidad: "singles",
+      formatoSets: "bo3",
+      gamesPorSet: 6,
+      tieBreak: "TB7",
+      idaVuelta: false,
+      decider: "set",
+      matchTBPoints: 10,
+      matchOnly: false,
+    },
+    elim: {
+      modalidad: "singles",
+      formatoSets: "bo3",
+      gamesPorSet: 6,
+      tieBreak: "TB7",
+      decider: "set",
+      matchTBPoints: 10,
+      matchOnly: false,
+    }
+  }), []);
+
+  const [reglas, setReglas] = React.useState(defaultReglas);
+
+  // ====== Helpers ======
+  const torneoSel = React.useMemo(
+    () => torneos.find(t => t.id === selectedId) || null,
+    [torneos, selectedId]
+  );
+
+  const alumnoById = React.useCallback(
+    (id) => alumnos.find(a => a.id === id) || null,
+    [alumnos]
+  );
+
+  const nombreCompleto = React.useCallback((a) => {
+    if (!a) return "";
+    const name = [a.nombre, a.apellido].filter(Boolean).join(" ").trim();
+    return name || a.alias || a.displayName || a.id;
+  }, []);
+
+  const fullNameOfId = React.useCallback((id) => {
+    const a = alumnoById(id);
+    return nombreCompleto(a) || id;
+  }, [alumnoById, nombreCompleto]);
+
+  // Ordenar alumnos por nombre completo en el selector
+  const alumnosOrdenados = React.useMemo(() => {
+    return [...alumnos].sort((x, y) =>
+      nombreCompleto(x).localeCompare(nombreCompleto(y), "es", { sensitivity: "base" })
+    );
+  }, [alumnos, nombreCompleto]);
+
+  const resumenReglas = (rules) => {
+    if (!rules) return "";
+    const tbTxt = rules.tieBreak === "TB7" ? "TB a 7"
+                 : rules.tieBreak === "TB10" ? "TB a 10"
+                 : "sin TB";
+    if (rules.matchOnly) return `${rules.modalidad}, Match TB a ${rules.matchTBPoints}`;
+    let setTxt = rules.formatoSets === "bo1" ? "1 set" : "Mejor de 3";
+    if ((rules.decider || "set") === "matchTB") setTxt += ` (+ decider TB a ${rules.matchTBPoints})`;
+    return `${rules.modalidad}, ${setTxt}, ${rules.gamesPorSet} games, ${tbTxt}`;
+  };
+
+  const snapshotReglas = (zona) => {
+    const r = (reglas && reglas[zona]) || defaultReglas[zona];
+    return {
+      modalidad: r.modalidad,
+      formatoSets: r.formatoSets,
+      gamesPorSet: Number(r.gamesPorSet) || 6,
+      tieBreak: r.tieBreak,                      // 'TB7' | 'TB10' | 'SinTB'
+      decider: r.decider || "set",               // 'set' | 'matchTB'
+      matchTBPoints: Number(r.matchTBPoints) || 10,
+      matchOnly: !!r.matchOnly,
+      idaVuelta: !!r.idaVuelta,                  // (solo grupos)
+    };
+  };
+
+  const mergeReglas = React.useCallback((incoming) => ({
+    grupos: { ...defaultReglas.grupos, ...(incoming?.grupos || {}) },
+    elim:   { ...defaultReglas.elim,   ...(incoming?.elim   || {}) },
+  }), [defaultReglas]);
+
+  // ====== Cargar detalle al seleccionar torneo ======
+  React.useEffect(() => {
+    if (!torneoSel) return;
+    setParticipantes(Array.isArray(torneoSel.participantes) ? torneoSel.participantes : []);
+    setPuntosCfg({ win: 3, draw: 1, loss: 0, ...(torneoSel.puntosCfg || {}) });
+    setGruposCount(Number(torneoSel.gruposCount || 2));
+    setTopK(Number(torneoSel.topK || 2));
+    setReglas(mergeReglas(torneoSel.reglas));
+  }, [torneoSel, mergeReglas]);
+
+  // ====== Crear / Guardar ======
+  const handleCrear = () => {
+    const nombre = newNombre.trim();
+    if (!nombre) return;
+    const id = `tor_${Date.now()}`;
+    const nuevo = {
+      id,
+      nombre,
+      modalidad: newModalidad,
+      participantes: [],
+      puntosCfg: { ...puntosCfg },
+      gruposCount: 2,
+      topK: 2,
+      reglas: { ...defaultReglas },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      teams: [] // 👈 parejas definidas por el usuario para dobles
+    };
+    setTorneos(prev => [nuevo, ...prev]);
+    setSelectedId(id);
+    setNewNombre("");
+  };
+
+  const handleGuardar = () => {
+    if (!torneoSel) return;
+    const actualizado = {
+      ...torneoSel,
+      participantes: [...participantes],
+      puntosCfg: { ...puntosCfg },
+      gruposCount: Number(gruposCount) || 2,
+      topK: Number(topK) || 2,
+      reglas: {
+        grupos: snapshotReglas("grupos"),
+        elim:   snapshotReglas("elim"),
+      },
+      teams: Array.isArray(torneoSel.teams) ? [...torneoSel.teams] : [],
+      updatedAt: Date.now(),
+    };
+    setTorneos(prev => prev.map(t => (t.id === torneoSel.id ? actualizado : t)));
+    // TODO: persistir si querés
+  };
+
+  // ====== Helpers de grupos / fixtures / cuadros ======
+  const letraGrupo = (i) => String.fromCharCode(65 + i); // 0->A,1->B...
+  const nextPow2 = (n) => Math.pow(2, Math.ceil(Math.log2(Math.max(1, n))));
+
+  // --- PAREJAS (dobles) definidas por el usuario ---
+  const teamIdFor = (a, b) => {
+    const [x, y] = [String(a), String(b)].sort();
+    return `T_${x}__${y}`;
+  };
+
+  const currentTeams = React.useMemo(() => torneoSel?.teams || [], [torneoSel]);
+  const memberUsed = React.useCallback(
+    (id) => (currentTeams.some(t => Array.isArray(t.members) && t.members.includes(id))),
+    [currentTeams]
+  );
+  const disponiblesParaPareja = React.useMemo(() => {
+    const used = new Set(currentTeams.flatMap(t => t.members || []));
+    return participantes.filter(id => !used.has(id));
+  }, [participantes, currentTeams]);
+
+  const [pairA, setPairA] = React.useState("");
+  const [pairB, setPairB] = React.useState("");
+
+  const addTeamManual = () => {
+    if (!pairA || !pairB) { alert("Elegí dos jugadores para formar la pareja."); return; }
+    if (pairA === pairB) { alert("La pareja debe ser de dos jugadores distintos."); return; }
+    if (memberUsed(pairA) || memberUsed(pairB)) {
+      alert("Uno de los jugadores ya está en otra pareja. Quitala antes de reasignar.");
+      return;
+    }
+    const id = teamIdFor(pairA, pairB);
+    const nuevo = {
+      id,
+      members: [pairA, pairB],
+      label: `${fullNameOfId(pairA)} / ${fullNameOfId(pairB)}`
+    };
+    setTorneos(prev => prev.map(t =>
+      t.id === torneoSel.id ? { ...t, teams: [...(t.teams || []), nuevo], updatedAt: Date.now() } : t
+    ));
+    setPairA(""); setPairB("");
+  };
+
+  const removeTeam = (teamId) => {
+    setTorneos(prev => prev.map(t =>
+      t.id === torneoSel.id ? { ...t, teams: (t.teams || []).filter(tt => tt.id !== teamId), updatedAt: Date.now() } : t
+    ));
+  };
+
+  const labelTeamById = (tid) => {
+    const t = currentTeams.find(x => x.id === tid);
+    if (!t) return String(tid);
+    const [a,b] = t.members || [];
+    return t.label || `${fullNameOfId(a)} / ${fullNameOfId(b)}`;
+  };
+
+  const fullEntryLabel = (entryId) => {
+    if (!entryId) return "—";
+    const isTeam = currentTeams.some(t => t.id === entryId);
+    return isTeam ? labelTeamById(entryId) : fullNameOfId(entryId);
+  };
+
+  /** Distribución "snake" para balancear grupos */
+  const repartirEnGrupos = (ids, gruposCount) => {
+    const groups = Array.from({ length: gruposCount }, () => []);
+    ids.forEach((id, i) => {
+      const fila = Math.floor(i / gruposCount);
+      const col  = i % gruposCount;
+      const gIdx = (fila % 2 === 0) ? col : (gruposCount - 1 - col);
+      groups[gIdx].push(id);
+    });
+    return groups;
+  };
+
+  /** Round-robin (método del círculo) */
+  const roundRobinSchedule = (ids) => {
+    const n = ids.length;
+    const list = (n % 2 === 1) ? [...ids, null] : [...ids];
+    const m = list.length;
+    const half = m / 2;
+    const rounds = [];
+    for (let r = 0; r < m - 1; r++) {
+      const pares = [];
+      for (let i = 0; i < half; i++) {
+        const a = list[i];
+        const b = list[m - 1 - i];
+        if (a != null && b != null) pares.push([a, b]);
+      }
+      rounds.push(pares);
+      // rotar (fijo el primero)
+      list.splice(1, 0, list.pop());
+    }
+    return rounds;
+  };
+
+  /** Partidos por grupo; ida/vuelta opcional, con keys únicas por grupo */
+  const generarPartidosGrupo = (ids, idaVuelta = false, keyPrefix = "G") => {
+    const rounds = roundRobinSchedule(ids);
+    const out = [];
+    let c = 0;
+    rounds.forEach((pares, rIndex) => {
+      pares.forEach(([a, b], pairIdx) => {
+        out.push({
+          id: `Gm_${keyPrefix}_R${rIndex + 1}_M${pairIdx}_L1_${c++}`,
+          round: rIndex + 1, leg: 1,
+          localId: a, visitaId: b,
+          estado: "pendiente", resultado: null,
+          groupId: null, groupName: null
+        });
+        if (idaVuelta) {
+          out.push({
+            id: `Gm_${keyPrefix}_R${rIndex + 1}_M${pairIdx}_L2_${c++}`,
+            round: rIndex + 1, leg: 2,
+            localId: b, visitaId: a,
+            estado: "pendiente", resultado: null,
+            groupId: null, groupName: null
+          });
+        }
+      });
+    });
+    return out;
+  };
+
+  /** Nombre de ronda por tamaño */
+  const nombreRonda = (size) => {
+    switch (size) {
+      case 2:  return "Final";
+      case 4:  return "Semifinales";
+      case 8:  return "Cuartos";
+      case 16: return "Octavos";
+      case 32: return "Dieciseisavos";
+      default: return `Ronda (${size})`;
+    }
+  };
+
+  /** Construye cuadro de eliminación directa con byes si no es potencia de 2 */
+  const buildCuadroEliminacion = (participantes) => {
+    const total = participantes.length;
+    const size = nextPow2(total);
+    const arr = participantes.slice();
+    while (arr.length < size) arr.push(null); // byes
+
+    const rnd1 = [];
+    for (let i = 0; i < arr.length; i += 2) {
+      rnd1.push({
+        id: `R1_${i/2}_${Date.now()}`,
+        a: arr[i],
+        b: arr[i+1],
+        estado: "pendiente",
+        ganador: null,
+        resultado: null
+      });
+    }
+
+    const rondas = [ { nombre: nombreRonda(size), partidos: rnd1 } ];
+    let partidosPrev = rnd1.length;
+    let etapa = 2;
+    while (partidosPrev > 1) {
+      const partidos = Array.from({ length: Math.ceil(partidosPrev / 2) }, (_, i) => ({
+        id: `R${etapa}_${i}_${Date.now()}`, a: null, b: null, estado: "pendiente", ganador: null, resultado: null
+      }));
+      rondas.push({ nombre: nombreRonda(partidosPrev * 2), partidos });
+      partidosPrev = partidos.length;
+      etapa++;
+    }
+    return { rondas };
+  };
+
+  // --- Helpers para Top-K → seeds → cuadro (serpentina) ---
+  const computeTopKPorGrupo = (grupos, k) => {
+    const perGroup = {};
+    grupos.forEach(g => {
+      const tabla = standingsByGroup?.[g.id];
+      if (tabla && tabla.length) {
+        perGroup[g.id] = tabla.slice(0, k).map((s, i) => ({
+          // s.id puede ser jugador o pareja:
+          alumnoId: currentTeams.some(t => t.id === s.id) ? undefined : s.id,
+          teamId:   currentTeams.some(t => t.id === s.id) ? s.id : undefined,
+          label:    fullEntryLabel(s.id),
+          from: g.id,
+          pos: i + 1
+        }));
+      } else {
+        perGroup[g.id] = Array.from({ length: k }, (_, i) => ({
+          placeholder: `${i + 1}${g.id}`,
+          label: `${i + 1}° ${g.nombre}`,
+          from: g.id,
+          pos: i + 1
+        }));
+      }
+    });
+    return perGroup;
+  };
+
+  const createSeedsSerpentine = (grupos, perGroup, k) => {
+    const orderIds = [...grupos]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map(g => g.id);
+
+    const seeds = [];
+    for (let pos = 1; pos <= k; pos++) {
+      const ids = (pos % 2 === 1) ? orderIds : [...orderIds].reverse();
+      ids.forEach(gid => {
+        const q = perGroup[gid]?.[pos - 1];
+        if (q) seeds.push(q);
+      });
+    }
+    seeds.forEach((q, i) => (q.seed = i + 1));
+    return seeds;
+  };
+
+  const buildBracketFromSeeds = (seeds) => {
+    const total = seeds.length;
+    const size = nextPow2(total);
+    const getP = (seedNum) => (seedNum <= total ? seeds[seedNum - 1] : null);
+
+    const rnd1 = [];
+    for (let i = 1; i <= size / 2; i++) {
+      rnd1.push({
+        id: `R1_${i - 1}_${Date.now()}`,
+        a: getP(i),
+        b: getP(size + 1 - i),
+        estado: "pendiente",
+        ganador: null,
+        resultado: null,
+        seeds: [i, size + 1 - i]
+      });
+    }
+
+    const rondas = [{ nombre: nombreRonda(size), partidos: rnd1 }];
+    let prevCount = rnd1.length, etapa = 2;
+    while (prevCount > 1) {
+      const partidos = Array.from({ length: Math.ceil(prevCount / 2) }, (_, i) => ({
+        id: `R${etapa}_${i}_${Date.now()}`, a: null, b: null, estado: "pendiente", ganador: null, resultado: null
+      }));
+      rondas.push({ nombre: nombreRonda(prevCount * 2), partidos });
+      prevCount = partidos.length; etapa++;
+    }
+    return { rondas, size };
+  };
+
+  // ====== Standings (grupos) ======
+  const parseResultado = (p) => {
+    const res = p?.resultado || null;
+    if (!res) return { finished: false };
+
+    if (res.empate) {
+      const gamesL = (res.sets || []).reduce((acc, s)=> {
+        const [l,v] = Array.isArray(s) ? [s[0], s[1]] : [s?.l, s?.v];
+        return acc + (Number(l)||0);
+      }, 0);
+      const gamesV = (res.sets || []).reduce((acc, s)=> {
+        const [l,v] = Array.isArray(s) ? [s[0], s[1]] : [s?.l, s?.v];
+        return acc + (Number(v)||0);
+      }, 0);
+      return { finished: true, draw: true, SetsL: 0, SetsV: 0, gamesL, gamesV };
+    }
+
+    let SetsL = 0, SetsV = 0, gamesL = 0, gamesV = 0;
+    if (Array.isArray(res.sets)) {
+      res.sets.forEach((s) => {
+        const [l,v] = Array.isArray(s) ? [s[0], s[1]] : [s?.l, s?.v];
+        const L = Number(l)||0, V = Number(v)||0;
+        gamesL += L; gamesV += V;
+        if (L > V) SetsL++; else if (V > L) SetsV++;
+      });
+    }
+
+    if (res.ganadorId) {
+      return { finished: true, ganadorId: res.ganadorId, SetsL, SetsV, gamesL, gamesV };
+    }
+    return { finished: false };
+  };
+
+  const standingsByGroup = React.useMemo(() => {
+    if (!torneoSel?.grupos || !torneoSel?.partidosGrupos) return null;
+
+    const map = new Map();
+    torneoSel.grupos.forEach(g => {
+      const ids = g.alumnoIds || g.entryIds || [];
+      const stats = new Map();
+      ids.forEach(id => {
+        stats.set(id, {
+          id,
+          PJ: 0, PG: 0, PE: 0, PP: 0, Pts: 0,
+          SetsF: 0, SetsC: 0, SD: 0,
+          GamesF: 0, GamesC: 0, GD: 0
+        });
+      });
+      map.set(g.id, stats);
+    });
+
+    (torneoSel.partidosGrupos || []).forEach(p => {
+      const gid = p.groupId;
+      if (!gid || !map.has(gid)) return;
+      const stats = map.get(gid);
+      const L = stats.get(p.localId);
+      const V = stats.get(p.visitaId);
+      if (!L || !V) return;
+
+      const pr = parseResultado(p);
+      if (!pr.finished) return;
+
+      L.PJ++; V.PJ++;
+
+      if (pr.draw) {
+        L.PE++; V.PE++;
+        L.Pts += Number(puntosCfg.draw) || 0;
+        V.Pts += Number(puntosCfg.draw) || 0;
+      } else if (pr.ganadorId === p.localId) {
+        L.PG++; V.PP++;
+        L.Pts += Number(puntosCfg.win) || 0;
+        V.Pts += Number(puntosCfg.loss) || 0;
+      } else if (pr.ganadorId === p.visitaId) {
+        V.PG++; L.PP++;
+        V.Pts += Number(puntosCfg.win) || 0;
+        L.Pts += Number(puntosCfg.loss) || 0;
+      }
+
+      if (typeof pr.SetsL === "number") {
+        L.SetsF += pr.SetsL || 0;
+        L.SetsC += pr.SetsV || 0;
+        V.SetsF += pr.SetsV || 0;
+        V.SetsC += pr.SetsL || 0;
+      }
+      if (typeof pr.gamesL === "number") {
+        L.GamesF += pr.gamesL || 0;
+        L.GamesC += pr.gamesV || 0;
+        V.GamesF += pr.gamesV || 0;
+        V.GamesC += pr.gamesL || 0;
+      }
+    });
+
+    const out = {};
+    torneoSel.grupos.forEach(g => {
+      const arr = Array.from(map.get(g.id).values()).map(s => ({
+        ...s,
+        SD: (s.SetsF - s.SetsC),
+        GD: (s.GamesF - s.GamesC)
+      }));
+      arr.sort((a, b) => {
+        if (b.Pts !== a.Pts) return b.Pts - a.Pts;
+        if (b.SD !== a.SD)   return b.SD - a.SD;
+        if (b.GD !== a.GD)   return b.GD - a.GD;
+        return fullEntryLabel(a.id).localeCompare(fullEntryLabel(b.id), "es", { sensitivity: "base" });
+      });
+      out[g.id] = arr;
+    });
+    return out;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [torneoSel?.grupos, torneoSel?.partidosGrupos, puntosCfg.win, puntosCfg.draw, puntosCfg.loss, fullNameOfId, currentTeams]);
+
+  const hayResultados = React.useMemo(() => {
+    if (!standingsByGroup) return false;
+    return Object.values(standingsByGroup).some(arr => arr.some(s => s.PJ > 0));
+  }, [standingsByGroup]);
+
+  // ====== Participantes ======
+  const addParticipante = (alumnoId) => {
+    if (!alumnoId) return;
+    setParticipantes(prev => prev.includes(alumnoId) ? prev : [...prev, alumnoId]);
+  };
+  const removeParticipante = (alumnoId) => {
+    setParticipantes(prev => prev.filter(id => id !== alumnoId));
+    // si está en alguna pareja del torneo seleccionado, la quitamos
+    if (torneoSel) {
+      setTorneos(prev => prev.map(t => {
+        if (t.id !== torneoSel.id) return t;
+        const filteredTeams = (t.teams || []).filter(tt => !(tt.members || []).includes(alumnoId));
+        return { ...t, teams: filteredTeams, updatedAt: Date.now() };
+      }));
+    }
+  };
+
+  // ====== Helpers de resultado rápido (grupos) ======
+  const setGanadorPartido = (partidoId, ganadorId) => {
+    if (!torneoSel) return;
+    setTorneos(prev => prev.map(t => {
+      if (t.id !== torneoSel.id) return t;
+      const partidos = (t.partidosGrupos || []).map(p =>
+        p.id === partidoId ? { ...p, estado: "finalizado", resultado: { ganadorId, sets: [] } } : p
+      );
+      return { ...t, partidosGrupos: partidos, updatedAt: Date.now() };
+    }));
+  };
+
+  // ====== MODAL resultado con sets (GRUPOS) ======
+  const [resModalOpen, setResModalOpen] = React.useState(false);
+  const [editMatch, setEditMatch] = React.useState(null);
+  const [editSets, setEditSets] = React.useState([[6,4]]); // [[l,v], ...]
+
+  const openResultadoModal = (p) => {
+    const sets = Array.isArray(p?.resultado?.sets) && p.resultado.sets.length
+      ? p.resultado.sets.map(s => Array.isArray(s) ? [Number(s[0])||0, Number(s[1])||0] : [Number(s?.l)||0, Number(s?.v)||0])
+      : [[6,4]];
+    setEditMatch(p);
+    setEditSets(sets);
+    setResModalOpen(true);
+  };
+
+  const closeResultadoModal = () => {
+    setResModalOpen(false);
+    setEditMatch(null);
+  };
+
+  const setSetValue = (idx, side, val) => {
+    const num = Number(val);
+    setEditSets(prev => prev.map((s,i) => i===idx ? (side==="L" ? [num, s[1]] : [s[0], num]) : s));
+  };
+  const addSetRow = () => setEditSets(prev => [...prev, [0,0]]);
+  const removeSetRow = (idx) => setEditSets(prev => prev.filter((_,i)=>i!==idx));
+
+  const computeWinnerFromSets = (setsArr) => {
+    let SL = 0, SV = 0;
+    setsArr.forEach(([l,v]) => { if (Number(l)>Number(v)) SL++; else if (Number(v)>Number(l)) SV++; });
+    if (SL > SV) return "local";
+    if (SV > SL) return "visita";
+    return null;
+  };
+
+  const saveResultadoModal = () => {
+    if (!torneoSel || !editMatch) return;
+
+    const cleanSets = editSets
+      .map(([l,v]) => [Number(l)||0, Number(v)||0])
+      .filter(([l,v]) => l>0 || v>0);
+
+    const who = computeWinnerFromSets(cleanSets);
+    if (!who) {
+      alert("Los sets están empatados. Agregá un set decisivo (ej: TB10 como 10–7).");
+      return;
+    }
+    const ganadorId = (who === "local") ? editMatch.localId : editMatch.visitaId;
+
+    setTorneos(prev => prev.map(t => {
+      if (t.id !== torneoSel.id) return t;
+      const partidos = (t.partidosGrupos || []).map(p =>
+        p.id === editMatch.id ? ({
+          ...p,
+          estado: "finalizado",
+          resultado: { ganadorId, sets: cleanSets }
+        }) : p
+      );
+      return { ...t, partidosGrupos: partidos, updatedAt: Date.now() };
+    }));
+
+    closeResultadoModal();
+  };
+
+  const clearResultadoPartido = (p) => {
+    if (!torneoSel) return;
+    setTorneos(prev => prev.map(t => {
+      if (t.id !== torneoSel.id) return t;
+      const partidos = (t.partidosGrupos || []).map(x =>
+        x.id === p.id ? { ...x, estado: "pendiente", resultado: null } : x
+      );
+      return { ...t, partidosGrupos: partidos, updatedAt: Date.now() };
+    }));
+  };
+
+  // ====== Acciones ======
+
+  // 1) Generar fixture (grupos)
+  const generarFixtureGrupos = () => {
+    if (!torneoSel) return;
+    if (!Array.isArray(participantes) || participantes.length < 2) {
+      alert("Necesitás al menos 2 participantes para generar el fixture.");
+      return;
+    }
+
+    const modalidad = (reglas?.grupos?.modalidad || "singles");
+    let entryIds = [];
+
+    if (modalidad === "dobles") {
+      const teams = currentTeams;
+      if (!teams.length) {
+        alert("Modalidad DOBLES: definí parejas en la sección 'Parejas (dobles)' antes de generar.");
+        return;
+      }
+      if (teams.length < 2) {
+        alert("Necesitás al menos 2 parejas para generar el fixture.");
+        return;
+      }
+      entryIds = [...teams].sort((a,b) => (a.label||"").localeCompare(b.label||"", "es", {sensitivity:"base"})).map(t => t.id);
+    } else {
+      entryIds = [...participantes].sort((a, b) =>
+        fullNameOfId(a).localeCompare(fullNameOfId(b), "es", { sensitivity: "base" })
+      );
+    }
+
+    // Evitar más grupos que entradas
+    const gCount = Math.max(1, Math.min(Number(gruposCount) || 1, entryIds.length));
+    const gruposIds = repartirEnGrupos(entryIds, gCount);
+
+    const grupos = gruposIds.map((arr, i) => ({
+      id: letraGrupo(i),
+      nombre: `Grupo ${letraGrupo(i)}`,
+      alumnoIds: arr,
+      entryIds: arr
+    }));
+
+    const idaVuelta = !!(reglas?.grupos?.idaVuelta);
+    const partidosGrupos = [];
+
+    grupos.forEach((g) => {
+      const matches = generarPartidosGrupo(g.alumnoIds, idaVuelta, g.id); // prefijo por grupo
+      matches.forEach(m => partidosGrupos.push({ ...m, groupId: g.id, groupName: g.nombre }));
+    });
+
+    setTorneos(prev => prev.map(t => (
+      t.id === torneoSel.id
+        ? { ...t, grupos, partidosGrupos, updatedAt: Date.now() }
+        : t
+    )));
+
+    alert(`Fixture generado: ${grupos.length} grupo(s), ${partidosGrupos.length} partido(s).`);
+  };
+
+  // 2) Crear fase final (top-K) — serpentina + seeding + reglas elim
+  const crearFaseFinal = () => {
+    if (!torneoSel) return;
+
+    let grupos = torneoSel.grupos;
+    if (!Array.isArray(grupos) || grupos.length === 0) {
+      if (!Array.isArray(participantes) || participantes.length < 2) {
+        alert("Necesitás al menos 2 participantes para crear la fase final.");
+        return;
+      }
+      const modalidad = (reglas?.grupos?.modalidad || "singles");
+
+      let entryIds = [];
+      if (modalidad === "dobles") {
+        const teams = currentTeams;
+        if (!teams.length) { alert("DOBLES: definí parejas antes de crear la fase final."); return; }
+        entryIds = teams.map(t => t.id);
+      } else {
+        entryIds = [...participantes].sort((a, b) =>
+          fullNameOfId(a).localeCompare(fullNameOfId(b), "es", { sensitivity: "base" })
+        );
+      }
+
+      const gCount = Math.max(1, Math.min(Number(gruposCount) || 1, entryIds.length));
+      const gruposIds = repartirEnGrupos(entryIds, gCount);
+      grupos = gruposIds.map((arr, i) => ({
+        id: letraGrupo(i),
+        nombre: `Grupo ${letraGrupo(i)}`,
+        alumnoIds: arr,
+        entryIds: arr
+      }));
+    }
+
+    const k = Math.max(1, Number(topK) || 1);
+
+    const perGroup = computeTopKPorGrupo(grupos, k);
+    const seeds = createSeedsSerpentine(grupos, perGroup, k);
+    const cuadro0 = buildBracketFromSeeds(seeds);
+    const rondas = (function propagateByes(r) {
+      // Propagar BYEs hacia adelante
+      const copy = r.map(x => ({ ...x, partidos: x.partidos.map(p => ({ ...p })) }));
+      for (let ri = 0; ri < copy.length - 1; ri++) {
+        const curr = copy[ri].partidos, next = copy[ri+1].partidos;
+        next.forEach(nm => { nm.a = nm.a || null; nm.b = nm.b || null; });
+        curr.forEach((m, i) => {
+          if (!m.a || !m.b) {
+            const winner = m.a || m.b || null;
+            if (winner) { m.estado = "finalizado"; m.ganador = m.a ? "a" : "b"; }
+            const target = next[Math.floor(i / 2)];
+            if (target) { if (i % 2 === 0) target.a = winner; else target.b = winner; }
+          }
+        });
+      }
+      return copy;
+    })(cuadro0.rondas);
+
+    setTorneos(prev => prev.map(t =>
+      t.id === torneoSel.id
+        ? {
+            ...t,
+            faseFinal: {
+              participantes: seeds,
+              cuadro: { ...cuadro0, rondas },
+              origen: "grupos",
+              reglas: snapshotReglas("elim")
+            },
+            updatedAt: Date.now()
+          }
+        : t
+    ));
+
+    alert(`Fase final creada: ${seeds.length} clasificado(s), cuadro de ${nextPow2(seeds.length)}.`);
+  };
+
+  // 3) Generar cuadro directo (sin grupos)
+  const generarCuadro = () => {
+    if (!torneoSel) return;
+    if (!Array.isArray(participantes) || participantes.length < 2) {
+      alert("Necesitás al menos 2 participantes para el cuadro.");
+      return;
+    }
+
+    const modalidad = (reglas?.elim?.modalidad || "singles");
+    let seeds;
+
+    if (modalidad === "dobles") {
+      const teams = currentTeams;
+      if (!teams.length) { alert("DOBLES: definí parejas antes de generar el cuadro."); return; }
+      seeds = teams
+        .slice()
+        .sort((a,b)=> (a.label||"").localeCompare(b.label||"", "es", {sensitivity:"base"}))
+        .map(t => ({ teamId: t.id, label: t.label }));
+    } else {
+      const idsOrdenados = [...participantes].sort((a, b) =>
+        fullNameOfId(a).localeCompare(fullNameOfId(b), "es", { sensitivity: "base" })
+      );
+      seeds = idsOrdenados.map(id => ({ alumnoId: id, label: fullNameOfId(id) }));
+    }
+
+    const cuadro0 = buildCuadroEliminacion(seeds);
+    const rondas = (function propagateByes(r) {
+      const copy = r.map(x => ({ ...x, partidos: x.partidos.map(p => ({ ...p })) }));
+      for (let ri = 0; ri < copy.length - 1; ri++) {
+        const curr = copy[ri].partidos, next = copy[ri+1].partidos;
+        next.forEach(nm => { nm.a = nm.a || null; nm.b = nm.b || null; });
+        curr.forEach((m, i) => {
+          if (!m.a || !m.b) {
+            const winner = m.a || m.b || null;
+            if (winner) { m.estado = "finalizado"; m.ganador = m.a ? "a" : "b"; }
+            const target = next[Math.floor(i / 2)];
+            if (target) { if (i % 2 === 0) target.a = winner; else target.b = winner; }
+          }
+        });
+      }
+      return copy;
+    })(cuadro0.rondas);
+
+    setTorneos(prev => prev.map(t => (
+      t.id === torneoSel.id
+        ? {
+            ...t,
+            cuadroDirecto: {
+              participantes: seeds,
+              cuadro: { ...cuadro0, rondas },
+              origen: "directo",
+              reglas: snapshotReglas("elim")
+            },
+            updatedAt: Date.now()
+          }
+        : t
+    )));
+
+    alert(`Cuadro generado con ${seeds.length} participante(s).`);
+  };
+
+  // ====== UI ======
+  return (
+    <div className="max-w-4xl mx-auto p-4 space-y-6">
+      {/* === SECCIÓN 1: LISTA / CREAR (ARRIBA) === */}
+      <section className="bg-white border rounded-2xl p-4 space-y-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+          <div className="flex-1">
+            <label className="text-xs text-slate-600 block mb-1">Nombre del torneo</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2"
+              placeholder="Ej. Torneo Octubre"
+              value={newNombre}
+              onChange={e => setNewNombre(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-600 block mb-1">Tipo</label>
+            <select
+              className="border rounded-lg px-3 py-2"
+              value={newModalidad}
+              onChange={e => setNewModalidad(e.target.value)}
+            >
+              <option value="grupos">Grupos</option>
+              <option value="grupos+elim">Grupos + Eliminación</option>
+              <option value="cuadros">Eliminación directa</option>
+            </select>
+          </div>
+          <button onClick={handleCrear} className="px-4 py-2 rounded-lg bg-emerald-600 text-white">
+            Crear
+          </button>
+        </div>
+
+        {torneos.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {torneos.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setSelectedId(t.id)}
+                className={[
+                  "px-3 py-2 rounded-lg border",
+                  selectedId === t.id ? "bg-emerald-50 border-emerald-300" : "bg-white"
+                ].join(" ")}
+                title={[
+                  `Reglas grupos: ${resumenReglas((t.reglas||{}).grupos || defaultReglas.grupos)}`,
+                  `Reglas final: ${resumenReglas((t.reglas||{}).elim   || defaultReglas.elim)}`
+                ].join(" | ")}
+              >
+                <div className="text-sm font-semibold text-slate-800">{t.nombre}</div>
+                <div className="text-xs text-slate-500">
+                  {t.modalidad} · {t.participantes?.length || 0} participantes
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* === SECCIÓN 2: DETALLE (ABAJO) === */}
+      {torneoSel && (
+        <section className="bg-white border rounded-2xl p-4 space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-bold text-slate-800">{torneoSel.nombre}</h2>
+            <button
+              onClick={handleGuardar}
+              className="px-4 py-2 rounded-lg bg-emerald-600 text-white"
+            >
+              Guardar
+            </button>
+          </div>
+
+          {/* Participantes */}
+          <div className="border rounded-xl p-3 bg-white">
+            <p className="text-sm font-semibold text-slate-700 mb-2">Participantes</p>
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <select
+                className="border rounded-lg px-3 py-2 flex-1"
+                onChange={(e) => { addParticipante(e.target.value); e.target.value = ""; }}
+                defaultValue=""
+              >
+                <option value="" disabled>— Seleccionar alumno —</option>
+                {alumnosOrdenados.map(a => (
+                  <option key={a.id} value={a.id}>{nombreCompleto(a)}</option>
+                ))}
+              </select>
+              <div className="text-xs text-slate-500">{participantes.length} seleccionado(s)</div>
+            </div>
+
+            {participantes.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {participantes.map(id => {
+                  const a = alumnoById(id);
+                  return (
+                    <span key={id} className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-sm">
+                      <span>{nombreCompleto(a)}</span>
+                      <button
+                        onClick={() => removeParticipante(id)}
+                        className="text-slate-500 hover:text-slate-700"
+                        title="Quitar"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Parejas (dobles) */}
+          {(reglas?.grupos?.modalidad === "dobles" || reglas?.elim?.modalidad === "dobles") && (
+            <div className="border rounded-xl p-3 bg-white">
+              <p className="text-sm font-semibold text-slate-700 mb-2">Parejas (dobles)</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+                <div>
+                  <label className="text-xs text-slate-600 block mb-1">Jugador A</label>
+                  <select className="w-full border rounded-lg px-2 py-1 text-sm"
+                          value={pairA}
+                          onChange={e=>setPairA(e.target.value)}>
+                    <option value="">— Elegir —</option>
+                    {disponiblesParaPareja.map(id => (
+                      <option key={id} value={id}>{fullNameOfId(id)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-600 block mb-1">Jugador B</label>
+                  <select className="w-full border rounded-lg px-2 py-1 text-sm"
+                          value={pairB}
+                          onChange={e=>setPairB(e.target.value)}>
+                    <option value="">— Elegir —</option>
+                    {disponiblesParaPareja
+                      .filter(id => id !== pairA)
+                      .map(id => (
+                        <option key={id} value={id}>{fullNameOfId(id)}</option>
+                      ))}
+                  </select>
+                </div>
+                <button onClick={addTeamManual} className="px-3 py-2 border rounded-lg">
+                  + Agregar pareja
+                </button>
+              </div>
+
+              {currentTeams.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {currentTeams.map(t => (
+                    <span key={t.id} className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-sky-50 text-slate-800 text-sm border border-sky-200">
+                      <span>{labelTeamById(t.id)}</span>
+                      <button
+                        onClick={() => removeTeam(t.id)}
+                        className="text-slate-500 hover:text-slate-700"
+                        title="Quitar pareja"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-500 mt-2">
+                  Definí las parejas que competirán cuando la modalidad sea “dobles”.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Puntos (grupos) */}
+          <div className="border rounded-xl p-3 bg-white">
+            <p className="text-sm font-semibold text-slate-700 mb-2">Puntos (grupos)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-slate-600 block">Ganar</label>
+                <input
+                  type="number"
+                  className="w-full border rounded-lg px-2 py-1"
+                  value={puntosCfg.win}
+                  onChange={e => setPuntosCfg(p => ({ ...p, win: Number(e.target.value)||0 }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-600 block">Empate</label>
+                <input
+                  type="number"
+                  className="w-full border rounded-lg px-2 py-1"
+                  value={puntosCfg.draw}
+                  onChange={e => setPuntosCfg(p => ({ ...p, draw: Number(e.target.value)||0 }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-600 block">Perder</label>
+                <input
+                  type="number"
+                  className="w-full border rounded-lg px-2 py-1"
+                  value={puntosCfg.loss}
+                  onChange={e => setPuntosCfg(p => ({ ...p, loss: Number(e.target.value)||0 }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+              <div>
+                <label className="text-xs text-slate-600 block">Grupos</label>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full border rounded-lg px-2 py-1"
+                  value={gruposCount}
+                  onChange={e => setGruposCount(Number(e.target.value) || 1)}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-600 block">Top K x grupo</label>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full border rounded-lg px-2 py-1"
+                  value={topK}
+                  onChange={e => setTopK(Number(e.target.value) || 1)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Reglas apiladas */}
+          <div className="space-y-3">
+            <RulesEditor zona="grupos" title="Reglas · Zona de Grupos" reglas={reglas} setReglas={setReglas} />
+            <RulesEditor zona="elim"   title="Reglas · Fase Final"     reglas={reglas} setReglas={setReglas} />
+          </div>
+
+          {/* Acciones */}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button onClick={generarFixtureGrupos} className="px-3 py-2 border rounded-lg">
+              Generar fixture (grupos)
+            </button>
+            <button onClick={crearFaseFinal} className="px-3 py-2 border rounded-lg">
+              Crear fase final (top-K)
+            </button>
+            <button onClick={generarCuadro} className="px-3 py-2 border rounded-lg">
+              Generar cuadro
+            </button>
+          </div>
+
+          {/* === Standings (Grupos) === */}
+          {torneoSel?.grupos && (
+            <div className="border rounded-xl p-3 bg-white">
+              <p className="text-sm font-semibold text-slate-700 mb-3">Tabla de posiciones (grupos)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {torneoSel.grupos.map(g => {
+                  const tabla = standingsByGroup?.[g.id] || (g.alumnoIds || []).map(id => ({
+                    id, PJ:0, PG:0, PE:0, PP:0, Pts:0, SetsF:0, SetsC:0, SD:0, GamesF:0, GamesC:0, GD:0
+                  }));
+                  return (
+                    <div key={g.id} className="border rounded-lg p-2">
+                      <div className="text-sm font-semibold text-slate-700 mb-1">{g.nombre}</div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-xs">
+                          <thead className="text-slate-500">
+                            <tr>
+                              <th className="text-left py-1 pr-2">#</th>
+                              <th className="text-left py-1 pr-2">Jugador / Pareja</th>
+                              <th className="text-right py-1 px-2">PJ</th>
+                              <th className="text-right py-1 px-2">PG</th>
+                              <th className="text-right py-1 px-2">PE</th>
+                              <th className="text-right py-1 px-2">PP</th>
+                              <th className="text-right py-1 px-2">Pts</th>
+                              <th className="text-right py-1 px-2">SD</th>
+                              <th className="text-right py-1 px-2">GD</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tabla.map((s, idx) => (
+                              <tr key={s.id} className="border-t">
+                                <td className="py-1 pr-2">{idx+1}</td>
+                                <td className="py-1 pr-2">{fullEntryLabel(s.id)}</td>
+                                <td className="py-1 px-2 text-right">{s.PJ}</td>
+                                <td className="py-1 px-2 text-right">{s.PG}</td>
+                                <td className="py-1 px-2 text-right">{s.PE}</td>
+                                <td className="py-1 px-2 text-right">{s.PP}</td>
+                                <td className="py-1 px-2 text-right font-semibold">{s.Pts}</td>
+                                <td className="py-1 px-2 text-right">{s.SD}</td>
+                                <td className="py-1 px-2 text-right">{s.GD}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {!hayResultados && (
+                <p className="text-[11px] text-slate-500 mt-2">
+                  Tip: marcá ganadores o cargá sets para que la tabla se actualice.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* === Partidos (grupos) – rápido + modal === */}
+          {torneoSel?.partidosGrupos && (
+            <div className="border rounded-xl p-3 bg-white">
+              <p className="text-sm font-semibold text-slate-700 mb-2">Partidos (grupos)</p>
+              <div className="space-y-2">
+                {torneoSel.partidosGrupos.map((p, idx) => (
+                  <div key={`${p.id}_${idx}`} className="flex flex-wrap items-center gap-2 text-sm border rounded-lg px-2 py-1">
+                    <span className="text-slate-500">{p.groupName}</span>
+                    <span className="text-slate-400">· R{p.round}{p.leg ? ` (V${p.leg})` : ""}</span>
+                    <span className="ml-auto" />
+                    <span className="font-medium">{fullEntryLabel(p.localId)}</span>
+                    <span>vs</span>
+                    <span className="font-medium">{fullEntryLabel(p.visitaId)}</span>
+
+                    {p.estado === "finalizado" ? (
+                      <>
+                        <span className="ml-2 text-emerald-600 font-semibold">
+                          Ganó {p.resultado?.ganadorId === p.localId
+                            ? fullEntryLabel(p.localId)
+                            : fullEntryLabel(p.visitaId)}
+                        </span>
+                        {Array.isArray(p.resultado?.sets) && p.resultado.sets.length > 0 && (
+                          <span className="text-xs text-slate-500">
+                            &nbsp;({p.resultado.sets.map(([l,v])=>`${l}-${v}`).join(", ")})
+                          </span>
+                        )}
+                        <button
+                          className="ml-2 text-xs px-2 py-1 border rounded hover:bg-slate-50"
+                          onClick={() => openResultadoModal(p)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          className="text-xs px-2 py-1 border rounded hover:bg-slate-50"
+                          onClick={() => clearResultadoPartido(p)}
+                        >
+                          Borrar
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex gap-1 ml-2">
+                        <button
+                          className="text-xs px-2 py-1 border rounded hover:bg-emerald-50"
+                          onClick={() => setGanadorPartido(p.id, p.localId)}
+                          title="Marcar ganador local"
+                        >
+                          Ganó {fullEntryLabel(p.localId)}
+                        </button>
+                        <button
+                          className="text-xs px-2 py-1 border rounded hover:bg-emerald-50"
+                          onClick={() => setGanadorPartido(p.id, p.visitaId)}
+                          title="Marcar ganador visita"
+                        >
+                          Ganó {fullEntryLabel(p.visitaId)}
+                        </button>
+                        <button
+                          className="text-xs px-2 py-1 border rounded hover:bg-slate-50"
+                          onClick={() => openResultadoModal(p)}
+                          title="Cargar sets / TB10"
+                        >
+                          Cargar resultado
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* MODAL de resultado con sets */}
+              {resModalOpen && editMatch && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/50" onClick={closeResultadoModal} />
+                  <div className="relative bg-white w-full max-w-lg rounded-2xl p-4 shadow-xl">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-semibold text-slate-800">
+                        Resultado · {fullEntryLabel(editMatch.localId)} vs {fullEntryLabel(editMatch.visitaId)}
+                      </h3>
+                      <button className="text-slate-500" onClick={closeResultadoModal}>✕</button>
+                    </div>
+
+                    <p className="text-xs text-slate-500 mt-1">
+                      Cargá los sets como <b>games</b>. Para match tie-break (p.ej. TB10), ingresá <b>10–7</b>.
+                    </p>
+
+                    <div className="mt-3 space-y-2">
+                      {editSets.map((sv, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 w-10">Set {idx+1}</span>
+                          <input
+                            type="number" className="w-16 border rounded px-2 py-1"
+                            value={sv[0]} onChange={(e)=>setSetValue(idx, "L", e.target.value)}
+                            min={0}
+                          />
+                          <span className="text-slate-500">—</span>
+                          <input
+                            type="number" className="w-16 border rounded px-2 py-1"
+                            value={sv[1]} onChange={(e)=>setSetValue(idx, "V", e.target.value)}
+                            min={0}
+                          />
+                          {editSets.length > 1 && (
+                            <button className="text-xs px-2 py-1 border rounded hover:bg-slate-50"
+                                    onClick={()=>removeSetRow(idx)}>
+                              Quitar
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button className="text-xs px-2 py-1 border rounded hover:bg-slate-50" onClick={addSetRow}>
+                        + Agregar set
+                      </button>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2 justify-end">
+                      <button className="px-3 py-2 border rounded-lg" onClick={closeResultadoModal}>
+                        Cancelar
+                      </button>
+                      <button className="px-3 py-2 border rounded-lg" onClick={()=>clearResultadoPartido(editMatch)}>
+                        Borrar resultado
+                      </button>
+                      <button className="px-3 py-2 rounded-lg bg-emerald-600 text-white" onClick={saveResultadoModal}>
+                        Guardar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
     
     function Pagos({ pagos, alumnos, perfil, onPayMensual, clases, onEditarPago, onDeletePago }) {
-        const [vista, setVista] = useState(perfil.metodoCobro === 'mensual' ? 'mensual' : 'historial');
-        useEffect(() => {
-            setVista(perfil.metodoCobro === 'mensual' ? 'mensual' : 'historial');
-        }, [perfil.metodoCobro]);
-        return (
-            <div className="grid gap-4">
-                <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
-                    <button onClick={() => setVista('historial')} className={`w-full text-center px-3 py-1.5 text-sm rounded-lg ${vista === 'historial' ? 'bg-white shadow' : ''}`}>Historial de Pagos</button>
-                    <button onClick={() => setVista('mensual')} className={`w-full text-center px-3 py-1.5 text-sm rounded-lg ${vista === 'mensual' ? 'bg-white shadow' : ''}`}>Control Clases Mensuales</button>
-                    <button onClick={() => setVista('deudas')} className={`w-full text-center px-3 py-1.5 text-sm rounded-lg ${vista === 'deudas' ? 'bg-white shadow' : ''}`}>Control de Deudas</button>
-                </div>
-                {vista === 'historial' && <HistorialPagos pagos={pagos} alumnos={alumnos} clases={clases} onEditarPago={onEditarPago} onDeletePago={onDeletePago} perfil={perfil}/>}
-                {vista === 'mensual' && <ControlMensual pagos={pagos} alumnos={alumnos} perfil={perfil} onPay={onPayMensual} />}
-                {vista === 'deudas' && <ControlDeudas pagos={pagos} alumnos={alumnos} clases={clases} perfil={perfil} />}
-            </div>
-        );
-    }
+  const [vista, setVista] = useState(perfil.metodoCobro === 'mensual' ? 'mensual' : 'historial');
+
+  useEffect(() => {
+    setVista(perfil.metodoCobro === 'mensual' ? 'mensual' : 'historial');
+  }, [perfil.metodoCobro]);
+
+  // Botón de pestaña uniforme
+  const TabBtn = ({ id, children }) => (
+    <button
+      onClick={() => setVista(id)}
+      className={`w-full text-center px-3 py-1.5 text-sm rounded-lg transition
+        ${vista === id ? 'bg-white shadow' : 'bg-transparent hover:bg-white/60'}`}
+    >
+      {children}
+    </button>
+  );
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-xl">
+        <TabBtn id="historial">Historial de Pagos</TabBtn>
+        <TabBtn id="porAlumno">Historial por alumno</TabBtn>
+        <TabBtn id="mensual">Control Clases Mensuales</TabBtn>
+        <TabBtn id="deudas">Control de Deudas</TabBtn>
+      </div>
+
+      {vista === 'historial' && (
+        <HistorialPagos
+          pagos={pagos}
+          alumnos={alumnos}
+          clases={clases}
+          onEditarPago={onEditarPago}
+          onDeletePago={onDeletePago}
+          perfil={perfil}
+        />
+      )}
+
+      {vista === 'porAlumno' && (
+        <HistorialPorAlumno pagos={pagos} alumnos={alumnos} />
+      )}
+
+      {vista === 'mensual' && (
+        <ControlMensual pagos={pagos} alumnos={alumnos} perfil={perfil} onPay={onPayMensual} />
+      )}
+
+      {vista === 'deudas' && (
+        <ControlDeudas pagos={pagos} alumnos={alumnos} clases={clases} perfil={perfil} />
+      )}
+    </div>
+  );
+}
+
 
 function HistorialPagos({
   pagos, alumnos, clases,
@@ -4434,12 +6618,12 @@ function HistorialPagos({
     ?? "-";
 
           const pagosConDatos = useMemo(() => {
-              return pagos.map(pago => {
-                  const nombreAlumno = alumnoMap.get(pago.alumnoId) || 'Alumno no encontrado';
-                  const concepto = pago.concepto || `Pago de ${nombreAlumno}`;
-                  return { ...pago, nombreAlumno, concepto };
-              });
-          }, [pagos, alumnoMap]);
+  return pagos.map(pago => {
+    const nombreAlumno = alumnoMap.get(pago.alumnoId) || 'Alumno no encontrado';
+    const concepto = pago.concepto || `Pago de ${nombreAlumno}`;
+    return { ...pago, nombreAlumno, concepto }; // ← corregido
+  });
+}, [pagos, alumnoMap]);
           
           const pagosFiltrados = useMemo(() => {
             const ahora = new Date();
@@ -4522,7 +6706,6 @@ function HistorialPagos({
                         <FilterButton onClick={() => setMetodo('Efectivo')} isActive={metodo === 'Efectivo'}>Efectivo</FilterButton>
                         <FilterButton onClick={() => setMetodo('Transferencia')} isActive={metodo === 'Transferencia'}>Transferencia</FilterButton>
                         <FilterButton onClick={() => setMetodo('Pendiente')} isActive={metodo === 'Pendiente'}>Pendiente</FilterButton>
-                        <FilterButton onClick={() => setMetodo('Mixto')} isActive={metodo === 'Mixto'}>Mixto</FilterButton>
                     </div>
                 </div>
 
@@ -4842,99 +7025,394 @@ function HistorialPagos({
         );
     }
 
-function Gastos({ gastos, onCreate, onUpdate, onDelete }) {
-      const [showForm, setShowForm] = useState(false);
-      const [editing, setEditing] = useState(null);
-      const emptyForm = { fecha: formatDate(new Date()), concepto: "", monto: "", categoria: "Varios" };
-      const [form, setForm] = useState(emptyForm);
-      const [periodo, setPeriodo] = useState("mes");
-      const [currentPage, setCurrentPage] = useState(1);
-      const ITEMS_PER_PAGE = 10;
 
-      const handleChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, [name]: value })); };
+function HistorialPorAlumno({ pagos = [], alumnos = [] }) {
+  const [fechaDesde, setFechaDesde] = React.useState("");
+  const [fechaHasta, setFechaHasta] = React.useState("");
+  const [metodo, setMetodo] = React.useState("Todos");
+  const [q, setQ] = React.useState("");
+  const [expandedId, setExpandedId] = React.useState(null);
 
-      const gastosFiltrados = useMemo(() => {
-        const ahora = new Date();
-        const hoy = formatDate(ahora);
-        const semanaInicio = formatDate(getWeekStartDate(ahora));
-        const mesInicio = formatDate(new Date(ahora.getFullYear(), ahora.getMonth(), 1));
-        const anioInicio = formatDate(new Date(ahora.getFullYear(), 0, 1));
+  const alumnoMap = React.useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
 
-        return gastos
-          .filter(g => {
-            if (periodo === 'dia' && g.fecha !== hoy) return false;
-            if (periodo === 'semana' && g.fecha < semanaInicio) return false;
-            if (periodo === 'mes' && g.fecha < mesInicio) return false;
-            if (periodo === 'año' && g.fecha < anioInicio) return false;
-            return true;
-          })
-          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-      }, [gastos, periodo]);
-      
-      const totalGastos = useMemo(() => gastosFiltrados.reduce((acc, g) => acc + (parseFloat(g.monto || 0) || 0), 0), [gastosFiltrados]);
+  const normNum = (v) => {
+    if (v == null) return 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
 
-      const totalPages = Math.ceil(gastosFiltrados.length / ITEMS_PER_PAGE);
-      const paginatedGastos = useMemo(() => {
-          const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-          return gastosFiltrados.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-      }, [gastosFiltrados, currentPage]);
+  const formatMoney = (n) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(normNum(n));
+  const getName = (a) => (a ? getNombreCompleto(a) : "");
 
-      useEffect(() => {
-          setCurrentPage(1);
-      }, [periodo]);
+  const pagosFiltrados = React.useMemo(() => {
+    return pagos.filter(p => {
+      if (fechaDesde && String(p.fecha) < fechaDesde) return false;
+      if (fechaHasta && String(p.fecha) > fechaHasta) return false;
+      if (metodo !== "Todos" && (p.metodo || "") !== metodo) return false;
+      if (q) {
+        const nombre = getName(alumnoMap.get(p.alumnoId)) || "";
+        if (!nombre.toLowerCase().includes(q.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [pagos, fechaDesde, fechaHasta, metodo, q, alumnoMap]);
 
-      function openNew() { setEditing(null); setForm(emptyForm); setShowForm(true); }
-      function openEdit(g) { setEditing(g); setForm(g); setShowForm(true); }
-      function cancel() { setShowForm(false); setEditing(null); setForm(emptyForm); }
-      function submit(e) { e.preventDefault(); if (!form.concepto.trim() || !form.monto) return alert("Completá concepto y monto"); if (editing) { onUpdate({ ...form, id: editing.id }); } else { onCreate(form); } cancel(); }
+const filas = React.useMemo(() => {
+  const acc = new Map();
+  for (const p of pagosFiltrados) {
+    const id = p.alumnoId || "_sin_";
+    const alumno = alumnoMap.get(p.alumnoId);
+    const nombre = alumno ? getName(alumno) : (p.nombreAlumno || "—");
+    const cur = acc.get(id) || { alumnoId: id, nombre, efectivo: 0, transferencia: 0, mensual: 0, pendiente: 0, total: 0, items: [] };
 
-      const PeriodoButton = ({ value, current, setter, children }) => (<button onClick={() => setter(value)} className={`px-3 py-1.5 text-sm rounded-lg ${current === value ? 'bg-[#34745B] text-white hover:bg-green-800' : 'bg-white border text-slate-700 hover:bg-slate-50'}`}>{children}</button>);
-      
-      return (
-        <div className="grid gap-4">
-          <Card 
-            title={<span className="text-[#34745B]">{editing ? "Editar gasto" : "Nuevo gasto"}</span>} 
-            right={!showForm && <button onClick={openNew} className="bg-[#34745B] hover:bg-green-800 text-white text-sm px-3 py-1.5 rounded-xl">+ Nuevo</button>}
-          >
-            {showForm ? (
-                <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
-                    <div className="md:col-span-3"><label className="text-sm text-slate-600">Fecha</label><input type="date" name="fecha" value={form.fecha} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" required /></div>
-                    <div className="md:col-span-3"><label className="text-sm text-slate-600">Concepto</label><input type="text" name="concepto" value={form.concepto} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Alquiler de cancha" required /></div>
-                    <div className="md:col-span-3"><label className="text-sm text-slate-600">Monto</label><input type="number" name="monto" value={form.monto} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: 1500" required /></div>
-                    <div className="md:col-span-3"><label className="text-sm text-slate-600">Categoría</label><select name="categoria" value={form.categoria} onChange={handleChange} className="w-full border rounded-lg px-3 py-2">{CATEGORIAS_GASTOS.map(c => <option key={c}>{c}</option>)}</select></div>
-                    <div className="md:col-span-6 flex gap-2 justify-end"><button type="button" onClick={cancel} className="px-3 py-2 rounded-lg border">Cancelar</button><button type="submit" className="px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white">Guardar</button></div>
-                </form>
-            ) : ( <p className="text-sm text-slate-500">Hacé clic en <b>+ Nuevo</b> para registrar un gasto.</p> )}
-          </Card>
-          
-          <Card title={<span className="text-[#34745B]">Control de Gastos</span>}>
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <PeriodoButton value="dia" current={periodo} setter={setPeriodo}>Hoy</PeriodoButton>
-              <PeriodoButton value="semana" current={periodo} setter={setPeriodo}>Semana</PeriodoButton>
-              <PeriodoButton value="mes" current={periodo} setter={setPeriodo}>Mes</PeriodoButton>
-              <PeriodoButton value="año" current={periodo} setter={setPeriodo}>Año</PeriodoButton>
-            </div>
-            <div className="bg-slate-100 border border-slate-200 p-4 rounded-xl mb-4"><p className="text-sm text-slate-600">Total de Gastos</p><p className="text-2xl font-bold text-slate-800">${totalGastos.toFixed(2)}</p></div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead><tr className="text-left text-slate-600"><th className="p-2">Fecha</th><th className="p-2">Concepto</th><th className="p-2">Monto</th><th className="p-2">Categoría</th><th className="p-2 text-right">Acciones</th></tr></thead>
-                <tbody>
-                  {paginatedGastos.length === 0 && (<tr><td colSpan={5} className="text-center py-6 text-slate-400">No hay gastos en este período</td></tr>)}
-                  {paginatedGastos.map(g => (<tr key={g.id} className="border-t"><td className="p-2">{g.fecha}</td><td className="p-2">{g.concepto}</td><td className="p-2">${g.monto}</td><td className="p-2">{g.categoria}</td><td className="p-2 text-right"><div className="inline-flex gap-2"><button onClick={() => openEdit(g)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button><button type="button" onClick={() => onDelete(g.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button></div></td></tr>))}
-                </tbody>
-              </table>
-            </div>
-            {totalPages > 1 && (
-              <div className="mt-4 flex justify-center items-center gap-2">
-                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50">Anterior</button>
-                <span className="text-sm text-slate-600">Página {currentPage} de {totalPages}</span>
-                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50">Siguiente</button>
-              </div>
-            )}
-          </Card>
-        </div>
-      );
+    const m = String(p.metodo || "");
+    const monto = normNum(p.monto);
+
+    if (m === "Efectivo") {
+      cur.efectivo += monto;
+    } else if (m === "Transferencia") {
+      cur.transferencia += monto;
+    } else if (m === "Mensual") {
+      cur.mensual += monto;
+    } else if (m === "Mixto" && p.detalleMixto) {
+      // 🆕 compat con docs viejos: repartir en el resumen
+      cur.efectivo      += normNum(p.detalleMixto.efectivo);
+      cur.transferencia += normNum(p.detalleMixto.transferencia);
+    } else if (m === "Pendiente") {
+      cur.pendiente += monto; // no suma al total cobrado
+    } else {
+      cur.total += monto;     // fallback (compat)
     }
+
+    cur.total = cur.efectivo + cur.transferencia + cur.mensual;
+    cur.items.push(p);
+    acc.set(id, cur);
+  }
+  return Array.from(acc.values()).sort((a, b) => b.total - a.total);
+}, [pagosFiltrados, alumnoMap]);
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 md:grid-cols-4">
+        <div>
+          <label className="block text-xs text-slate-500">Alumno</label>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre…" className="w-full border rounded-lg px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500">Desde</label>
+          <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500">Hasta</label>
+          <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500">Método</label>
+          <select value={metodo} onChange={e => setMetodo(e.target.value)} className="w-full border rounded-lg px-3 py-2">
+            <option>Todos</option>
+            <option>Efectivo</option>
+            <option>Transferencia</option>
+            <option>Mensual</option>
+            <option>Pendiente</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="text-left p-2">Alumno</th>
+              <th className="text-right p-2">Efectivo</th>
+              <th className="text-right p-2">Transferencia</th>
+              <th className="text-right p-2">Mensual</th>
+              <th className="text-right p-2">Total</th>
+              <th className="p-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.length === 0 ? (
+              <tr><td className="p-3 text-slate-400" colSpan={6}>Sin movimientos en el período.</td></tr>
+            ) : filas.map(row => (
+              <React.Fragment key={row.alumnoId}>
+                <tr className="border-t">
+                  <td className="p-2">{row.nombre}</td>
+                  <td className="p-2 text-right">{formatMoney(row.efectivo)}</td>
+                  <td className="p-2 text-right">{formatMoney(row.transferencia)}</td>
+                  <td className="p-2 text-right">{formatMoney(row.mensual)}</td>
+                  <td className="p-2 text-right font-semibold">{formatMoney(row.total)}</td>
+                  <td className="p-2 text-right">
+                    <button onClick={() => setExpandedId(expandedId === row.alumnoId ? null : row.alumnoId)} className="text-xs px-2 py-1 rounded-md border hover:bg-slate-50">
+                      {expandedId === row.alumnoId ? "Ocultar" : "Ver detalle"}
+                    </button>
+                  </td>
+                </tr>
+                {expandedId === row.alumnoId && (
+                  <tr className="bg-white">
+                    <td colSpan={6} className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-xs">
+                          <thead className="bg-slate-50">
+                            <tr>
+                              <th className="text-left p-2">Fecha</th>
+                              <th className="text-left p-2">Concepto</th>
+                              <th className="text-left p-2">Método</th>
+                              <th className="text-right p-2">Monto</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {row.items.slice().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))).map((p,i)=>(
+                              <tr key={i} className="border-t">
+                                <td className="p-2">{p.fecha}</td>
+                                <td className="p-2">{p.concepto || "Pago Clase"}</td>
+                                <td className="p-2">{p.metodo}</td>
+                                <td className="p-2 text-right">{formatMoney(p.monto)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+
+function Gastos({ gastos, onCreate, onUpdate, onDelete }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const emptyForm = { fecha: formatDate(new Date()), concepto: "", monto: "", categoria: "Varios" };
+  const [form, setForm] = useState(emptyForm);
+  const [periodo, setPeriodo] = useState("mes");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  // ✅ FIX: sin JSX adentro
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const gastosFiltrados = useMemo(() => {
+    const ahora = new Date();
+    const hoy = formatDate(ahora);
+    const semanaInicio = formatDate(getWeekStartDate(ahora));
+    const mesInicio = formatDate(new Date(ahora.getFullYear(), ahora.getMonth(), 1));
+    const anioInicio = formatDate(new Date(ahora.getFullYear(), 0, 1));
+
+    return gastos
+      .filter(g => {
+        if (periodo === 'dia' && g.fecha !== hoy) return false;
+        if (periodo === 'semana' && g.fecha < semanaInicio) return false;
+        if (periodo === 'mes' && g.fecha < mesInicio) return false;
+        if (periodo === 'año' && g.fecha < anioInicio) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  }, [gastos, periodo]);
+
+  const totalGastos = useMemo(
+    () => gastosFiltrados.reduce((acc, g) => acc + (parseFloat(g.monto || 0) || 0), 0),
+    [gastosFiltrados]
+  );
+
+  const totalPages = Math.ceil(gastosFiltrados.length / ITEMS_PER_PAGE);
+  const paginatedGastos = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return gastosFiltrados.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [gastosFiltrados, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [periodo]);
+
+  function openNew() { setEditing(null); setForm(emptyForm); setShowForm(true); }
+  function openEdit(g) { setEditing(g); setForm(g); setShowForm(true); }
+  function cancel() { setShowForm(false); setEditing(null); setForm(emptyForm); }
+  function submit(e) {
+    e.preventDefault();
+    if (!form.concepto.trim() || !form.monto) return alert("Completá concepto y monto");
+    if (editing) { onUpdate({ ...form, id: editing.id }); } else { onCreate(form); }
+    cancel();
+  }
+
+  const PeriodoButton = ({ value, current, setter, children }) => (
+    <button
+      onClick={() => setter(value)}
+      className={`px-3 py-1.5 text-sm rounded-lg ${
+        current === value
+          ? 'bg-[#34745B] text-white hover:bg-green-800'
+          : 'bg-white border text-slate-700 hover:bg-slate-50'
+      }`}
+    >
+      {children}
+    </button>
+  );
+
+  return (
+    <div className="grid gap-4">
+      <Card
+        title={<span className="text-[#34745B]">{editing ? "Editar gasto" : "Nuevo gasto"}</span>}
+        right={!showForm && (
+          <button
+            onClick={openNew}
+            className="bg-[#34745B] hover:bg-green-800 text-white text-sm px-3 py-1.5 rounded-xl"
+          >
+            + Nuevo
+          </button>
+        )}
+      >
+        {showForm ? (
+          <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
+            <div className="md:col-span-3">
+              <label className="text-sm text-slate-600">Fecha</label>
+              <input
+                type="date"
+                name="fecha"
+                value={form.fecha}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2"
+                required
+              />
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="text-sm text-slate-600">Concepto</label>
+              <input
+                type="text"
+                name="concepto"
+                value={form.concepto}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2"
+                placeholder="Ej: Alquiler de cancha"
+                required
+              />
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="text-sm text-slate-600">Monto</label>
+              <input
+                type="number"
+                name="monto"
+                value={form.monto}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2"
+                placeholder="Ej: 1500"
+                required
+              />
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="text-sm text-slate-600">Categoría</label>
+              <select
+                name="categoria"
+                value={form.categoria}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2"
+              >
+                {CATEGORIAS_GASTOS.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="md:col-span-6 flex gap-2 justify-end">
+              <button type="button" onClick={cancel} className="px-3 py-2 rounded-lg border">
+                Cancelar
+              </button>
+              <button type="submit" className="px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white">
+                Guardar
+              </button>
+            </div>
+          </form>
+        ) : (
+          <p className="text-sm text-slate-500">
+            Hacé clic en <b>+ Nuevo</b> para registrar un gasto.
+          </p>
+        )}
+      </Card>
+
+      <Card title={<span className="text-[#34745B]">Control de Gastos</span>}>
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <PeriodoButton value="dia" current={periodo} setter={setPeriodo}>Hoy</PeriodoButton>
+          <PeriodoButton value="semana" current={periodo} setter={setPeriodo}>Semana</PeriodoButton>
+          <PeriodoButton value="mes" current={periodo} setter={setPeriodo}>Mes</PeriodoButton>
+          <PeriodoButton value="año" current={periodo} setter={setPeriodo}>Año</PeriodoButton>
+        </div>
+
+        <div className="bg-slate-100 border border-slate-200 p-4 rounded-xl mb-4">
+          <p className="text-sm text-slate-600">Total de Gastos</p>
+          <p className="text-2xl font-bold text-slate-800">${totalGastos.toFixed(2)}</p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-600">
+                <th className="p-2">Fecha</th>
+                <th className="p-2">Concepto</th>
+                <th className="p-2">Monto</th>
+                <th className="p-2">Categoría</th>
+                <th className="p-2 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedGastos.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="text-center py-6 text-slate-400">
+                    No hay gastos en este período
+                  </td>
+                </tr>
+              )}
+              {paginatedGastos.map(g => (
+                <tr key={g.id} className="border-t">
+                  <td className="p-2">{g.fecha}</td>
+                  <td className="p-2">{g.concepto}</td>
+                  <td className="p-2">${g.monto}</td>
+                  <td className="p-2">{g.categoria}</td>
+                  <td className="p-2 text-right">
+                    <div className="inline-flex gap-2">
+                      <button onClick={() => openEdit(g)} className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50">✏️ Editar</button>
+                      <button type="button" onClick={() => onDelete(g.id)} className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50">🗑️ Eliminar</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {totalPages > 1 && (
+          <div className="mt-4 flex justify-center items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50"
+            >
+              Anterior
+            </button>
+            <span className="text-sm text-slate-600">
+              Página {currentPage} de {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50"
+            >
+              Siguiente
+            </button>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
     
     function GraficoBarras({ data }) {
       const maxValue = useMemo(() => Math.max(...data.map(d => d.value), 1), [data]);
@@ -7768,100 +10246,159 @@ function MainApp({ user, onLogout }) {
     delete: (id) => setDeletingInfo({ id, type: 'alumno', collection: 'alumnos' }),
   };
 
-  const pagoCrud = {
-    createPagosClase: async (pagosData) => {
-      const batch = db.batch();
+const pagoCrud = {
+  // Guarda pagos por clase. Si un pago viene como “Mixto”, lo divide en dos documentos:
+  // uno Efectivo y otro Transferencia.
+  createPagosClase: async (pagosData = []) => {
+    try {
       const collectionRef = getCollection('pagos');
-      if (!collectionRef) return;
-      // Actualizar el estado 'pagada' de la clase al guardar el pago.
-      const claseRef = getCollection('clases').doc(payingClase.id);
+      if (!collectionRef) { alert('No hay club activo.'); return; }
+      if (!payingClase || !payingClase.id) { alert('Clase no definida para pago.'); return; }
 
-      pagosData.forEach(pago => {
-        if (parseFloat(pago.monto) > 0 || pago.metodo === 'Pendiente') {
-            const docRef = collectionRef.doc();
-            const payload = {
-                claseId: payingClase.id,
-                alumnoId: pago.alumnoId,
-                fecha: payingClase.fecha,
-                concepto: `Pago Clase ${payingClase.tipo}`,
-                metodo: pago.metodo,
-                monto: pago.monto
-            };
-            if (pago.metodo === 'Mixto') {
-                payload.detalleMixto = {
-                    efectivo: parseFloat(pago.mixtoEfectivo) || 0,
-                    transferencia: parseFloat(pago.mixtoTransferencia) || 0
-                };
-            }
-            batch.set(docRef, payload);
+      const normal = (v) => {
+        if (v == null) return 0;
+        const s = String(v).replace(/\./g, '').replace(',', '.');
+        const n = parseFloat(s);
+        return isNaN(n) ? 0 : n;
+      };
+
+      const normMethod = (s) => {
+        const m = String(s || '').trim().toLowerCase();
+        if (m.startsWith('efect')) return 'Efectivo';
+        if (m.startsWith('transf') || m.startsWith('tx')) return 'Transferencia';
+        if (m.startsWith('mensu')) return 'Mensual';
+        if (m.startsWith('pend')) return 'Pendiente';
+        if (m.startsWith('mixto')) return 'Mixto';
+        return s || 'Efectivo';
+      };
+
+      const isZeroLike = (x) => {
+        const n = Number(x);
+        return !Number.isFinite(n) || n <= 0;
+      };
+
+      // Convierte “Mixto” en dos ítems (efectivo/transferencia)
+      const expandMixto = (p) => {
+        const metodo = String(p.metodo || '').trim().toLowerCase();
+        if (metodo !== 'mixto') return [p];
+
+        const ef = normal(p.mixtoEfectivo ?? p.efectivo ?? p.efectivoMonto ?? p.cash ?? p.contado);
+        const tx = normal(p.mixtoTransferencia ?? p.transferencia ?? p.transf ?? p.transferenciaMonto ?? p.tx);
+
+        const out = [];
+        if (!isZeroLike(ef)) out.push({ ...p, metodo: 'Efectivo', monto: ef });
+        if (!isZeroLike(tx)) out.push({ ...p, metodo: 'Transferencia', monto: tx });
+
+        if (out.length === 0) throw new Error('Pago Mixto sin montos desglosados (Efectivo/Transferencia).');
+        return out;
+      };
+
+      // Aplanar pagos (expandiendo mixtos)
+      const items = [];
+      for (const p of (pagosData || [])) {
+        const metodo = normMethod(p.metodo);
+        if (metodo === 'Mixto') {
+          items.push(...expandMixto(p));
+        } else {
+          items.push({ ...p, monto: normal(p.monto), metodo });
         }
-      });
+      }
+
+      // Guardar solo pagos válidos
+      const batch = db.batch();
+      for (const p of items) {
+        if (p.metodo === 'Pendiente') continue;
+        if (isZeroLike(p.monto)) continue;
+
+        const docRef = collectionRef.doc();
+        batch.set(docRef, {
+          claseId: payingClase.id,
+          alumnoId: p.alumnoId,
+          fecha: payingClase.fecha,
+          concepto: `Pago de Clase ${payingClase.tipo} (${payingClase.fecha})`,
+          metodo: p.metodo,
+          monto: Number(p.monto || 0),
+        });
+      }
       await batch.commit();
 
-      // Recalcular el estado de la clase después de que los nuevos pagos se hayan guardado.
-      const pagosExistentes = await getCollection('pagos').where('claseId', '==', payingClase.id).get();
-      const totalPagadoAcumulado = pagosExistentes.docs.reduce((sum, doc) => {
-          const pago = doc.data();
-          return sum + parseFloat(pago.monto || 0);
-      }, 0);
+      // Recalcular clase.pagada
+      const pagosSnap = await collectionRef.where('claseId', '==', payingClase.id).get();
+      let totalPagado = 0;
+      pagosSnap.forEach(d => { totalPagado += Number(d.data().monto || 0); });
 
-      const claseDoc = await claseRef.get();
-      if (claseDoc.exists) {
-          const precioTotalClase = parseFloat(claseDoc.data().precio);
-          const estaPagada = totalPagadoAcumulado >= precioTotalClase;
-          await claseRef.update({ pagada: estaPagada });
-      }
+      const claseRef = getCollection('clases').doc(payingClase.id);
+      const precioClase = Number(payingClase.precio || 0);
+      await claseRef.set({ pagada: totalPagado >= precioClase }, { merge: true });
 
       setToast("Pagos registrados");
       setPayingClase(null);
       setFocusAlumnoId(null);
       setClaseParaAgendar(payingClase);
-    },
-    createAbono: (pagoData, alumno) => {
-      const collectionRef = getCollection('pagos');
-      if (!collectionRef) return;
-      const newPago = {
-        alumnoId: alumno.id,
-        fecha: pagoData.fechaPago,
-        concepto: pagoData.concepto || `Abono Mensual - ${MESES_NOMBRES[pagoData.mes]}`,
-        monto: pagoData.monto,
-        metodo: pagoData.metodo
-      };
-      collectionRef.add(newPago).then(() => {
-        setToast("Pago de abono registrado con éxito");
-        setRegistrandoAbono(null);
-      });
-    },
-    createMensual: (pagoData) => {
-      const collectionRef = getCollection('pagos');
-      if (!collectionRef) return;
-      const { alumno, mes } = payingCuota;
-      const fecha = new Date();
-      fecha.setMonth(mes);
-      const newPago = { alumnoId: alumno.id, fecha: formatDate(fecha), concepto: `Cuota Mensual - ${MESES_NOMBRES[mes]}`, ...pagoData };
-      collectionRef.add(newPago).then(() => {
-        setToast("Pago de cuota registrado");
-        setPayingCuota({ alumno: null, mes: null });
-      });
-    },
-    update: ({ id, ...data }) => {
-      const collectionRef = getCollection('pagos');
-      if (!collectionRef) return;
-      const dataToSave = { ...data };
-      if (data.metodo === 'Mixto') {
-        dataToSave.detalleMixto = {
-          efectivo: parseFloat(data.mixtoEfectivo) || 0,
-          transferencia: parseFloat(data.mixtoTransferencia) || 0
-        };
-      }
-      delete dataToSave.mixtoEfectivo;
-      delete dataToSave.mixtoTransferencia;
-      return collectionRef.doc(id).update(dataToSave).then(() => {
-        setToast("Pago actualizado con éxito");
-        setPagoParaEditar(null);
-      });
+    } catch (err) {
+      console.error('createPagosClase error:', err);
+      alert('No se pudo guardar el/los pagos. Revisá la consola para más detalles.');
     }
-  };
+  },
+
+  // ✅ ESTA ES LA CLAVE QUE FALTABA
+  createAbono: (pagoData, alumno) => {
+    const collectionRef = getCollection('pagos');
+    if (!collectionRef) return;
+    const newPago = {
+      alumnoId: alumno.id,
+      fecha: pagoData.fechaPago,
+      concepto: pagoData.concepto || `Abono Mensual - ${MESES_NOMBRES[pagoData.mes]}`,
+      monto: pagoData.monto,
+      metodo: pagoData.metodo
+    };
+    collectionRef.add(newPago).then(() => {
+      setToast("Pago de abono registrado con éxito");
+      setRegistrandoAbono(null);
+    });
+  },
+
+  createMensual: (pagoData) => {
+    const collectionRef = getCollection('pagos');
+    if (!collectionRef) return;
+    const { alumno, mes } = payingCuota;
+    const fecha = new Date();
+    fecha.setMonth(mes);
+    const newPago = {
+      alumnoId: alumno.id,
+      fecha: formatDate(fecha),
+      concepto: `Cuota Mensual - ${MESES_NOMBRES[mes]}`,
+      ...pagoData
+    };
+    collectionRef.add(newPago).then(() => {
+      setToast("Pago de cuota registrado");
+      setPayingCuota({ alumno: null, mes: null });
+    });
+  },
+
+  update: ({ id, ...data }) => {
+    const collectionRef = getCollection('pagos');
+    if (!collectionRef) return;
+
+    // Si quisieras permitir editar “Mixto” desde el modal de edición,
+    // podés seguir guardando los campos auxiliares:
+    const dataToSave = { ...data };
+    if (data.metodo === 'Mixto') {
+      dataToSave.detalleMixto = {
+        efectivo: parseFloat(data.mixtoEfectivo) || 0,
+        transferencia: parseFloat(data.mixtoTransferencia) || 0
+      };
+    }
+    delete dataToSave.mixtoEfectivo;
+    delete dataToSave.mixtoTransferencia;
+
+    return collectionRef.doc(id).update(dataToSave).then(() => {
+      setToast("Pago actualizado con éxito");
+      setPagoParaEditar(null);
+    });
+  }
+};
+
  const claseCrud = {
   create: async (c) => {
     const collectionRef = getCollection('clases');
@@ -8088,6 +10625,12 @@ function MainApp({ user, onLogout }) {
         {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({ alumno, mes })} onEditarPago={(pago) => setPagoParaEditar(pago)} onDeletePago={handleDeletePago} />}
         {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
         {current === "reportes" && <Reportes pagos={state.pagos} gastos={state.gastos} alumnos={state.alumnos} clases={state.clases} clubActivoId={clubActivoId} clubes={clubes} perfil={state.perfil} />}
+        {current === "rankings" && (
+  <Rankings alumnos={state.alumnos} user={user} clubActivoId={clubActivoId} />
+)}
+{current === "torneos" && (
+  <Torneos alumnos={state.alumnos} user={user} clubActivoId={clubActivoId} />
+)}
         {current === "perfil" && <Perfil
           perfil={state.perfil}
           alumnos={state.alumnos}
