@@ -19,6 +19,12 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
 
+  <!-- jsPDF (si ya lo usás en el archivo, no lo dupliques) -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<!-- html2canvas para capturar el DOM del cuadro -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+
   <style>
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -5148,10 +5154,16 @@ function Rankings({ alumnos, user, clubActivoId }) {
 // =========================
 // RulesEditor (usa props)
 // =========================
-function RulesEditor({ zona, title, reglas, setReglas }) {
-  const r = (reglas && reglas[zona]) || {};
+function RulesEditor({ title, scope, reglas, setReglas, modalidadUI }) {
+  // Subobjeto de reglas que edita este editor ("grupos" o "elim")
+  const r = reglas?.[scope] || {};
+
+  // Actualiza solo la rama reglas[scope]
   const setR = (patch) =>
-    setReglas(prev => ({ ...prev, [zona]: { ...prev[zona], ...patch } }));
+    setReglas(prev => ({
+      ...(prev || {}),
+      [scope]: { ...(prev?.[scope] || {}), ...patch }
+    }));
 
   const isMatchOnly = !!r.matchOnly;
 
@@ -5165,7 +5177,7 @@ function RulesEditor({ zona, title, reglas, setReglas }) {
           <label className="text-xs text-slate-600">Modalidad</label>
           <select
             className="w-full border rounded-lg px-2 py-1 text-sm"
-            value={r.modalidad || "singles"}
+            value={modalidadUI}
             onChange={e => setR({ modalidad: e.target.value })}
           >
             <option value="singles">Singles</option>
@@ -5224,7 +5236,7 @@ function RulesEditor({ zona, title, reglas, setReglas }) {
             <label className="flex flex-wrap items-center gap-2 leading-tight">
               <input
                 type="radio"
-                name={`decider-${zona}`}
+                name={`decider-${scope}`}
                 checked={(r.decider || "set") === "set" && !isMatchOnly}
                 onChange={() => setR({ decider: "set", matchOnly: false })}
                 disabled={isMatchOnly}
@@ -5235,7 +5247,7 @@ function RulesEditor({ zona, title, reglas, setReglas }) {
             <label className="flex flex-wrap items-center gap-2 leading-tight">
               <input
                 type="radio"
-                name={`decider-${zona}`}
+                name={`decider-${scope}`}
                 checked={(r.decider || "set") === "matchTB" && !isMatchOnly}
                 onChange={() => setR({ decider: "matchTB", matchOnly: false })}
                 disabled={isMatchOnly}
@@ -5282,7 +5294,7 @@ function RulesEditor({ zona, title, reglas, setReglas }) {
       </div>
 
       {/* Solo grupos: ida y vuelta */}
-      {zona === "grupos" && (
+      {scope === "grupos" && (
         <div className="mt-2">
           <label className="inline-flex items-center gap-2 text-sm">
             <input
@@ -5300,1245 +5312,2400 @@ function RulesEditor({ zona, title, reglas, setReglas }) {
   );
 }
 
+
 // =========================
 // Torneos (pasa reglas/setReglas)
 // =========================
-function Torneos({ alumnos = [], user, clubActivoId }) {
-  // ====== Estado principal ======
-  const [torneos, setTorneos] = React.useState([]);
+// ===== Torneos – Modo Pro por pestañas (drop‑in replacement) =====
+// Pega este bloque COMPLETO dentro de tu <script type="text/babel">,
+// reemplazando tu componente `Torneos(...)`. No requiere librerías nuevas.
+// Usa únicamente Tailwind y React 17 UMD (como tu proyecto actual).
+
+function Torneos({ alumnos = [], user, clubActivoId, perfil = {} }) {
+  // ================== Estado general ==================
+  const [torneos, setTorneos] = React.useState(() => loadTorneosLS());
   const [selectedId, setSelectedId] = React.useState(null);
-  const [loading, setLoading] = React.useState(false);
+  const [creating, setCreating] = React.useState(false);
 
-  // Crear torneo
-  const [newNombre, setNewNombre] = React.useState("");
-  const [newModalidad, setNewModalidad] = React.useState("grupos"); // "grupos" | "cuadros" | "grupos+elim"
-
-  // Detalle editable del torneo (cuando hay seleccionado)
-  const [participantes, setParticipantes] = React.useState([]); // array de alumnoIds
-  const [puntosCfg, setPuntosCfg] = React.useState({ win: 3, draw: 1, loss: 0 });
-  const [gruposCount, setGruposCount] = React.useState(2);
-  const [topK, setTopK] = React.useState(2);
-
-  // Reglas (padre para RulesEditor)
-  const defaultReglas = React.useMemo(() => ({
-    grupos: {
-      modalidad: "singles",
-      formatoSets: "bo3",
-      gamesPorSet: 6,
-      tieBreak: "TB7",
-      idaVuelta: false,
-      decider: "set",
-      matchTBPoints: 10,
-      matchOnly: false,
-    },
-    elim: {
-      modalidad: "singles",
-      formatoSets: "bo3",
-      gamesPorSet: 6,
-      tieBreak: "TB7",
-      decider: "set",
-      matchTBPoints: 10,
-      matchOnly: false,
-    }
-  }), []);
-
-  const [reglas, setReglas] = React.useState(defaultReglas);
-
-  // ====== Helpers ======
-  const torneoSel = React.useMemo(
+  const selected = React.useMemo(
     () => torneos.find(t => t.id === selectedId) || null,
     [torneos, selectedId]
   );
 
-  const alumnoById = React.useCallback(
-    (id) => alumnos.find(a => a.id === id) || null,
+  // Persistencia Local
+  React.useEffect(() => {
+    saveTorneosLS(torneos);
+  }, [torneos]);
+
+  const handleCreate = () => {
+    const t = newTorneo();
+    setTorneos(prev => [t, ...prev]);
+    setSelectedId(t.id);
+    setCreating(true);
+  };
+
+  const handleClone = (id) => {
+    const base = torneos.find(t => t.id === id);
+    if (!base) return;
+    const clone = { ...deepClone(base), id: genId("t_"), nombre: base.nombre + " (copia)", estado: "config" };
+    setTorneos(prev => [clone, ...prev]);
+    setSelectedId(clone.id);
+  };
+
+  const handleDelete = (id) => {
+    if (!confirm("¿Eliminar este torneo?")) return;
+    setTorneos(prev => prev.filter(t => t.id !== id));
+    if (selectedId === id) setSelectedId(null);
+  };
+
+  const upsert = (patch) => {
+    setTorneos(prev => prev.map(t => (t.id === patch.id ? { ...t, ...patch } : t)));
+  };
+
+  // === Helpers para etiquetar en la tarjeta ===
+  const alumnoByIdCard = React.useCallback(
+    (id) => (alumnos || []).find(a => a.id === id) || { id, nombre: id },
     [alumnos]
   );
 
-  const nombreCompleto = React.useCallback((a) => {
-    if (!a) return "";
-    const name = [a.nombre, a.apellido].filter(Boolean).join(" ").trim();
-    return name || a.alias || a.displayName || a.id;
-  }, []);
-
-  const fullNameOfId = React.useCallback((id) => {
-    const a = alumnoById(id);
-    return nombreCompleto(a) || id;
-  }, [alumnoById, nombreCompleto]);
-
-  // Ordenar alumnos por nombre completo en el selector
-  const alumnosOrdenados = React.useMemo(() => {
-    return [...alumnos].sort((x, y) =>
-      nombreCompleto(x).localeCompare(nombreCompleto(y), "es", { sensitivity: "base" })
-    );
-  }, [alumnos, nombreCompleto]);
-
-  const resumenReglas = (rules) => {
-    if (!rules) return "";
-    const tbTxt = rules.tieBreak === "TB7" ? "TB a 7"
-                 : rules.tieBreak === "TB10" ? "TB a 10"
-                 : "sin TB";
-    if (rules.matchOnly) return `${rules.modalidad}, Match TB a ${rules.matchTBPoints}`;
-    let setTxt = rules.formatoSets === "bo1" ? "1 set" : "Mejor de 3";
-    if ((rules.decider || "set") === "matchTB") setTxt += ` (+ decider TB a ${rules.matchTBPoints})`;
-    return `${rules.modalidad}, ${setTxt}, ${rules.gamesPorSet} games, ${tbTxt}`;
-  };
-
-  const snapshotReglas = (zona) => {
-    const r = (reglas && reglas[zona]) || defaultReglas[zona];
-    return {
-      modalidad: r.modalidad,
-      formatoSets: r.formatoSets,
-      gamesPorSet: Number(r.gamesPorSet) || 6,
-      tieBreak: r.tieBreak,                      // 'TB7' | 'TB10' | 'SinTB'
-      decider: r.decider || "set",               // 'set' | 'matchTB'
-      matchTBPoints: Number(r.matchTBPoints) || 10,
-      matchOnly: !!r.matchOnly,
-      idaVuelta: !!r.idaVuelta,                  // (solo grupos)
-    };
-  };
-
-  const mergeReglas = React.useCallback((incoming) => ({
-    grupos: { ...defaultReglas.grupos, ...(incoming?.grupos || {}) },
-    elim:   { ...defaultReglas.elim,   ...(incoming?.elim   || {}) },
-  }), [defaultReglas]);
-
-  // ====== Cargar detalle al seleccionar torneo ======
-  React.useEffect(() => {
-    if (!torneoSel) return;
-    setParticipantes(Array.isArray(torneoSel.participantes) ? torneoSel.participantes : []);
-    setPuntosCfg({ win: 3, draw: 1, loss: 0, ...(torneoSel.puntosCfg || {}) });
-    setGruposCount(Number(torneoSel.gruposCount || 2));
-    setTopK(Number(torneoSel.topK || 2));
-    setReglas(mergeReglas(torneoSel.reglas));
-  }, [torneoSel, mergeReglas]);
-
-  // ====== Crear / Guardar ======
-  const handleCrear = () => {
-    const nombre = newNombre.trim();
-    if (!nombre) return;
-    const id = `tor_${Date.now()}`;
-    const nuevo = {
-      id,
-      nombre,
-      modalidad: newModalidad,
-      participantes: [],
-      puntosCfg: { ...puntosCfg },
-      gruposCount: 2,
-      topK: 2,
-      reglas: { ...defaultReglas },
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      teams: [] // 👈 parejas definidas por el usuario para dobles
-    };
-    setTorneos(prev => [nuevo, ...prev]);
-    setSelectedId(id);
-    setNewNombre("");
-  };
-
-  const handleGuardar = () => {
-    if (!torneoSel) return;
-    const actualizado = {
-      ...torneoSel,
-      participantes: [...participantes],
-      puntosCfg: { ...puntosCfg },
-      gruposCount: Number(gruposCount) || 2,
-      topK: Number(topK) || 2,
-      reglas: {
-        grupos: snapshotReglas("grupos"),
-        elim:   snapshotReglas("elim"),
-      },
-      teams: Array.isArray(torneoSel.teams) ? [...torneoSel.teams] : [],
-      updatedAt: Date.now(),
-    };
-    setTorneos(prev => prev.map(t => (t.id === torneoSel.id ? actualizado : t)));
-    // TODO: persistir si querés
-  };
-
-  // ====== Helpers de grupos / fixtures / cuadros ======
-  const letraGrupo = (i) => String.fromCharCode(65 + i); // 0->A,1->B...
-  const nextPow2 = (n) => Math.pow(2, Math.ceil(Math.log2(Math.max(1, n))));
-
-  // --- PAREJAS (dobles) definidas por el usuario ---
-  const teamIdFor = (a, b) => {
-    const [x, y] = [String(a), String(b)].sort();
-    return `T_${x}__${y}`;
-  };
-
-  const currentTeams = React.useMemo(() => torneoSel?.teams || [], [torneoSel]);
-  const memberUsed = React.useCallback(
-    (id) => (currentTeams.some(t => Array.isArray(t.members) && t.members.includes(id))),
-    [currentTeams]
-  );
-  const disponiblesParaPareja = React.useMemo(() => {
-    const used = new Set(currentTeams.flatMap(t => t.members || []));
-    return participantes.filter(id => !used.has(id));
-  }, [participantes, currentTeams]);
-
-  const [pairA, setPairA] = React.useState("");
-  const [pairB, setPairB] = React.useState("");
-
-  const addTeamManual = () => {
-    if (!pairA || !pairB) { alert("Elegí dos jugadores para formar la pareja."); return; }
-    if (pairA === pairB) { alert("La pareja debe ser de dos jugadores distintos."); return; }
-    if (memberUsed(pairA) || memberUsed(pairB)) {
-      alert("Uno de los jugadores ya está en otra pareja. Quitala antes de reasignar.");
-      return;
-    }
-    const id = teamIdFor(pairA, pairB);
-    const nuevo = {
-      id,
-      members: [pairA, pairB],
-      label: `${fullNameOfId(pairA)} / ${fullNameOfId(pairB)}`
-    };
-    setTorneos(prev => prev.map(t =>
-      t.id === torneoSel.id ? { ...t, teams: [...(t.teams || []), nuevo], updatedAt: Date.now() } : t
-    ));
-    setPairA(""); setPairB("");
-  };
-
-  const removeTeam = (teamId) => {
-    setTorneos(prev => prev.map(t =>
-      t.id === torneoSel.id ? { ...t, teams: (t.teams || []).filter(tt => tt.id !== teamId), updatedAt: Date.now() } : t
-    ));
-  };
-
-  const labelTeamById = (tid) => {
-    const t = currentTeams.find(x => x.id === tid);
-    if (!t) return String(tid);
-    const [a,b] = t.members || [];
-    return t.label || `${fullNameOfId(a)} / ${fullNameOfId(b)}`;
-  };
-
-  const fullEntryLabel = (entryId) => {
-    if (!entryId) return "—";
-    const isTeam = currentTeams.some(t => t.id === entryId);
-    return isTeam ? labelTeamById(entryId) : fullNameOfId(entryId);
-  };
-
-  /** Distribución "snake" para balancear grupos */
-  const repartirEnGrupos = (ids, gruposCount) => {
-    const groups = Array.from({ length: gruposCount }, () => []);
-    ids.forEach((id, i) => {
-      const fila = Math.floor(i / gruposCount);
-      const col  = i % gruposCount;
-      const gIdx = (fila % 2 === 0) ? col : (gruposCount - 1 - col);
-      groups[gIdx].push(id);
-    });
-    return groups;
-  };
-
-  /** Round-robin (método del círculo) */
-  const roundRobinSchedule = (ids) => {
-    const n = ids.length;
-    const list = (n % 2 === 1) ? [...ids, null] : [...ids];
-    const m = list.length;
-    const half = m / 2;
-    const rounds = [];
-    for (let r = 0; r < m - 1; r++) {
-      const pares = [];
-      for (let i = 0; i < half; i++) {
-        const a = list[i];
-        const b = list[m - 1 - i];
-        if (a != null && b != null) pares.push([a, b]);
-      }
-      rounds.push(pares);
-      // rotar (fijo el primero)
-      list.splice(1, 0, list.pop());
-    }
-    return rounds;
-  };
-
-  /** Partidos por grupo; ida/vuelta opcional, con keys únicas por grupo */
-  const generarPartidosGrupo = (ids, idaVuelta = false, keyPrefix = "G") => {
-    const rounds = roundRobinSchedule(ids);
-    const out = [];
-    let c = 0;
-    rounds.forEach((pares, rIndex) => {
-      pares.forEach(([a, b], pairIdx) => {
-        out.push({
-          id: `Gm_${keyPrefix}_R${rIndex + 1}_M${pairIdx}_L1_${c++}`,
-          round: rIndex + 1, leg: 1,
-          localId: a, visitaId: b,
-          estado: "pendiente", resultado: null,
-          groupId: null, groupName: null
-        });
-        if (idaVuelta) {
-          out.push({
-            id: `Gm_${keyPrefix}_R${rIndex + 1}_M${pairIdx}_L2_${c++}`,
-            round: rIndex + 1, leg: 2,
-            localId: b, visitaId: a,
-            estado: "pendiente", resultado: null,
-            groupId: null, groupName: null
-          });
-        }
-      });
-    });
-    return out;
-  };
-
-  /** Nombre de ronda por tamaño */
-  const nombreRonda = (size) => {
-    switch (size) {
-      case 2:  return "Final";
-      case 4:  return "Semifinales";
-      case 8:  return "Cuartos";
-      case 16: return "Octavos";
-      case 32: return "Dieciseisavos";
-      default: return `Ronda (${size})`;
-    }
-  };
-
-  /** Construye cuadro de eliminación directa con byes si no es potencia de 2 */
-  const buildCuadroEliminacion = (participantes) => {
-    const total = participantes.length;
-    const size = nextPow2(total);
-    const arr = participantes.slice();
-    while (arr.length < size) arr.push(null); // byes
-
-    const rnd1 = [];
-    for (let i = 0; i < arr.length; i += 2) {
-      rnd1.push({
-        id: `R1_${i/2}_${Date.now()}`,
-        a: arr[i],
-        b: arr[i+1],
-        estado: "pendiente",
-        ganador: null,
-        resultado: null
-      });
-    }
-
-    const rondas = [ { nombre: nombreRonda(size), partidos: rnd1 } ];
-    let partidosPrev = rnd1.length;
-    let etapa = 2;
-    while (partidosPrev > 1) {
-      const partidos = Array.from({ length: Math.ceil(partidosPrev / 2) }, (_, i) => ({
-        id: `R${etapa}_${i}_${Date.now()}`, a: null, b: null, estado: "pendiente", ganador: null, resultado: null
-      }));
-      rondas.push({ nombre: nombreRonda(partidosPrev * 2), partidos });
-      partidosPrev = partidos.length;
-      etapa++;
-    }
-    return { rondas };
-  };
-
-  // --- Helpers para Top-K → seeds → cuadro (serpentina) ---
-  const computeTopKPorGrupo = (grupos, k) => {
-    const perGroup = {};
-    grupos.forEach(g => {
-      const tabla = standingsByGroup?.[g.id];
-      if (tabla && tabla.length) {
-        perGroup[g.id] = tabla.slice(0, k).map((s, i) => ({
-          // s.id puede ser jugador o pareja:
-          alumnoId: currentTeams.some(t => t.id === s.id) ? undefined : s.id,
-          teamId:   currentTeams.some(t => t.id === s.id) ? s.id : undefined,
-          label:    fullEntryLabel(s.id),
-          from: g.id,
-          pos: i + 1
-        }));
-      } else {
-        perGroup[g.id] = Array.from({ length: k }, (_, i) => ({
-          placeholder: `${i + 1}${g.id}`,
-          label: `${i + 1}° ${g.nombre}`,
-          from: g.id,
-          pos: i + 1
-        }));
-      }
-    });
-    return perGroup;
-  };
-
-  const createSeedsSerpentine = (grupos, perGroup, k) => {
-    const orderIds = [...grupos]
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .map(g => g.id);
-
-    const seeds = [];
-    for (let pos = 1; pos <= k; pos++) {
-      const ids = (pos % 2 === 1) ? orderIds : [...orderIds].reverse();
-      ids.forEach(gid => {
-        const q = perGroup[gid]?.[pos - 1];
-        if (q) seeds.push(q);
-      });
-    }
-    seeds.forEach((q, i) => (q.seed = i + 1));
-    return seeds;
-  };
-
-  const buildBracketFromSeeds = (seeds) => {
-    const total = seeds.length;
-    const size = nextPow2(total);
-    const getP = (seedNum) => (seedNum <= total ? seeds[seedNum - 1] : null);
-
-    const rnd1 = [];
-    for (let i = 1; i <= size / 2; i++) {
-      rnd1.push({
-        id: `R1_${i - 1}_${Date.now()}`,
-        a: getP(i),
-        b: getP(size + 1 - i),
-        estado: "pendiente",
-        ganador: null,
-        resultado: null,
-        seeds: [i, size + 1 - i]
-      });
-    }
-
-    const rondas = [{ nombre: nombreRonda(size), partidos: rnd1 }];
-    let prevCount = rnd1.length, etapa = 2;
-    while (prevCount > 1) {
-      const partidos = Array.from({ length: Math.ceil(prevCount / 2) }, (_, i) => ({
-        id: `R${etapa}_${i}_${Date.now()}`, a: null, b: null, estado: "pendiente", ganador: null, resultado: null
-      }));
-      rondas.push({ nombre: nombreRonda(prevCount * 2), partidos });
-      prevCount = partidos.length; etapa++;
-    }
-    return { rondas, size };
-  };
-
-  // ====== Standings (grupos) ======
-  const parseResultado = (p) => {
-    const res = p?.resultado || null;
-    if (!res) return { finished: false };
-
-    if (res.empate) {
-      const gamesL = (res.sets || []).reduce((acc, s)=> {
-        const [l,v] = Array.isArray(s) ? [s[0], s[1]] : [s?.l, s?.v];
-        return acc + (Number(l)||0);
-      }, 0);
-      const gamesV = (res.sets || []).reduce((acc, s)=> {
-        const [l,v] = Array.isArray(s) ? [s[0], s[1]] : [s?.l, s?.v];
-        return acc + (Number(v)||0);
-      }, 0);
-      return { finished: true, draw: true, SetsL: 0, SetsV: 0, gamesL, gamesV };
-    }
-
-    let SetsL = 0, SetsV = 0, gamesL = 0, gamesV = 0;
-    if (Array.isArray(res.sets)) {
-      res.sets.forEach((s) => {
-        const [l,v] = Array.isArray(s) ? [s[0], s[1]] : [s?.l, s?.v];
-        const L = Number(l)||0, V = Number(v)||0;
-        gamesL += L; gamesV += V;
-        if (L > V) SetsL++; else if (V > L) SetsV++;
-      });
-    }
-
-    if (res.ganadorId) {
-      return { finished: true, ganadorId: res.ganadorId, SetsL, SetsV, gamesL, gamesV };
-    }
-    return { finished: false };
-  };
-
-  const standingsByGroup = React.useMemo(() => {
-    if (!torneoSel?.grupos || !torneoSel?.partidosGrupos) return null;
-
-    const map = new Map();
-    torneoSel.grupos.forEach(g => {
-      const ids = g.alumnoIds || g.entryIds || [];
-      const stats = new Map();
-      ids.forEach(id => {
-        stats.set(id, {
-          id,
-          PJ: 0, PG: 0, PE: 0, PP: 0, Pts: 0,
-          SetsF: 0, SetsC: 0, SD: 0,
-          GamesF: 0, GamesC: 0, GD: 0
-        });
-      });
-      map.set(g.id, stats);
-    });
-
-    (torneoSel.partidosGrupos || []).forEach(p => {
-      const gid = p.groupId;
-      if (!gid || !map.has(gid)) return;
-      const stats = map.get(gid);
-      const L = stats.get(p.localId);
-      const V = stats.get(p.visitaId);
-      if (!L || !V) return;
-
-      const pr = parseResultado(p);
-      if (!pr.finished) return;
-
-      L.PJ++; V.PJ++;
-
-      if (pr.draw) {
-        L.PE++; V.PE++;
-        L.Pts += Number(puntosCfg.draw) || 0;
-        V.Pts += Number(puntosCfg.draw) || 0;
-      } else if (pr.ganadorId === p.localId) {
-        L.PG++; V.PP++;
-        L.Pts += Number(puntosCfg.win) || 0;
-        V.Pts += Number(puntosCfg.loss) || 0;
-      } else if (pr.ganadorId === p.visitaId) {
-        V.PG++; L.PP++;
-        V.Pts += Number(puntosCfg.win) || 0;
-        L.Pts += Number(puntosCfg.loss) || 0;
-      }
-
-      if (typeof pr.SetsL === "number") {
-        L.SetsF += pr.SetsL || 0;
-        L.SetsC += pr.SetsV || 0;
-        V.SetsF += pr.SetsV || 0;
-        V.SetsC += pr.SetsL || 0;
-      }
-      if (typeof pr.gamesL === "number") {
-        L.GamesF += pr.gamesL || 0;
-        L.GamesC += pr.gamesV || 0;
-        V.GamesF += pr.gamesV || 0;
-        V.GamesC += pr.gamesL || 0;
-      }
-    });
-
-    const out = {};
-    torneoSel.grupos.forEach(g => {
-      const arr = Array.from(map.get(g.id).values()).map(s => ({
-        ...s,
-        SD: (s.SetsF - s.SetsC),
-        GD: (s.GamesF - s.GamesC)
-      }));
-      arr.sort((a, b) => {
-        if (b.Pts !== a.Pts) return b.Pts - a.Pts;
-        if (b.SD !== a.SD)   return b.SD - a.SD;
-        if (b.GD !== a.GD)   return b.GD - a.GD;
-        return fullEntryLabel(a.id).localeCompare(fullEntryLabel(b.id), "es", { sensitivity: "base" });
-      });
-      out[g.id] = arr;
-    });
-    return out;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [torneoSel?.grupos, torneoSel?.partidosGrupos, puntosCfg.win, puntosCfg.draw, puntosCfg.loss, fullNameOfId, currentTeams]);
-
-  const hayResultados = React.useMemo(() => {
-    if (!standingsByGroup) return false;
-    return Object.values(standingsByGroup).some(arr => arr.some(s => s.PJ > 0));
-  }, [standingsByGroup]);
-
-  // ====== Participantes ======
-  const addParticipante = (alumnoId) => {
-    if (!alumnoId) return;
-    setParticipantes(prev => prev.includes(alumnoId) ? prev : [...prev, alumnoId]);
-  };
-  const removeParticipante = (alumnoId) => {
-    setParticipantes(prev => prev.filter(id => id !== alumnoId));
-    // si está en alguna pareja del torneo seleccionado, la quitamos
-    if (torneoSel) {
-      setTorneos(prev => prev.map(t => {
-        if (t.id !== torneoSel.id) return t;
-        const filteredTeams = (t.teams || []).filter(tt => !(tt.members || []).includes(alumnoId));
-        return { ...t, teams: filteredTeams, updatedAt: Date.now() };
-      }));
-    }
-  };
-
-  // ====== Helpers de resultado rápido (grupos) ======
-  const setGanadorPartido = (partidoId, ganadorId) => {
-    if (!torneoSel) return;
-    setTorneos(prev => prev.map(t => {
-      if (t.id !== torneoSel.id) return t;
-      const partidos = (t.partidosGrupos || []).map(p =>
-        p.id === partidoId ? { ...p, estado: "finalizado", resultado: { ganadorId, sets: [] } } : p
-      );
-      return { ...t, partidosGrupos: partidos, updatedAt: Date.now() };
-    }));
-  };
-
-  // ====== MODAL resultado con sets (GRUPOS) ======
-  const [resModalOpen, setResModalOpen] = React.useState(false);
-  const [editMatch, setEditMatch] = React.useState(null);
-  const [editSets, setEditSets] = React.useState([[6,4]]); // [[l,v], ...]
-
-  const openResultadoModal = (p) => {
-    const sets = Array.isArray(p?.resultado?.sets) && p.resultado.sets.length
-      ? p.resultado.sets.map(s => Array.isArray(s) ? [Number(s[0])||0, Number(s[1])||0] : [Number(s?.l)||0, Number(s?.v)||0])
-      : [[6,4]];
-    setEditMatch(p);
-    setEditSets(sets);
-    setResModalOpen(true);
-  };
-
-  const closeResultadoModal = () => {
-    setResModalOpen(false);
-    setEditMatch(null);
-  };
-
-  const setSetValue = (idx, side, val) => {
-    const num = Number(val);
-    setEditSets(prev => prev.map((s,i) => i===idx ? (side==="L" ? [num, s[1]] : [s[0], num]) : s));
-  };
-  const addSetRow = () => setEditSets(prev => [...prev, [0,0]]);
-  const removeSetRow = (idx) => setEditSets(prev => prev.filter((_,i)=>i!==idx));
-
-  const computeWinnerFromSets = (setsArr) => {
-    let SL = 0, SV = 0;
-    setsArr.forEach(([l,v]) => { if (Number(l)>Number(v)) SL++; else if (Number(v)>Number(l)) SV++; });
-    if (SL > SV) return "local";
-    if (SV > SL) return "visita";
-    return null;
-  };
-
-  const saveResultadoModal = () => {
-    if (!torneoSel || !editMatch) return;
-
-    const cleanSets = editSets
-      .map(([l,v]) => [Number(l)||0, Number(v)||0])
-      .filter(([l,v]) => l>0 || v>0);
-
-    const who = computeWinnerFromSets(cleanSets);
-    if (!who) {
-      alert("Los sets están empatados. Agregá un set decisivo (ej: TB10 como 10–7).");
-      return;
-    }
-    const ganadorId = (who === "local") ? editMatch.localId : editMatch.visitaId;
-
-    setTorneos(prev => prev.map(t => {
-      if (t.id !== torneoSel.id) return t;
-      const partidos = (t.partidosGrupos || []).map(p =>
-        p.id === editMatch.id ? ({
-          ...p,
-          estado: "finalizado",
-          resultado: { ganadorId, sets: cleanSets }
-        }) : p
-      );
-      return { ...t, partidosGrupos: partidos, updatedAt: Date.now() };
-    }));
-
-    closeResultadoModal();
-  };
-
-  const clearResultadoPartido = (p) => {
-    if (!torneoSel) return;
-    setTorneos(prev => prev.map(t => {
-      if (t.id !== torneoSel.id) return t;
-      const partidos = (t.partidosGrupos || []).map(x =>
-        x.id === p.id ? { ...x, estado: "pendiente", resultado: null } : x
-      );
-      return { ...t, partidosGrupos: partidos, updatedAt: Date.now() };
-    }));
-  };
-
-  // ====== Acciones ======
-
-  // 1) Generar fixture (grupos)
-  const generarFixtureGrupos = () => {
-    if (!torneoSel) return;
-    if (!Array.isArray(participantes) || participantes.length < 2) {
-      alert("Necesitás al menos 2 participantes para generar el fixture.");
-      return;
-    }
-
-    const modalidad = (reglas?.grupos?.modalidad || "singles");
-    let entryIds = [];
-
-    if (modalidad === "dobles") {
-      const teams = currentTeams;
-      if (!teams.length) {
-        alert("Modalidad DOBLES: definí parejas en la sección 'Parejas (dobles)' antes de generar.");
-        return;
-      }
-      if (teams.length < 2) {
-        alert("Necesitás al menos 2 parejas para generar el fixture.");
-        return;
-      }
-      entryIds = [...teams].sort((a,b) => (a.label||"").localeCompare(b.label||"", "es", {sensitivity:"base"})).map(t => t.id);
+  const labelEntradaCard = (e, t) => {
+    if (t.modalidad !== 'dobles') {
+      const id = typeof e === 'string' ? e : e?.id;
+      const a = alumnoByIdCard(id);
+      const ap = a.apellido || "";
+      const no = a.nombre || a.name || "";
+      return `${ap ? ap + ", " : ""}${no || a.id}`.trim();
     } else {
-      entryIds = [...participantes].sort((a, b) =>
-        fullNameOfId(a).localeCompare(fullNameOfId(b), "es", { sensitivity: "base" })
-      );
+      let team = e && e.members ? e : (t.teams || []).find(tt => tt.id === (typeof e === 'string' ? e : e?.id));
+      if (!team) return "—";
+      const [id1, id2] = team.members || [];
+      const A = alumnoByIdCard(id1), B = alumnoByIdCard(id2);
+      const l = (x)=>`${x.apellido ? x.apellido + ", " : ""}${x.nombre || x.name || x.id}`.trim();
+      return `${l(A)} / ${l(B)}`;
     }
-
-    // Evitar más grupos que entradas
-    const gCount = Math.max(1, Math.min(Number(gruposCount) || 1, entryIds.length));
-    const gruposIds = repartirEnGrupos(entryIds, gCount);
-
-    const grupos = gruposIds.map((arr, i) => ({
-      id: letraGrupo(i),
-      nombre: `Grupo ${letraGrupo(i)}`,
-      alumnoIds: arr,
-      entryIds: arr
-    }));
-
-    const idaVuelta = !!(reglas?.grupos?.idaVuelta);
-    const partidosGrupos = [];
-
-    grupos.forEach((g) => {
-      const matches = generarPartidosGrupo(g.alumnoIds, idaVuelta, g.id); // prefijo por grupo
-      matches.forEach(m => partidosGrupos.push({ ...m, groupId: g.id, groupName: g.nombre }));
-    });
-
-    setTorneos(prev => prev.map(t => (
-      t.id === torneoSel.id
-        ? { ...t, grupos, partidosGrupos, updatedAt: Date.now() }
-        : t
-    )));
-
-    alert(`Fixture generado: ${grupos.length} grupo(s), ${partidosGrupos.length} partido(s).`);
   };
 
-  // 2) Crear fase final (top-K) — serpentina + seeding + reglas elim
-  const crearFaseFinal = () => {
-    if (!torneoSel) return;
-
-    let grupos = torneoSel.grupos;
-    if (!Array.isArray(grupos) || grupos.length === 0) {
-      if (!Array.isArray(participantes) || participantes.length < 2) {
-        alert("Necesitás al menos 2 participantes para crear la fase final.");
-        return;
-      }
-      const modalidad = (reglas?.grupos?.modalidad || "singles");
-
-      let entryIds = [];
-      if (modalidad === "dobles") {
-        const teams = currentTeams;
-        if (!teams.length) { alert("DOBLES: definí parejas antes de crear la fase final."); return; }
-        entryIds = teams.map(t => t.id);
-      } else {
-        entryIds = [...participantes].sort((a, b) =>
-          fullNameOfId(a).localeCompare(fullNameOfId(b), "es", { sensitivity: "base" })
-        );
-      }
-
-      const gCount = Math.max(1, Math.min(Number(gruposCount) || 1, entryIds.length));
-      const gruposIds = repartirEnGrupos(entryIds, gCount);
-      grupos = gruposIds.map((arr, i) => ({
-        id: letraGrupo(i),
-        nombre: `Grupo ${letraGrupo(i)}`,
-        alumnoIds: arr,
-        entryIds: arr
-      }));
-    }
-
-    const k = Math.max(1, Number(topK) || 1);
-
-    const perGroup = computeTopKPorGrupo(grupos, k);
-    const seeds = createSeedsSerpentine(grupos, perGroup, k);
-    const cuadro0 = buildBracketFromSeeds(seeds);
-    const rondas = (function propagateByes(r) {
-      // Propagar BYEs hacia adelante
-      const copy = r.map(x => ({ ...x, partidos: x.partidos.map(p => ({ ...p })) }));
-      for (let ri = 0; ri < copy.length - 1; ri++) {
-        const curr = copy[ri].partidos, next = copy[ri+1].partidos;
-        next.forEach(nm => { nm.a = nm.a || null; nm.b = nm.b || null; });
-        curr.forEach((m, i) => {
-          if (!m.a || !m.b) {
-            const winner = m.a || m.b || null;
-            if (winner) { m.estado = "finalizado"; m.ganador = m.a ? "a" : "b"; }
-            const target = next[Math.floor(i / 2)];
-            if (target) { if (i % 2 === 0) target.a = winner; else target.b = winner; }
-          }
-        });
-      }
-      return copy;
-    })(cuadro0.rondas);
-
-    setTorneos(prev => prev.map(t =>
-      t.id === torneoSel.id
-        ? {
-            ...t,
-            faseFinal: {
-              participantes: seeds,
-              cuadro: { ...cuadro0, rondas },
-              origen: "grupos",
-              reglas: snapshotReglas("elim")
-            },
-            updatedAt: Date.now()
-          }
-        : t
-    ));
-
-    alert(`Fase final creada: ${seeds.length} clasificado(s), cuadro de ${nextPow2(seeds.length)}.`);
-  };
-
-  // 3) Generar cuadro directo (sin grupos)
-  const generarCuadro = () => {
-    if (!torneoSel) return;
-    if (!Array.isArray(participantes) || participantes.length < 2) {
-      alert("Necesitás al menos 2 participantes para el cuadro.");
-      return;
-    }
-
-    const modalidad = (reglas?.elim?.modalidad || "singles");
-    let seeds;
-
-    if (modalidad === "dobles") {
-      const teams = currentTeams;
-      if (!teams.length) { alert("DOBLES: definí parejas antes de generar el cuadro."); return; }
-      seeds = teams
-        .slice()
-        .sort((a,b)=> (a.label||"").localeCompare(b.label||"", "es", {sensitivity:"base"}))
-        .map(t => ({ teamId: t.id, label: t.label }));
-    } else {
-      const idsOrdenados = [...participantes].sort((a, b) =>
-        fullNameOfId(a).localeCompare(fullNameOfId(b), "es", { sensitivity: "base" })
-      );
-      seeds = idsOrdenados.map(id => ({ alumnoId: id, label: fullNameOfId(id) }));
-    }
-
-    const cuadro0 = buildCuadroEliminacion(seeds);
-    const rondas = (function propagateByes(r) {
-      const copy = r.map(x => ({ ...x, partidos: x.partidos.map(p => ({ ...p })) }));
-      for (let ri = 0; ri < copy.length - 1; ri++) {
-        const curr = copy[ri].partidos, next = copy[ri+1].partidos;
-        next.forEach(nm => { nm.a = nm.a || null; nm.b = nm.b || null; });
-        curr.forEach((m, i) => {
-          if (!m.a || !m.b) {
-            const winner = m.a || m.b || null;
-            if (winner) { m.estado = "finalizado"; m.ganador = m.a ? "a" : "b"; }
-            const target = next[Math.floor(i / 2)];
-            if (target) { if (i % 2 === 0) target.a = winner; else target.b = winner; }
-          }
-        });
-      }
-      return copy;
-    })(cuadro0.rondas);
-
-    setTorneos(prev => prev.map(t => (
-      t.id === torneoSel.id
-        ? {
-            ...t,
-            cuadroDirecto: {
-              participantes: seeds,
-              cuadro: { ...cuadro0, rondas },
-              origen: "directo",
-              reglas: snapshotReglas("elim")
-            },
-            updatedAt: Date.now()
-          }
-        : t
-    )));
-
-    alert(`Cuadro generado con ${seeds.length} participante(s).`);
-  };
-
-  // ====== UI ======
+  // ================== UI ==================
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6">
-      {/* === SECCIÓN 1: LISTA / CREAR (ARRIBA) === */}
-      <section className="bg-white border rounded-2xl p-4 space-y-4">
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-          <div className="flex-1">
-            <label className="text-xs text-slate-600 block mb-1">Nombre del torneo</label>
-            <input
-              className="w-full border rounded-lg px-3 py-2"
-              placeholder="Ej. Torneo Octubre"
-              value={newNombre}
-              onChange={e => setNewNombre(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-slate-600 block mb-1">Tipo</label>
-            <select
-              className="border rounded-lg px-3 py-2"
-              value={newModalidad}
-              onChange={e => setNewModalidad(e.target.value)}
-            >
-              <option value="grupos">Grupos</option>
-              <option value="grupos+elim">Grupos + Eliminación</option>
-              <option value="cuadros">Eliminación directa</option>
-            </select>
-          </div>
-          <button onClick={handleCrear} className="px-4 py-2 rounded-lg bg-emerald-600 text-white">
-            Crear
+    <div className="grid gap-4">
+      {/* Header */}
+      <header className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-bold text-[#34745B]">Torneos</h2>
+        <div className="flex gap-2">
+          <button className="px-3 py-2 rounded-xl bg-[#34745B] text-white hover:opacity-90" onClick={handleCreate}>
+            + Nuevo torneo
           </button>
         </div>
+      </header>
 
-        {torneos.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {torneos.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setSelectedId(t.id)}
-                className={[
-                  "px-3 py-2 rounded-lg border",
-                  selectedId === t.id ? "bg-emerald-50 border-emerald-300" : "bg-white"
-                ].join(" ")}
-                title={[
-                  `Reglas grupos: ${resumenReglas((t.reglas||{}).grupos || defaultReglas.grupos)}`,
-                  `Reglas final: ${resumenReglas((t.reglas||{}).elim   || defaultReglas.elim)}`
-                ].join(" | ")}
-              >
-                <div className="text-sm font-semibold text-slate-800">{t.nombre}</div>
-                <div className="text-xs text-slate-500">
-                  {t.modalidad} · {t.participantes?.length || 0} participantes
+      {/* Lista VERTICAL de torneos */}
+      <section className="border rounded-2xl p-3">
+        {torneos.length === 0 ? (
+          <div className="text-slate-500 text-sm">
+            Aún no hay torneos. Creá uno con “+ Nuevo torneo”.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {torneos.map(t => {
+              // Campeón/Sub de KO o de Liga (para mostrar en la tarjeta)
+              const fin  = bracketFinalInfo(t.cuadro);
+              const liga = leagueWinnersInfo(t);
+
+              const champLabel = fin?.done
+                ? labelEntradaCard(findEntry(fin.champion, t), t)
+                : (liga?.done && liga.type === 'single'
+                    ? labelEntradaCard(findEntry(liga.champion, t), t)
+                    : null);
+
+              const runnerLabel = fin?.done
+                ? labelEntradaCard(findEntry(fin.runnerUp, t), t)
+                : (liga?.done && liga.type === 'single' && liga.runnerUp
+                    ? labelEntradaCard(findEntry(liga.runnerUp, t), t)
+                    : null);
+
+              return (
+                <div
+                  key={t.id}
+                  className={cx(
+                    "w-full border rounded-2xl p-3 transition cursor-pointer",
+                    selectedId === t.id ? "border-[#34745B] bg-[#34745B]/5" : "border-slate-200 hover:bg-slate-50"
+                  )}
+                  onClick={() => { setSelectedId(t.id); setCreating(false); }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-800 truncate">{t.nombre || "(Sin nombre)"}</div>
+                      <div className="text-xs text-slate-500">
+                        {formatLabel(t.formato)} · {t.modalidad === 'dobles' ? 'Dobles' : 'Singles'} · {prettyEstado(t.estado)}
+                      </div>
+                      {(champLabel || runnerLabel) && (
+                        <div className="text-xs text-emerald-700 mt-1">
+                          {champLabel && <>🏆 {champLabel}</>}
+                          {runnerLabel && <> · 🥈 {runnerLabel}</>}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <IconButton title="Duplicar" onClick={(e)=>{e.stopPropagation(); handleClone(t.id);}} icon={IconCopy} />
+                      <IconButton title="Eliminar" onClick={(e)=>{e.stopPropagation(); handleDelete(t.id);}} icon={IconTrash} />
+                    </div>
+                  </div>
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
 
-      {/* === SECCIÓN 2: DETALLE (ABAJO) === */}
-      {torneoSel && (
-        <section className="bg-white border rounded-2xl p-4 space-y-4">
-          {/* Header */}
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-bold text-slate-800">{torneoSel.nombre}</h2>
-            <button
-              onClick={handleGuardar}
-              className="px-4 py-2 rounded-lg bg-emerald-600 text-white"
-            >
-              Guardar
-            </button>
+      {/* Editor a ancho completo (una sola columna) */}
+      <section>
+        {!selected ? (
+          <div className="border border-slate-200 rounded-2xl p-8 text-center text-slate-500">
+            Seleccioná un torneo de la lista o creá uno nuevo para continuar.
+          </div>
+        ) : (
+          <TorneoEditorPro
+            key={selected.id}
+            torneo={selected}
+            onChange={upsert}
+            alumnos={alumnos}
+            perfil={perfil}
+            clubActivoId={clubActivoId}
+          />
+        )}
+      </section>
+    </div>
+  );
+}
+
+
+// ================== Editor PRO por pestañas ==================
+function TorneoEditorPro({ torneo, onChange, alumnos, perfil, clubActivoId }) {
+  const [tab, setTab] = React.useState(() => inferStartTab(torneo));
+
+   // NUEVO: detectar si es “Solo grupos / Liga”
+  const isLiga = isLeagueMode(torneo);
+  React.useEffect(() => {
+  if (isLiga && tab === "fase") setTab("partidos");
+}, [isLiga, tab]);
+
+  // === Lock de fase de grupos (PIN desde PERFIL)
+  const locked = !!torneo.lockedGrupos;
+  const gotoTab = (k) => setTab(k);
+  const tryUnlock = () => {
+    const perfilPIN = getPerfilPIN(perfil, clubActivoId);
+    if (!perfilPIN) { alert("No hay PIN configurado en PERFIL."); return; }
+    const pin = prompt("Ingresá el PIN de PERFIL (3 dígitos):");
+    if (pin != null && String(pin).trim() === perfilPIN) {
+      onChange({ ...torneo, lockedGrupos: false });
+      alert("Fase de grupos desbloqueada.");
+    } else {
+      alert("PIN incorrecto.");
+    }
+  };
+
+  const generarCuadroEliminacion = () => {
+  if (torneo.formato !== "eliminacion") {
+    alert("Este torneo no es de eliminación directa.");
+    return;
+  }
+
+  // Entradas según modalidad
+  const ids = (torneo.modalidad === "dobles"
+      ? (torneo.teams || []).map(t => t.id)        // parejas -> ids de teams
+      : (torneo.participantes || []).slice()       // singles -> ids de jugadores
+    ).filter(Boolean);
+
+  const clean = Array.from(new Set(ids));
+  if (clean.length < 2) {
+    alert("Necesitás al menos 2 participantes/parejas para generar el cuadro.");
+    return;
+  }
+
+  // Construir cuadro (siembra serpentina + BYEs la maneja buildBracket)
+  const cuadro = buildBracket(clean);
+
+  // Guardar y llevar a Fase final
+  onChange({ ...torneo, cuadro, lockedGrupos: true }); // bloquea edición al generar
+  gotoTab("fase");
+};
+  const handleSiguientePaso = () => {
+  // 1) Debe ser un torneo con KO
+  if (torneo.formato !== "grupos_y_eliminacion") {
+    alert("Este torneo no usa fase final.");
+    return;
+  }
+
+  // 2) Exigir que TODOS los partidos de grupos estén cargados
+  if (!groupsAllMatchesDone(torneo)) {
+    const faltan = countPendingGroupMatches(torneo);
+    alert(`Faltan ${faltan} partido(s) de grupos por cargar. Completalos antes de pasar a Fase final.`);
+    return;
+  }
+
+  // 3) PIN de PERFIL (3 dígitos)
+  const perfilPIN = getPerfilPIN(perfil, clubActivoId);
+  if (!perfilPIN) {
+    alert("Configurá primero un PIN en PERFIL.");
+    return;
+  }
+  const pin = prompt("Confirmá el PIN de PERFIL (3 dígitos) para cerrar grupos:");
+  if (pin == null || String(pin).trim() !== perfilPIN) {
+    alert("PIN incorrecto.");
+    return;
+  }
+
+  // 4) Clasificados reales desde la tabla (Top-K por grupo)
+  const K = Math.max(1, parseInt(torneo.topK || 2, 10));
+  const ids = computeQualifiers(torneo, K);
+  const clean = Array.from(new Set((ids || []).filter(Boolean)));
+  if (clean.length < 2) {
+    alert(`Se necesitan al menos 2 clasificados para el cuadro. Recibidos: ${clean.length}.`);
+    return;
+  }
+
+  // 5) Si ya hay cuadro con resultados KO, pedir confirmación para reemplazar
+  if (torneo.cuadro && hasKOResults(torneo.cuadro)) {
+    const ok = confirm("Ya hay resultados cargados en Fase final. Regenerar el cuadro los borrará. ¿Continuar?");
+    if (!ok) return;
+  }
+
+  // 6) Construir cuadro y bloquear fase de grupos
+  const cuadro = buildBracket(clean);
+  onChange({ ...torneo, cuadro, lockedGrupos: true });
+  gotoTab("fase");
+};
+
+
+  // Accesos rápidos
+  const patch = (p) => onChange({ ...torneo, ...p });
+  const patchReglas = (r) => patch({ reglas: { ...torneo.reglas, ...r } });
+
+  // Guardas automáticas simples: nombre/formato/modalidad
+  const setNombre = (v) => patch({ nombre: v });
+  const setFormato = (v) => patch({ formato: v, estado: "config" });
+  const setModalidad = (v) => patch({ modalidad: v, estado: "config" });
+
+  // Grupos / KO config
+  const setGruposCount = (n) => patch({ gruposCount: n });
+  const setIdaVuelta = (b) => patch({ idaVuelta: b });
+  const setTopK = (n) => patch({ topK: n });
+
+  // Participantes
+  const entradas = torneo.modalidad === 'dobles' ? (torneo.teams || []) : (torneo.participantes || []);
+
+  // Helper label alumno
+  const alumnoById = React.useCallback((id) => alumnos.find(a => a.id === id) || { id, nombre: id }, [alumnos]);
+  const labelAlumno = (a) => {
+    if (!a) return "";
+    const ap = a.apellido || "";
+    const no = a.nombre || a.name || "";
+    return `${ap ? ap + ", " : ""}${no || a.id}`.trim();
+  };
+  const labelEntrada = (e) => {
+  // Singles: viene id de alumno; Dobles: puede venir id de team o el objeto team
+  if (torneo.modalidad !== 'dobles') {
+    const id = typeof e === 'string' ? e : e?.id;
+    const a = alumnoById(id);
+    return labelAlumno(a);
+  } else {
+    let team = null;
+    if (e && e.members) team = e; // ya es objeto team
+    else if (typeof e === 'string') team = (torneo.teams || []).find(t => t.id === e) || null;
+    if (!team) return '—';
+    const [id1, id2] = team.members || [];
+    return `${labelAlumno(alumnoById(id1))} / ${labelAlumno(alumnoById(id2))}`;
+  }
+};
+
+  // ====== Acciones de estructura ======
+  const canGenGrupos = () => torneo.formato !== 'eliminacion' && (entradas?.length || 0) >= 2 && (torneo.gruposCount || 0) >= 1;
+  const canGenCuadro  = () => (torneo.formato === 'eliminacion' || torneo.formato === 'grupos_y_eliminacion') && (entradas?.length || 0) >= 2;
+
+  const generarGruposYFixture = () => {
+    if (!canGenGrupos()) return;
+    const ids = torneo.modalidad === 'dobles' ? (torneo.teams || []).map(t => t.id) : (torneo.participantes || []);
+    const grupos = buildGroups(ids, torneo.gruposCount || 2);
+    const fixture = {};
+    grupos.forEach((g) => {
+      const rondas = buildRoundRobin(g.entradas, !!torneo.idaVuelta);
+      fixture[g.id] = rondas;
+    });
+    patch({ grupos, fixture, estado: 'en_juego' });
+  };
+
+  const generarCuadro = () => {
+    if (!canGenCuadro()) return;
+    const ids = torneo.formato === 'eliminacion' ?
+      (torneo.modalidad === 'dobles' ? (torneo.teams || []).map(t => t.id) : (torneo.participantes || []))
+      : tomarTopK(torneo, torneo.topK || 2); // desde grupos
+
+    const cuadro = buildBracket(ids);
+    patch({ cuadro, estado: 'en_juego' });
+  };
+
+  // ====== UI Tabs ======
+  const tabs = [
+  { key: 'formato',       label: 'Formato' },
+  { key: 'reglas',        label: 'Reglas' },
+  { key: 'participantes', label: torneo.modalidad === 'dobles' ? 'Participantes · Parejas' : 'Participantes' },
+  { key: 'estructura',    label: 'Grupos / Fixture' },
+  { key: 'partidos',      label: 'Partidos' },
+  ...(isLiga ? [] : [{ key: 'fase', label: 'Fase final' }]), // ← oculta en Liga
+];
+
+  return (
+    <div className="border border-slate-200 rounded-2xl">
+      {/* Tabs header */}
+      <div className="flex flex-wrap gap-2 p-3 border-b bg-slate-50 rounded-t-2xl">
+        {tabs.map(t => (
+          <button key={t.key} onClick={()=>setTab(t.key)}
+            className={cx('px-3 py-1.5 rounded-xl text-sm', tab===t.key ? 'bg-white border border-slate-200 font-semibold' : 'hover:bg-white')}
+          >{t.label}</button>
+        ))}
+      </div>
+
+      {locked && (
+        <div className="mx-3 my-2 p-3 border border-amber-300 bg-amber-50 rounded-xl text-sm flex items-center justify-between">
+          <div><span className="font-semibold">Fase de grupos bloqueada.</span> Para editar reglas, participantes o fixture necesitás el PIN guardado en PERFIL.</div>
+          <button className="px-3 py-1.5 rounded-lg border border-amber-300" onClick={tryUnlock}>Desbloquear</button>
+        </div>
+      )}
+
+      <div className="p-4">
+        {tab === 'formato' && (
+          <FormatoTab
+            nombre={torneo.nombre}
+            setNombre={v => !locked && setNombre(v)}
+            formato={torneo.formato}
+            setFormato={v => !locked && setFormato(v)}
+            modalidad={torneo.modalidad}
+            setModalidad={v => !locked && setModalidad(v)}
+          disabled={locked}
+          />
+        )}
+
+        {tab === 'reglas' && (
+  <>
+    <ReglasTab
+      reglas={torneo.reglas}
+      setReglas={r => !locked && patchReglas(r)}
+      modalidad={torneo.modalidad}
+      disabled={locked}
+    />
+
+    {/* Resumen automático (copiar/guardar) */}
+    <ResumenReglasBox
+      torneo={torneo}
+      disabled={locked}
+      onGuardar={(texto) => !locked && patch({ reglamentoTexto: texto })}
+    />
+  </>
+)}
+
+        {tab === 'participantes' && (
+          <ParticipantesTab
+            modalidad={torneo.modalidad}
+            participantes={torneo.participantes || []}
+            setParticipantes={(arr)=>patch({ participantes: arr })}
+            teams={torneo.teams || []}
+            setTeams={(arr)=>patch({ teams: arr })}
+            alumnos={alumnos}
+            labelAlumno={labelAlumno}
+          disabled={locked}
+          />
+        )}
+
+        {tab === "estructura" && (
+  <EstructuraTab
+  torneo={torneo}
+  setGruposCount={setGruposCount}
+  setIdaVuelta={setIdaVuelta}
+  setTopK={setTopK}
+  onGenerarGrupos={generarGruposYFixture}
+  onGenerarCuadro={torneo.formato === 'eliminacion' ? generarCuadroEliminacion : undefined}
+  labelEntrada={labelEntrada}
+  onSiguientePaso={!isLiga ? handleSiguientePaso : undefined}  // ← clave
+  locked={locked}
+/>
+        )}
+
+        {tab === "partidos" && (
+  <PartidosTab
+    torneo={torneo}
+    onChange={onChange}
+    labelEntrada={labelEntrada}
+    perfil={perfil}              // << NUEVO
+    clubActivoId={clubActivoId}  // << NUEVO
+  />
+)}
+
+
+        {tab === 'fase' && !isLiga && (
+  <FaseFinalTab torneo={torneo} onChange={onChange} labelEntrada={labelEntrada} />
+)}
+      </div>
+    </div>
+  );
+}
+
+// ================== Tabs – Implementación ==================
+function FormatoTab({
+  nombre, setNombre,
+  formato, setFormato,
+  modalidad, setModalidad,
+  fechaInicio, setFechaInicio,
+  fechaFin, setFechaFin,
+  disabled
+}) {
+  // Helpers para compatibilidad con distintos tipos de fecha
+  const toInputDate = (v) => {
+    if (!v) return '';
+    const d = typeof v === 'number' ? new Date(v) : new Date(String(v));
+    if (isNaN(d)) return '';
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+  // Guardamos como timestamp (ms) para máxima compatibilidad con tu código
+  const fromInputDate = (s) => s ? new Date(`${s}T00:00:00`).getTime() : null;
+
+  return (
+    <div className="grid gap-4">
+      {/* Fila: Nombre + Fechas */}
+      <div className="grid gap-3 md:grid-cols-[1fr,180px,180px]">
+        {/* Nombre */}
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Nombre del torneo</label>
+          <input
+            type="text"
+            className="w-full border rounded-xl px-3 py-2"
+            placeholder="Ej: Torneo Apertura"
+            value={nombre || ''}
+            onChange={(e) => !disabled && setNombre(e.target.value)}
+            disabled={disabled}
+          />
+        </div>
+
+        {/* Fecha de inicio */}
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Fecha de inicio</label>
+          <input
+            type="date"
+            className="w-full border rounded-xl px-3 py-2"
+            value={toInputDate(fechaInicio)}
+            onChange={(e) => !disabled && setFechaInicio(fromInputDate(e.target.value))}
+            disabled={disabled}
+          />
+        </div>
+
+        {/* Fecha de finalización */}
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Fecha de finalización</label>
+          <input
+            type="date"
+            className="w-full border rounded-xl px-3 py-2"
+            value={toInputDate(fechaFin)}
+            min={toInputDate(fechaInicio) || undefined}
+            onChange={(e) => !disabled && setFechaFin(fromInputDate(e.target.value))}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+
+      {/* Modalidad / Formato (lo básico para que no pierdas nada) */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Modalidad</label>
+          <div className="flex gap-3">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="modalidad"
+                checked={modalidad !== 'dobles'}
+                onChange={() => !disabled && setModalidad('singles')}
+                disabled={disabled}
+              />
+              Singles
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="modalidad"
+                checked={modalidad === 'dobles'}
+                onChange={() => !disabled && setModalidad('dobles')}
+                disabled={disabled}
+              />
+              Dobles
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Formato</label>
+          <select
+            className="w-full border rounded-xl px-3 py-2"
+            value={formato || 'grupos'}
+            onChange={(e) => !disabled && setFormato(e.target.value)}
+            disabled={disabled}
+          >
+            <option value="grupos">Sólo grupos (Liga)</option>
+            <option value="eliminacion">Eliminación directa</option>
+            <option value="grupos_y_eliminacion">Grupos + Eliminación</option>
+          </select>
+        </div>
+      </div>
+
+      {/* tip */}
+      <div className="text-xs text-slate-500">
+        Las fechas se usarán en el resumen de reglas y en las exportaciones (PNG/PDF).
+      </div>
+    </div>
+  );
+}
+
+
+function ReglasTab({ reglas = {}, setReglas, modalidad }) {
+  const r = normalizeReglas(reglas);
+  const set = (path, value) => setReglas(deepSet(r, path, value));
+
+  return (
+    <div className="grid gap-6">
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="border rounded-xl p-3">
+          <div className="font-semibold text-slate-800 mb-2">Puntuación en grupos</div>
+          <div className="flex items-center gap-3">
+            <NumberField label="Win" value={r.grupos.puntos.win} onChange={v=>set(['grupos','puntos','win'], v)} />
+            <NumberField label="Draw" value={r.grupos.puntos.draw} onChange={v=>set(['grupos','puntos','draw'], v)} />
+            <NumberField label="Loss" value={r.grupos.puntos.loss} onChange={v=>set(['grupos','puntos','loss'], v)} />
+          </div>
+        </div>
+
+        <div className="border rounded-xl p-3">
+          <div className="font-semibold text-slate-800 mb-2">Sets / Tie-break</div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <SelectField label="Formato sets" value={r.sets.formato} onChange={v=>set(['sets','formato'], v)} options={[
+              { value:'bo1', label:'Al mejor de 1 set' },
+              { value:'bo3', label:'Al mejor de 3 sets' },
+              { value:'match_tb10', label:'Match tie-break a 10' },
+            ]} />
+            <SelectField label="Tie-break" value={r.sets.tb} onChange={v=>set(['sets','tb'], v)} options={[
+              { value:'tb7', label:'TB a 7' },
+              { value:'tb10', label:'TB a 10' },
+              { value:'none', label:'Sin TB' },
+            ]} />
+          </div>
+          <div className="text-xs text-slate-500 mt-2">
+            Si elegís “Match tie-break a 10”, el tercer set se define con un TB a 10 (ej: 10-7).
+          </div>
+        </div>
+      </div>
+
+      <div className="border rounded-xl p-3">
+        <div className="font-semibold text-slate-800 mb-2">Reglas de eliminación</div>
+        <div className="grid gap-2 md:grid-cols-3">
+          <SelectField label="Orden de siembra" value={r.ko.seeding} onChange={v=>set(['ko','seeding'], v)} options={[
+            { value:'serpentina', label:'Serpentina' },
+            { value:'aleatorio', label:'Aleatorio' },
+          ]} />
+          <SelectField label="Sets KO" value={r.ko.sets} onChange={v=>set(['ko','sets'], v)} options={[
+            { value:'bo1', label:'Bo1' },
+            { value:'bo3', label:'Bo3' },
+            { value:'match_tb10', label:'Match TB10' },
+          ]} />
+          <SelectField label="TB KO" value={r.ko.tb} onChange={v=>set(['ko','tb'], v)} options={[
+            { value:'tb7', label:'TB7' },
+            { value:'tb10', label:'TB10' },
+            { value:'none', label:'Sin TB' },
+          ]} />
+        </div>
+      </div>
+
+      <InfoTip>
+        La modalidad actual es <b>{modalidad === 'dobles' ? 'Dobles' : 'Singles'}</b>. En Dobles, armá las parejas manualmente en la pestaña Participantes.
+      </InfoTip>
+    </div>
+  );
+}
+
+function ParticipantesTab({ modalidad, participantes, setParticipantes, teams, setTeams, alumnos, labelAlumno }) {
+  const [busca, setBusca] = React.useState('');
+  const pool = React.useMemo(() => alumnos
+    .filter(a => (a.nombre||'').toLowerCase().includes(busca.toLowerCase()) || (a.apellido||'').toLowerCase().includes(busca.toLowerCase()))
+    .sort((a,b)=> (a.apellido||'').localeCompare(b.apellido||'')), [alumnos, busca]);
+
+  // Para dobles: creador de parejas
+  const [sel1, setSel1] = React.useState('');
+  const [sel2, setSel2] = React.useState('');
+
+  const agregarParticipante = (id) => {
+    if (participantes.includes(id)) return;
+    setParticipantes([...participantes, id]);
+  };
+  const quitarParticipante = (id) => setParticipantes(participantes.filter(x => x !== id));
+
+  const agregarPareja = () => {
+    if (!sel1 || !sel2 || sel1 === sel2) return;
+    // evitar repetir jugador ya usado
+    const usados = new Set(teams.flatMap(t => t.members));
+    if (usados.has(sel1) || usados.has(sel2)) { alert('Uno de los jugadores ya está en una pareja.'); return; }
+    const nueva = { id: genId('team_'), members: [sel1, sel2] };
+    setTeams([...(teams||[]), nueva]);
+    setSel1(''); setSel2('');
+  };
+  const quitarPareja = (id) => setTeams((teams||[]).filter(t => t.id !== id));
+
+  return (
+    <div className="grid gap-6">
+      {modalidad === 'singles' && (
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="border rounded-xl p-3">
+            <div className="font-semibold mb-2">Alumnos</div>
+            <input className="w-full border rounded-xl px-3 py-2 mb-2" value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar por nombre o apellido"/>
+            <div className="max-h-64 overflow-auto divide-y">
+              {pool.map(a => (
+                <div key={a.id} className="py-2 flex items-center justify-between">
+                  <div className="text-sm">{labelAlumno(a)}</div>
+                  <button className="text-xs px-2 py-1 rounded-lg bg-slate-800 text-white" onClick={()=>agregarParticipante(a.id)}>Agregar</button>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Participantes */}
-          <div className="border rounded-xl p-3 bg-white">
-            <p className="text-sm font-semibold text-slate-700 mb-2">Participantes</p>
-            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-              <select
-                className="border rounded-lg px-3 py-2 flex-1"
-                onChange={(e) => { addParticipante(e.target.value); e.target.value = ""; }}
-                defaultValue=""
-              >
-                <option value="" disabled>— Seleccionar alumno —</option>
-                {alumnosOrdenados.map(a => (
-                  <option key={a.id} value={a.id}>{nombreCompleto(a)}</option>
-                ))}
-              </select>
-              <div className="text-xs text-slate-500">{participantes.length} seleccionado(s)</div>
+          <div className="border rounded-xl p-3">
+            <div className="font-semibold mb-2">Seleccionados ({participantes.length})</div>
+            {participantes.length === 0 && <div className="text-sm text-slate-500">Aún no hay jugadores.</div>}
+            <div className="flex flex-wrap gap-2">
+              {participantes.map(id => (
+                <span key={id} className="text-xs bg-slate-100 rounded-xl px-2 py-1 flex items-center gap-1">
+                  {labelAlumno(alumnos.find(a=>a.id===id))}
+                  <button className="ml-1" onClick={()=>quitarParticipante(id)} title="Quitar">✕</button>
+                </span>
+              ))}
             </div>
+          </div>
+        </div>
+      )}
 
-            {participantes.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {participantes.map(id => {
-                  const a = alumnoById(id);
-                  return (
-                    <span key={id} className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-sm">
-                      <span>{nombreCompleto(a)}</span>
-                      <button
-                        onClick={() => removeParticipante(id)}
-                        className="text-slate-500 hover:text-slate-700"
-                        title="Quitar"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  );
-                })}
+      {modalidad === 'dobles' && (
+        <div className="grid gap-4">
+          <div className="border rounded-xl p-3">
+            <div className="font-semibold mb-2">Crear parejas</div>
+            <div className="grid md:grid-cols-3 gap-2 items-end">
+              <SelectAlumno value={sel1} onChange={setSel1} alumnos={alumnos} placeholder="Jugador A" />
+              <SelectAlumno value={sel2} onChange={setSel2} alumnos={alumnos} placeholder="Jugador B" />
+              <button className="px-3 py-2 rounded-xl bg-slate-800 text-white" onClick={agregarPareja}>Agregar pareja</button>
+            </div>
+            <div className="text-xs text-slate-500 mt-2">Cada jugador puede pertenecer a una única pareja.</div>
+          </div>
+
+          <div className="border rounded-xl p-3">
+            <div className="font-semibold mb-2">Parejas ({(teams||[]).length})</div>
+            {(teams||[]).length === 0 && <div className="text-sm text-slate-500">Aún no hay parejas.</div>}
+            <div className="space-y-2">
+              {(teams||[]).map(t => (
+                <div key={t.id} className="flex items-center justify-between border rounded-xl px-3 py-2">
+                  <div className="text-sm">{renderTeamLabel(t, alumnos)}</div>
+                  <button className="text-xs px-2 py-1 rounded-lg bg-slate-800 text-white" onClick={()=>quitarPareja(t.id)}>Quitar</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <InfoTip>
+        Recordá: el orden visible se usa como orden de entrada para generar fixture/cuadro. Podés reordenar más adelante si lo necesitás.
+      </InfoTip>
+    </div>
+  );
+}
+
+// === Layout de llaves (SVG + cajas absolutas) ===
+function computeBracketLayout(cuadro, colW = 240, rowGap = 90, boxW = 210, boxH = 54) {
+  // rounds ordenados 1..N
+  const rnums = Object.keys(cuadro || {}).map(n => Number(n)).sort((a,b)=>a-b);
+  const rmap = Object.fromEntries(rnums.map((n, i) => [String(n), i]));
+  const first = (cuadro && cuadro[String(rnums[0])]) || [];
+  const firstLen = first.length || 1;
+
+  // altura total aproximada
+  const totalH = Math.max(1, firstLen) * rowGap;
+
+  const boxes = [];   // {match, roundIdx, x, y, w, h}
+  const centers = {}; // map[match.id] = {x,y}
+
+  rnums.forEach((rnum, rIndex) => {
+    const matches = cuadro[String(rnum)] || [];
+    const ySpacing = rowGap * (2 ** rIndex);
+    matches.forEach((m, j) => {
+      const x = 16 + rIndex * colW;
+      const y = ySpacing * (j + 0.5);
+      boxes.push({ match: m, roundIdx: rIndex, x, y, w: boxW, h: boxH });
+      centers[m.id] = { x: x + boxW, y }; // punto de salida (lado derecho de la caja)
+    });
+  });
+
+  // edges (conectores)
+  const edges = [];
+  rnums.forEach((rnum) => {
+    const matches = cuadro[String(rnum)] || [];
+    matches.forEach((m) => {
+      const n = m?.next;
+      if (!n) return;
+      const from = centers[m.id];
+      const destRoundIdx = rmap[String(n.round)];
+      const dest = (cuadro[String(n.round)] || [])[n.slot];
+      if (!dest) return;
+      const destBox = boxes.find(b => b.match.id === dest.id);
+      if (!destBox) return;
+      const destPoint = { x: destBox.x, y: destBox.y }; // entra por la izquierda
+
+      // Polyline en forma de ├───┐
+      edges.push({
+        d: `M ${from.x} ${from.y} 
+            L ${destPoint.x - 14} ${from.y} 
+            L ${destPoint.x - 14} ${destPoint.y} 
+            L ${destPoint.x} ${destPoint.y}`
+      });
+    });
+  });
+
+  const width = 16 + rnums.length * colW + 16;
+  const height = totalH + 40;
+
+  return { width, height, boxes, edges };
+}
+
+// Render del bracket como SVG (líneas) + cajas absolutas (partidos)
+function BracketViewSVG({ cuadro, labelEntrada, resumenMarcador, onMatchClick, containerId, layout }) {
+  if (!cuadro) return null;
+  const { width, height, boxes, edges } = computeBracketLayout(cuadro);
+
+  const sideLabel = (side) => {
+    // side puede ser id, objeto con id, o BYE
+    if (!side || side?.BYE) return "—";
+    return labelEntrada(side);
+  };
+
+  return (
+    <div id={containerId || undefined} className="relative overflow-auto border rounded-xl" style={{ minHeight: 120 }}>
+      {/* Conectores */}
+      <svg width={width} height={height} style={{ display: 'block' }}>
+        <defs>
+          <marker id="dot" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6">
+            <circle cx="4" cy="4" r="3" />
+          </marker>
+        </defs>
+        {edges.map((e, i) => (
+          <path key={i} d={e.d} fill="none" stroke="#CBD5E1" strokeWidth="2" />
+        ))}
+      </svg>
+
+      {/* Cajas */}
+      <div className="absolute inset-0">
+        {boxes.map(({ match: m, x, y, w, h }) => (
+          <div
+            key={m.id}
+            className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow cursor-pointer"
+            style={{
+              position: 'absolute',
+              left: x,
+              top: y - h/2,
+              width: w,
+              height: h,
+              padding: '8px 10px',
+              boxSizing: 'border-box'
+            }}
+            onClick={() => onMatchClick && onMatchClick(m)}
+            title="Cargar/editar resultado"
+          >
+            <div className="text-xs font-medium truncate">{sideLabel(m.a)} <span className="text-slate-400">vs</span> {sideLabel(m.b)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">
+              {m.done ? (resumenMarcador ? resumenMarcador(m) : "Finalizado") : "Sin resultado"}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TablaGrupo({ torneo, gid, labelEntrada }) {
+  const rows = React.useMemo(() => computeTablaGrupo(torneo, gid), [torneo, gid]);
+
+  if (!rows.length) {
+    return <div className="text-sm text-slate-500">Aún sin posiciones.</div>;
+  }
+
+  const nombreEntrada = (id) => {
+    try {
+      const entry = findEntry(id, torneo);
+      return labelEntrada ? labelEntrada(entry, torneo) : (entry?.label || id);
+    } catch { return String(id); }
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-slate-500">
+            <th className="py-2 pr-3">#</th>
+            <th className="py-2 pr-3">Jugador / Pareja</th>
+            <th className="py-2 pr-3 text-right">PTS</th>
+            <th className="py-2 pr-3 text-right">PJ</th>
+            <th className="py-2 pr-3 text-right">PG</th>
+            <th className="py-2 pr-3 text-right">PE</th>
+            <th className="py-2 pr-3 text-right">PP</th>
+            <th className="py-2 pr-3 text-right">PF</th>
+            <th className="py-2 pr-3 text-right">PC</th>
+            <th className="py-2 pr-3 text-right">DIF</th>
+            <th className="py-2 pr-0 text-right">PF/PJ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.id} className="border-t">
+              <td className="py-2 pr-3 text-slate-500">{i + 1}</td>
+              <td className="py-2 pr-3">{nombreEntrada(r.id)}</td>
+              <td className="py-2 pr-3 text-right font-semibold">{r.pts}</td>
+              <td className="py-2 pr-3 text-right">{r.pj}</td>
+              <td className="py-2 pr-3 text-right">{r.pg}</td>
+              <td className="py-2 pr-3 text-right">{r.pe}</td>
+              <td className="py-2 pr-3 text-right">{r.pp}</td>
+              <td className="py-2 pr-3 text-right">{r.pf}</td>
+              <td className="py-2 pr-3 text-right">{r.pc}</td>
+              <td className="py-2 pr-3 text-right">{r.dg}</td>
+              <td className="py-2 pr-0 text-right">{r.ppg.toFixed(1)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+
+function EstructuraTab({
+  torneo,
+  setGruposCount,
+  setIdaVuelta,
+  setTopK,
+  onGenerarGrupos,
+  onGenerarCuadro,   // (opcional) generar cuadro directo
+  onSiguientePaso,   // para grupos+KO
+  onIrFaseFinal,     // << NUEVO
+  labelEntrada,
+  locked
+}) {
+
+  const entradasCount =
+    torneo.modalidad === "dobles"
+      ? (torneo.teams || []).length
+      : (torneo.participantes || []).length;
+
+  const tieneGrupos = torneo.formato !== "eliminacion";
+  const tieneKO = torneo.formato !== "grupos";
+
+  const canG =
+    tieneGrupos &&
+    !locked &&
+    entradasCount >= 2 &&
+    (torneo.gruposCount || 0) >= 1;
+
+  // === NUEVO: exigir grupos completos ===
+  const pending = countPendingGroupMatches(torneo);
+  const groupsDone = groupsAllMatchesDone(torneo);
+  const canNext =
+    tieneKO &&
+    torneo.formato === "grupos_y_eliminacion" &&
+    groupsDone;
+
+  return (
+    <div className="grid gap-6">
+      {tieneGrupos && (
+        <div className="border rounded-xl p-3 grid md:grid-cols-3 gap-3 items-end">
+          <NumberField
+            label="# de grupos"
+            value={torneo.gruposCount || 2}
+            onChange={(v) => setGruposCount(v)}
+            min={1}
+          />
+          <ToggleField
+            label="Ida y vuelta"
+            checked={!!torneo.idaVuelta}
+            onChange={setIdaVuelta}
+          />
+          <button
+            className={cx("px-3 py-2 rounded-xl", canButton(canG))}
+            onClick={() => {
+              if (!canG) return;
+              onGenerarGrupos && onGenerarGrupos();
+            }}
+            disabled={!canG}
+            title={locked ? "Bloqueado por PIN" : ""}
+          >
+            Generar grupos y fixture
+          </button>
+          <div className="md:col-span-3 text-xs text-slate-500">
+            Entradas: {entradasCount} {locked && "· (Bloqueado)"}
+          </div>
+        </div>
+      )}
+
+      {tieneKO && torneo.formato === 'grupos_y_eliminacion' && (
+  <div className="border rounded-xl p-3 grid md:grid-cols-3 gap-3 items-end">
+    <NumberField label="Top-K desde grupos" value={torneo.topK || 2} onChange={v=>setTopK(v)} min={1} />
+    <div className="md:col-span-2" />
+    <button
+      className={cx('px-3 py-2 rounded-xl', canButton(canNext))}
+      onClick={() => { if (!canNext) return; onSiguientePaso && onSiguientePaso(); }}
+      disabled={!canNext}
+      title={!canNext ? 'Generá grupos y cargá TODOS los resultados primero' : ''}
+    >
+      Siguiente paso a Fase final (PIN de PERFIL)
+    </button>
+
+    <div className="md:col-span-3 text-xs text-slate-500">
+      {groupsDone ? 'Todos los partidos de grupos están cargados.' : `Faltan ${pending} partido(s) de grupos por cargar.`}
+    </div>
+  </div>
+)}
+
+{torneo.formato === 'eliminacion' && (
+  <div className="border rounded-xl p-3 grid md:grid-cols-3 gap-3 items-end">
+    {!torneo.cuadro ? (
+      <>
+        <div className="md:col-span-2 text-sm text-slate-600">
+          Generá el cuadro de eliminación directa con las parejas/participantes cargados.
+        </div>
+        <button
+          className={cx("px-3 py-2 rounded-xl", canButton(!locked && (torneo.modalidad === 'dobles'
+                     ? (torneo.teams||[]).length >= 2
+                     : (torneo.participantes||[]).length >= 2)))}
+          onClick={() => onGenerarCuadro && onGenerarCuadro()}
+          disabled={locked}
+          title={locked ? "Bloqueado por PIN" : ""}
+        >
+          Generar cuadro de eliminación
+        </button>
+      </>
+    ) : (
+      <>
+        <div className="md:col-span-2 text-sm text-slate-600">
+          Los resultados de eliminación directa se cargan en la pestaña <b>Fase final</b>.
+        </div>
+        <button
+          className="px-3 py-2 rounded-xl border"
+          onClick={() => onIrFaseFinal && onIrFaseFinal()}
+        >
+          Ir a Fase final
+        </button>
+      </>
+    )}
+  </div>
+)}
+
+
+      {!!torneo.grupos?.length && (
+        <div className="border rounded-xl p-3">
+          <div className="font-semibold mb-2">Vista previa de grupos</div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {torneo.grupos.map((g) => (
+              <div key={g.id} className="border rounded-xl p-2">
+                <div className="font-medium">{g.nombre}</div>
+                <ul className="list-disc pl-5 text-sm text-slate-700">
+                  {g.entradas.map((e) => (
+                    <li key={idKey(e)}>
+                      {labelEntrada(findEntry(e, torneo))}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!!torneo.cuadro && (
+  <div className="border rounded-xl p-3">
+    <div className="font-semibold mb-2">Vista previa de cuadro</div>
+    <BracketViewSVG
+      cuadro={torneo.cuadro}
+      labelEntrada={(id) => labelEntrada(findEntry(id, torneo))}
+      resumenMarcador={resumenMarcador}
+      onMatchClick={null}  // solo lectura acá
+    />
+  </div>
+)}
+    </div>
+  );
+}
+
+
+function PartidosTab({ torneo, onChange, labelEntrada, perfil, clubActivoId }) {
+  const partidos = React.useMemo(() => flattenFixture(torneo.fixture || {}), [torneo.fixture]);
+  const [editId, setEditId] = React.useState(null);
+
+  const standings = React.useMemo(() => computeStandings(torneo), [torneo]);
+
+  // Liga
+  const isLiga = isLeagueMode(torneo);
+  const locked = !!torneo.lockedGrupos; // reutilizamos el lock existente
+  const ligaInfo = React.useMemo(() => leagueWinnersInfo(torneo), [torneo]);
+
+  // Cerrar liga (PIN) y Desbloquear
+  const cerrarLiga = () => {
+    if (!isLiga) return;
+    if (!groupsAllMatchesDone(torneo)) {
+      const faltan = countPendingGroupMatches(torneo);
+      alert(`Faltan ${faltan} partido(s) de liga por cargar.`);
+      return;
+    }
+    const perfilPIN = getPerfilPIN(perfil, clubActivoId);
+    if (!perfilPIN) { alert("Configurá primero un PIN en PERFIL."); return; }
+    const pin = prompt("Confirmá el PIN de PERFIL (3 dígitos) para CERRAR la liga:");
+    if (pin == null || String(pin).trim() !== perfilPIN) { alert("PIN incorrecto."); return; }
+    onChange({ ...torneo, lockedGrupos: true });
+    alert("Liga cerrada.");
+  };
+
+  const desbloquearLiga = () => {
+    const perfilPIN = getPerfilPIN(perfil, clubActivoId);
+    if (!perfilPIN) { alert("No hay PIN configurado en PERFIL."); return; }
+    const pin = prompt("Ingresá el PIN de PERFIL (3 dígitos) para DESBLOQUEAR la liga:");
+    if (pin != null && String(pin).trim() === perfilPIN) {
+      onChange({ ...torneo, lockedGrupos: false });
+      alert("Liga desbloqueada.");
+    } else {
+      alert("PIN incorrecto.");
+    }
+  };
+
+  const guardarResultado = (matchId, result) => {
+    const nuevo = applyResultToFixture(deepClone(torneo), matchId, result);
+    onChange(nuevo);
+    setEditId(null);
+  };
+
+  return (
+    <div className="grid gap-4">
+      {/* Banner de estado para LIGA */}
+      {isLiga && (
+        <div className={`p-3 rounded-xl border ${locked ? "bg-amber-50 border-amber-300" : "bg-sky-50 border-sky-300"}`}>
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              <b>{locked ? "Liga cerrada." : "Liga en juego."}</b>{" "}
+              {locked
+                ? "Para editar resultados necesitás el PIN guardado en PERFIL."
+                : groupsAllMatchesDone(torneo)
+                  ? "Todos los partidos están cargados. Podés cerrar la liga."
+                  : `Faltan ${countPendingGroupMatches(torneo)} partido(s) por cargar.`}
+            </div>
+            <div className="flex gap-2">
+              {locked ? (
+                <button className="px-3 py-1.5 rounded-lg border" onClick={desbloquearLiga}>Desbloquear</button>
+              ) : (
+                <button
+                  className="px-3 py-1.5 rounded-lg border"
+                  onClick={cerrarLiga}
+                  disabled={!groupsAllMatchesDone(torneo)}
+                  title={!groupsAllMatchesDone(torneo) ? "Completá todos los partidos" : ""}
+                >
+                  Cerrar liga (PIN)
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Campeón / Subcampeón (Liga) */}
+      {isLiga && ligaInfo?.done && (
+        ligaInfo.type === 'single' ? (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300">
+            <div className="font-semibold">
+              🏆 Campeón: {labelEntrada(findEntry(ligaInfo.champion, torneo))}
+            </div>
+            {ligaInfo.runnerUp && (
+              <div className="text-sm">
+                🥈 Subcampeón: {labelEntrada(findEntry(ligaInfo.runnerUp, torneo))}
               </div>
             )}
           </div>
+        ) : (
+          <div className="p-3 rounded-xl bg-sky-50 border border-sky-300">
+            <div className="font-semibold mb-1">Ganadores por grupo</div>
+            <ul className="list-disc pl-5 text-sm">
+              {Object.entries(ligaInfo.byGroup || {}).map(([gid, eid]) => (
+                <li key={gid}>
+                  {torneo.grupos?.find(g=>g.id===gid)?.nombre || gid}:{" "}
+                  {eid ? labelEntrada(findEntry(eid, torneo)) : "—"}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      )}
 
-          {/* Parejas (dobles) */}
-          {(reglas?.grupos?.modalidad === "dobles" || reglas?.elim?.modalidad === "dobles") && (
-            <div className="border rounded-xl p-3 bg-white">
-              <p className="text-sm font-semibold text-slate-700 mb-2">Parejas (dobles)</p>
+{/* Tabla + lista de partidos (actualizada con standings) */}
+{Object.keys(torneo.fixture || {}).map((gid) => {
+  const rounds = torneo.fixture[gid] || [];
+  const listaPartidos = Array.isArray(rounds[0]) ? rounds.flat() : rounds;
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
-                <div>
-                  <label className="text-xs text-slate-600 block mb-1">Jugador A</label>
-                  <select className="w-full border rounded-lg px-2 py-1 text-sm"
-                          value={pairA}
-                          onChange={e=>setPairA(e.target.value)}>
-                    <option value="">— Elegir —</option>
-                    {disponiblesParaPareja.map(id => (
-                      <option key={id} value={id}>{fullNameOfId(id)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-600 block mb-1">Jugador B</label>
-                  <select className="w-full border rounded-lg px-2 py-1 text-sm"
-                          value={pairB}
-                          onChange={e=>setPairB(e.target.value)}>
-                    <option value="">— Elegir —</option>
-                    {disponiblesParaPareja
-                      .filter(id => id !== pairA)
-                      .map(id => (
-                        <option key={id} value={id}>{fullNameOfId(id)}</option>
-                      ))}
-                  </select>
-                </div>
-                <button onClick={addTeamManual} className="px-3 py-2 border rounded-lg">
-                  + Agregar pareja
+  const grupoName = torneo.grupos?.find(g => g.id === gid)?.nombre || gid;
+  const p = torneo?.reglas?.grupos?.puntos ?? { win: 3, draw: 1, loss: 0 };
+
+  return (
+    <div key={gid} className="border rounded-xl p-3">
+      <div className="font-semibold mb-1">{grupoName} · Tabla de posiciones</div>
+      <div className="text-xs text-slate-500 mb-2">
+        Puntaje: victoria {p.win}, empate {p.draw}, derrota {p.loss}.
+      </div>
+
+      {/* ✅ Tabla completa */}
+      <StandingsTable
+        rows={standings[gid] || []}
+        getLabel={(eid) => labelEntrada(findEntry(eid, torneo))}
+      />
+
+      {/* Lista de partidos debajo (tu UI existente) */}
+      <div className="mt-4 font-semibold">Partidos</div>
+      {listaPartidos.map((m) => {
+        const editable = !locked; // en liga cerrada no se puede editar
+        return (
+          <div key={m.id} className="border rounded-xl p-2 mt-2">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium">
+                {grupoName} · {labelEntrada(findEntry(m.a, torneo))} vs {labelEntrada(findEntry(m.b, torneo))}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">
+                  {m.done ? resumenMarcador(m) : "Sin resultado"}
+                </span>
+                <button
+                  className="px-2 py-1 rounded-lg text-xs bg-slate-800 text-white disabled:opacity-50"
+                  onClick={() => editable && setEditId(editId === m.id ? null : m.id)}
+                  disabled={!editable}
+                  title={locked ? "Liga cerrada" : ""}
+                >
+                  {editId === m.id ? "Cerrar" : "Cargar"}
                 </button>
               </div>
-
-              {currentTeams.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {currentTeams.map(t => (
-                    <span key={t.id} className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-sky-50 text-slate-800 text-sm border border-sky-200">
-                      <span>{labelTeamById(t.id)}</span>
-                      <button
-                        onClick={() => removeTeam(t.id)}
-                        className="text-slate-500 hover:text-slate-700"
-                        title="Quitar pareja"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[11px] text-slate-500 mt-2">
-                  Definí las parejas que competirán cuando la modalidad sea “dobles”.
-                </p>
-              )}
             </div>
-          )}
-
-          {/* Puntos (grupos) */}
-          <div className="border rounded-xl p-3 bg-white">
-            <p className="text-sm font-semibold text-slate-700 mb-2">Puntos (grupos)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div>
-                <label className="text-xs text-slate-600 block">Ganar</label>
-                <input
-                  type="number"
-                  className="w-full border rounded-lg px-2 py-1"
-                  value={puntosCfg.win}
-                  onChange={e => setPuntosCfg(p => ({ ...p, win: Number(e.target.value)||0 }))}
+            {editId === m.id && (
+              <div className="mt-2">
+                <ResultadoEditor
+                  reglas={torneo.reglas}
+                  initial={m.result}
+                  onSave={(res) => guardarResultado(m.id, res)}
+                  onCancel={() => setEditId(null)}
                 />
               </div>
-              <div>
-                <label className="text-xs text-slate-600 block">Empate</label>
-                <input
-                  type="number"
-                  className="w-full border rounded-lg px-2 py-1"
-                  value={puntosCfg.draw}
-                  onChange={e => setPuntosCfg(p => ({ ...p, draw: Number(e.target.value)||0 }))}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-600 block">Perder</label>
-                <input
-                  type="number"
-                  className="w-full border rounded-lg px-2 py-1"
-                  value={puntosCfg.loss}
-                  onChange={e => setPuntosCfg(p => ({ ...p, loss: Number(e.target.value)||0 }))}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-              <div>
-                <label className="text-xs text-slate-600 block">Grupos</label>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full border rounded-lg px-2 py-1"
-                  value={gruposCount}
-                  onChange={e => setGruposCount(Number(e.target.value) || 1)}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-600 block">Top K x grupo</label>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full border rounded-lg px-2 py-1"
-                  value={topK}
-                  onChange={e => setTopK(Number(e.target.value) || 1)}
-                />
-              </div>
-            </div>
+            )}
           </div>
+        );
+      })}
+    </div>
+  );
+})}
 
-          {/* Reglas apiladas */}
-          <div className="space-y-3">
-            <RulesEditor zona="grupos" title="Reglas · Zona de Grupos" reglas={reglas} setReglas={setReglas} />
-            <RulesEditor zona="elim"   title="Reglas · Fase Final"     reglas={reglas} setReglas={setReglas} />
+    </div>
+  );
+}
+
+
+// === Info de la final (campeón / subcampeón) ===
+function bracketFinalInfo(cuadro){
+  if (!cuadro) return null;
+  const rounds = Object.keys(cuadro).map(n => Number(n)).sort((a,b)=>a-b);
+  if (!rounds.length) return null;
+  const last = String(rounds[rounds.length-1]);
+  const finalMatch = (cuadro[last] || [])[0];
+  if (!finalMatch) return { done:false, round:last, match:null };
+
+  if (!finalMatch.done || !finalMatch.result || !finalMatch.result.winner) {
+    return { done:false, round:last, match:finalMatch };
+  }
+  const champion = finalMatch.result.winner === 'a' ? finalMatch.a : finalMatch.b;
+  const runnerUp = finalMatch.result.winner === 'a' ? finalMatch.b : finalMatch.a;
+  return { done:true, round:last, match:finalMatch, champion, runnerUp };
+}
+
+
+function FaseFinalTab({ torneo, onChange, labelEntrada }) {
+  const [edit, setEdit] = React.useState(null);
+  const [showBracket, setShowBracket] = React.useState(true);
+
+  const koHasResults = React.useMemo(() => hasKOResults(torneo.cuadro), [torneo.cuadro]);
+  const finalInfo    = React.useMemo(() => bracketFinalInfo(torneo.cuadro), [torneo.cuadro]);
+
+  // Exportación A4
+  const exportPNG = React.useCallback(
+    () => exportPNG_A4(torneo, showBracket, setShowBracket),
+    [torneo, showBracket]
+  );
+  const exportPDF = React.useCallback(
+    () => exportPDF_A4(torneo, showBracket, setShowBracket),
+    [torneo, showBracket]
+  );
+
+  // Regenerar cuadro desde tabla
+  const regenerarDesdeTabla = () => {
+    if (koHasResults && !confirm("Ya hay resultados en KO. Regenerar borrará esos resultados. ¿Continuar?")) return;
+    const K = Math.max(1, parseInt(torneo.topK || 2, 10));
+    const ids = computeQualifiers(torneo, K);
+    const clean = Array.from(new Set((ids || []).filter(Boolean)));
+    if (clean.length < 2) { alert("Se necesitan al menos 2 clasificados."); return; }
+    const cuadro = buildBracket(clean);
+    onChange({ ...torneo, cuadro });
+  };
+
+  if (!torneo.cuadro) {
+    return <div className="text-slate-500">Aún no se generó el cuadro.</div>;
+  }
+
+  const guardar = (matchId, result) => {
+    const nuevo = applyResultToBracket(deepClone(torneo), matchId, result);
+    onChange(nuevo);
+    setEdit(null);
+    const info = bracketFinalInfo(nuevo.cuadro);
+    if (info?.done) {
+      const champ = labelEntrada(findEntry(info.champion, nuevo));
+      const sub   = labelEntrada(findEntry(info.runnerUp, nuevo));
+      alert(`¡Fin del torneo!\n🏆 Campeón: ${champ}\n🥈 Subcampeón: ${sub}`);
+    }
+  };
+
+  // Metadatos (para encabezado A4)
+  const esDobles = torneo.modalidad === 'dobles';
+  const parejas  = (torneo.teams || []).length;
+  const jugadores = esDobles ? parejas * 2 : (torneo.participantes || []).length;
+  const formatoLabel =
+    torneo.formato === "grupos" ? "Sólo grupos (Liga)" :
+    torneo.formato === "eliminacion" ? "Eliminación directa" :
+    torneo.formato === "grupos_y_eliminacion" ? "Grupos + Eliminación" : (torneo.formato || "—");
+  const creado = new Date(torneo.createdAt || torneo.fechaCreacion || Date.now()).toLocaleDateString();
+
+  const safeResumen = (m) => (typeof resumenMarcador === 'function' ? resumenMarcador(m) : (m?.done ? 'OK' : 'Sin resultado'));
+  const sideLabel = (side) => (!side || side?.BYE) ? "—" : labelEntrada(findEntry(side, torneo));
+
+  // ---- UI -------------------------------------------------------------------
+  return (
+    <div className="grid gap-4">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-lg font-semibold">Fase final</div>
+        <div className="flex gap-2">
+          <button className="px-3 py-1.5 rounded-lg border" onClick={() => setShowBracket(s => !s)}>
+            {showBracket ? "Ver lista" : "Ver llaves"}
+          </button>
+          <button className="px-3 py-1.5 rounded-lg border" onClick={regenerarDesdeTabla}>
+            Regenerar desde tabla
+          </button>
+          <button className="px-3 py-1.5 rounded-lg border" onClick={exportPNG} title="Exportar a PNG">PNG</button>
+          <button className="px-3 py-1.5 rounded-lg bg-[#34745B] text-white" onClick={exportPDF} title="Exportar a PDF">PDF</button>
+        </div>
+      </div>
+
+      {/* Campeón/Subcampeón */}
+      {finalInfo?.done && (
+        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300">
+          <div className="font-semibold">
+            🏆 Campeón: {labelEntrada(findEntry(finalInfo.champion, torneo))}
           </div>
+          <div className="text-sm">🥈 Subcampeón: {labelEntrada(findEntry(finalInfo.runnerUp, torneo))}</div>
+        </div>
+      )}
 
-          {/* Acciones */}
-          <div className="flex flex-wrap gap-2 pt-1">
-            <button onClick={generarFixtureGrupos} className="px-3 py-2 border rounded-lg">
-              Generar fixture (grupos)
-            </button>
-            <button onClick={crearFaseFinal} className="px-3 py-2 border rounded-lg">
-              Crear fase final (top-K)
-            </button>
-            <button onClick={generarCuadro} className="px-3 py-2 border rounded-lg">
-              Generar cuadro
-            </button>
-          </div>
+      {/* CONTENEDOR A4 OFF-SCREEN (para exportar con id=bracket-canvas) */}
+      <div
+        id="a4-export-root"
+        style={{ position:'absolute', left:-99999, top:0, width:'1123px', minHeight:'794px', background:'#fff', padding:'16px',
+                 border:'1px solid #e2e8f0', borderRadius:'12px' }}
+        aria-hidden="true"
+      >
+        <div className="flex items-center gap-3 mb-2">
+          <img src="logo_favicon.png" alt="Coachex-Pro" width="28" height="28" />
+          <div className="text-xl font-bold">Coachex-Pro</div>
+        </div>
+        <div className="text-base font-semibold">{torneo.nombre || "(Sin nombre)"}</div>
+        <div className="text-xs text-slate-500">
+          {formatoLabel} · {esDobles ? `${parejas} parejas (${jugadores} jugadores)` : `${jugadores} jugadores`} · Creado: {creado}
+          {torneo.formato === "grupos_y_eliminacion" ? ` · Top-K: ${parseInt(torneo.topK || 2, 10)}` : ""}
+          {torneo.formato !== "eliminacion" ? ` · Ida y vuelta: ${torneo.idaVuelta ? "Sí" : "No"}` : ""}
+        </div>
 
-          {/* === Standings (Grupos) === */}
-          {torneoSel?.grupos && (
-            <div className="border rounded-xl p-3 bg-white">
-              <p className="text-sm font-semibold text-slate-700 mb-3">Tabla de posiciones (grupos)</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {torneoSel.grupos.map(g => {
-                  const tabla = standingsByGroup?.[g.id] || (g.alumnoIds || []).map(id => ({
-                    id, PJ:0, PG:0, PE:0, PP:0, Pts:0, SetsF:0, SetsC:0, SD:0, GamesF:0, GamesC:0, GD:0
-                  }));
-                  return (
-                    <div key={g.id} className="border rounded-lg p-2">
-                      <div className="text-sm font-semibold text-slate-700 mb-1">{g.nombre}</div>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full text-xs">
-                          <thead className="text-slate-500">
-                            <tr>
-                              <th className="text-left py-1 pr-2">#</th>
-                              <th className="text-left py-1 pr-2">Jugador / Pareja</th>
-                              <th className="text-right py-1 px-2">PJ</th>
-                              <th className="text-right py-1 px-2">PG</th>
-                              <th className="text-right py-1 px-2">PE</th>
-                              <th className="text-right py-1 px-2">PP</th>
-                              <th className="text-right py-1 px-2">Pts</th>
-                              <th className="text-right py-1 px-2">SD</th>
-                              <th className="text-right py-1 px-2">GD</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {tabla.map((s, idx) => (
-                              <tr key={s.id} className="border-t">
-                                <td className="py-1 pr-2">{idx+1}</td>
-                                <td className="py-1 pr-2">{fullEntryLabel(s.id)}</td>
-                                <td className="py-1 px-2 text-right">{s.PJ}</td>
-                                <td className="py-1 px-2 text-right">{s.PG}</td>
-                                <td className="py-1 px-2 text-right">{s.PE}</td>
-                                <td className="py-1 px-2 text-right">{s.PP}</td>
-                                <td className="py-1 px-2 text-right font-semibold">{s.Pts}</td>
-                                <td className="py-1 px-2 text-right">{s.SD}</td>
-                                <td className="py-1 px-2 text-right">{s.GD}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              {!hayResultados && (
-                <p className="text-[11px] text-slate-500 mt-2">
-                  Tip: marcá ganadores o cargá sets para que la tabla se actualice.
-                </p>
-              )}
-            </div>
-          )}
+        {/* Bracket para exportar (con id) */}
+        {showBracket ? (
+          <BracketViewSVG
+            cuadro={torneo.cuadro}
+            labelEntrada={(id)=>labelEntrada(findEntry(id, torneo))}
+            resumenMarcador={safeResumen}
+            onMatchClick={(m)=>setEdit(edit===m.id?null:m.id)}
+            containerId="bracket-canvas"
+            layout={{ colW: 360, rowGap: 150, boxW: 400, boxH: 76 }}
+          />
+        ) : null}
+      </div>
 
-          {/* === Partidos (grupos) – rápido + modal === */}
-          {torneoSel?.partidosGrupos && (
-            <div className="border rounded-xl p-3 bg-white">
-              <p className="text-sm font-semibold text-slate-700 mb-2">Partidos (grupos)</p>
-              <div className="space-y-2">
-                {torneoSel.partidosGrupos.map((p, idx) => (
-                  <div key={`${p.id}_${idx}`} className="flex flex-wrap items-center gap-2 text-sm border rounded-lg px-2 py-1">
-                    <span className="text-slate-500">{p.groupName}</span>
-                    <span className="text-slate-400">· R{p.round}{p.leg ? ` (V${p.leg})` : ""}</span>
-                    <span className="ml-auto" />
-                    <span className="font-medium">{fullEntryLabel(p.localId)}</span>
-                    <span>vs</span>
-                    <span className="font-medium">{fullEntryLabel(p.visitaId)}</span>
-
-                    {p.estado === "finalizado" ? (
-                      <>
-                        <span className="ml-2 text-emerald-600 font-semibold">
-                          Ganó {p.resultado?.ganadorId === p.localId
-                            ? fullEntryLabel(p.localId)
-                            : fullEntryLabel(p.visitaId)}
-                        </span>
-                        {Array.isArray(p.resultado?.sets) && p.resultado.sets.length > 0 && (
-                          <span className="text-xs text-slate-500">
-                            &nbsp;({p.resultado.sets.map(([l,v])=>`${l}-${v}`).join(", ")})
-                          </span>
-                        )}
-                        <button
-                          className="ml-2 text-xs px-2 py-1 border rounded hover:bg-slate-50"
-                          onClick={() => openResultadoModal(p)}
-                        >
-                          Editar
-                        </button>
-                        <button
-                          className="text-xs px-2 py-1 border rounded hover:bg-slate-50"
-                          onClick={() => clearResultadoPartido(p)}
-                        >
-                          Borrar
-                        </button>
-                      </>
-                    ) : (
-                      <div className="flex gap-1 ml-2">
-                        <button
-                          className="text-xs px-2 py-1 border rounded hover:bg-emerald-50"
-                          onClick={() => setGanadorPartido(p.id, p.localId)}
-                          title="Marcar ganador local"
-                        >
-                          Ganó {fullEntryLabel(p.localId)}
-                        </button>
-                        <button
-                          className="text-xs px-2 py-1 border rounded hover:bg-emerald-50"
-                          onClick={() => setGanadorPartido(p.id, p.visitaId)}
-                          title="Marcar ganador visita"
-                        >
-                          Ganó {fullEntryLabel(p.visitaId)}
-                        </button>
-                        <button
-                          className="text-xs px-2 py-1 border rounded hover:bg-slate-50"
-                          onClick={() => openResultadoModal(p)}
-                          title="Cargar sets / TB10"
-                        >
-                          Cargar resultado
-                        </button>
-                      </div>
-                    )}
+      {/* Vista HORIZONTAL en pantalla: dos columnas en pantallas grandes */}
+      <div className="grid lg:grid-cols-[1fr,320px] gap-4">
+        <div className="border rounded-2xl p-3">
+          {showBracket ? (
+            <BracketViewSVG
+              cuadro={torneo.cuadro}
+              labelEntrada={(id)=>labelEntrada(findEntry(id, torneo))}
+              resumenMarcador={safeResumen}
+              onMatchClick={(m)=>setEdit(edit===m.id?null:m.id)}
+              layout={{ colW: 300, rowGap: 130, boxW: 360, boxH: 68 }}
+            />
+          ) : (
+            // Lista por rondas (modo “vertical” simple)
+            Object.keys(torneo.cuadro)
+              .map(Number).sort((a,b)=>b-a).map((rk) => (
+                <div key={rk} className="border rounded-xl p-3 mb-3">
+                  <div className="font-semibold">
+                    {rk===1?'Final':rk===2?'Semifinales':rk===4?'Cuartos':rk===8?'Octavos':`Ronda (${rk} partidos)`}
                   </div>
-                ))}
-              </div>
-
-              {/* MODAL de resultado con sets */}
-              {resModalOpen && editMatch && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                  <div className="absolute inset-0 bg-black/50" onClick={closeResultadoModal} />
-                  <div className="relative bg-white w-full max-w-lg rounded-2xl p-4 shadow-xl">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-semibold text-slate-800">
-                        Resultado · {fullEntryLabel(editMatch.localId)} vs {fullEntryLabel(editMatch.visitaId)}
-                      </h3>
-                      <button className="text-slate-500" onClick={closeResultadoModal}>✕</button>
-                    </div>
-
-                    <p className="text-xs text-slate-500 mt-1">
-                      Cargá los sets como <b>games</b>. Para match tie-break (p.ej. TB10), ingresá <b>10–7</b>.
-                    </p>
-
-                    <div className="mt-3 space-y-2">
-                      {editSets.map((sv, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 w-10">Set {idx+1}</span>
-                          <input
-                            type="number" className="w-16 border rounded px-2 py-1"
-                            value={sv[0]} onChange={(e)=>setSetValue(idx, "L", e.target.value)}
-                            min={0}
-                          />
-                          <span className="text-slate-500">—</span>
-                          <input
-                            type="number" className="w-16 border rounded px-2 py-1"
-                            value={sv[1]} onChange={(e)=>setSetValue(idx, "V", e.target.value)}
-                            min={0}
-                          />
-                          {editSets.length > 1 && (
-                            <button className="text-xs px-2 py-1 border rounded hover:bg-slate-50"
-                                    onClick={()=>removeSetRow(idx)}>
-                              Quitar
-                            </button>
+                  <div className="grid md:grid-cols-2 gap-3 mt-2">
+                    {(torneo.cuadro[String(rk)] || []).map((m) => {
+                      const byeA = !!(m?.a && m.a.BYE), byeB = !!(m?.b && m.b.BYE);
+                      const editable = !byeA && !byeB;
+                      return (
+                        <div key={m.id} className="border rounded-xl p-2">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-medium">
+                              {sideLabel(m.a)} {" vs "} {sideLabel(m.b)}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500">{safeResumen(m)}</span>
+                              <button
+                                className="px-2 py-1 rounded-lg text-xs bg-slate-800 text-white disabled:opacity-50"
+                                onClick={() => editable && setEdit(edit === m.id ? null : m.id)}
+                                disabled={!editable}
+                              >
+                                {edit === m.id ? "Cerrar" : "Cargar"}
+                              </button>
+                            </div>
+                          </div>
+                          {edit === m.id && editable && (
+                            <div className="mt-2">
+                              <ResultadoEditor
+                                reglas={torneo.reglas}
+                                initial={m.result}
+                                onSave={(res) => guardar(m.id, res)}
+                                onCancel={() => setEdit(null)}
+                              />
+                            </div>
                           )}
                         </div>
-                      ))}
-                      <button className="text-xs px-2 py-1 border rounded hover:bg-slate-50" onClick={addSetRow}>
-                        + Agregar set
-                      </button>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2 justify-end">
-                      <button className="px-3 py-2 border rounded-lg" onClick={closeResultadoModal}>
-                        Cancelar
-                      </button>
-                      <button className="px-3 py-2 border rounded-lg" onClick={()=>clearResultadoPartido(editMatch)}>
-                        Borrar resultado
-                      </button>
-                      <button className="px-3 py-2 rounded-lg bg-emerald-600 text-white" onClick={saveResultadoModal}>
-                        Guardar
-                      </button>
-                    </div>
+                      );
+                    })}
                   </div>
                 </div>
-              )}
-            </div>
+              ))
           )}
-        </section>
+        </div>
+
+        {/* Panel derecho: resumen */}
+        <aside className="lg:sticky lg:top-2 self-start border rounded-2xl p-3 bg-slate-50">
+          <div className="font-semibold text-slate-800 mb-2">Resumen</div>
+          <div className="text-sm text-slate-600 space-y-1">
+            {(() => {
+              const niveles = Object.values(torneo.cuadro || {});
+              const partidos = niveles.flat().length || 0;
+              const jugados = niveles.flat().filter(m => m?.done).length || 0;
+              const pendientes = Math.max(0, partidos - jugados);
+              return (
+                <>
+                  <div><span className="text-slate-500">Partidos:</span> {partidos}</div>
+                  <div><span className="text-slate-500">Jugados:</span> {jugados}</div>
+                  <div><span className="text-slate-500">Pendientes:</span> {pendientes}</div>
+                </>
+              );
+            })()}
+          </div>
+
+          {!!finalInfo?.done && <div className="h-px bg-slate-200 my-3" />}
+          {finalInfo?.done && (
+            <>
+              <div className="text-sm"><span className="text-slate-500">🏆 Campeón:</span> <b>{labelEntrada(findEntry(finalInfo.champion, torneo))}</b></div>
+              <div className="text-sm mt-1"><span className="text-slate-500">🥈 Subcampeón:</span> <b>{labelEntrada(findEntry(finalInfo.runnerUp, torneo))}</b></div>
+            </>
+          )}
+
+          <div className="h-px bg-slate-200 my-3" />
+          <div className="text-xs text-slate-500">
+            Tip: podés exportar PNG/PDF apaisado desde los botones de arriba.
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+
+
+
+// ================== Componentes UI pequeños ==================
+function RadioItem({ checked, onChange, title, desc }) {
+  return (
+    <label className={cx('flex gap-3 items-start p-2 rounded-xl border cursor-pointer', checked ? 'border-slate-400 bg-white' : 'border-slate-200 hover:bg-slate-50')}>
+      <input type="radio" className="mt-1" checked={!!checked} onChange={onChange} />
+      <div>
+        <div className="font-medium text-slate-800">{title}</div>
+        {desc && <div className="text-xs text-slate-500">{desc}</div>}
+      </div>
+    </label>
+  );
+}
+function NumberField({ label, value, onChange, min=0 }) {
+  return (
+    <label className="block">
+      <div className="text-sm text-slate-600 mb-1">{label}</div>
+      <input type="number" min={min} className="w-full border rounded-xl px-3 py-2" value={value ?? 0} onChange={e=>onChange(parseInt(e.target.value||0))} />
+    </label>
+  );
+}
+function SelectField({ label, value, onChange, options }) {
+  return (
+    <label className="block">
+      <div className="text-sm text-slate-600 mb-1">{label}</div>
+      <select className="w-full border rounded-xl px-3 py-2" value={value} onChange={e=>onChange(e.target.value)}>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </label>
+  );
+}
+function ToggleField({ label, checked, onChange }) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <input type="checkbox" checked={!!checked} onChange={e=>onChange(e.target.checked)} /> {label}
+    </label>
+  );
+}
+function SelectAlumno({ value, onChange, alumnos, placeholder }) {
+  return (
+    <select className="w-full border rounded-xl px-3 py-2" value={value} onChange={e=>onChange(e.target.value)}>
+      <option value="">{placeholder}</option>
+      {alumnos.sort((a,b)=> (a.apellido||'').localeCompare(b.apellido||'')).map(a => (
+        <option key={a.id} value={a.id}>{(a.apellido? a.apellido + ', ' : '') + (a.nombre||a.name||'')}</option>
+      ))}
+    </select>
+  );
+}
+
+// === Editor de resultado: 3 sets con A y B por set
+function ResultadoEditor({ reglas, onSave, onCancel, initial }) {
+  // inicial: por si ya hay resultado guardado
+  const seeded = (initial && Array.isArray(initial.sets)) ? initial.sets : [];
+  const seed3 = [0,1,2].map(i => ({ a: seeded[i]?.a ?? "", b: seeded[i]?.b ?? "" }));
+
+  const [sets, setSets] = React.useState(seed3);
+
+  const update = (i, side, val) => {
+    const v = val === "" ? "" : Number(val);
+    setSets(prev => prev.map((s, idx) => idx === i ? { ...s, [side]: v } : s));
+  };
+
+  const guardar = () => {
+    // tomar sólo sets completos (ambos lados) y sin empate
+    const filled = sets
+      .map(s => ({ a: s.a === "" ? null : Number(s.a), b: s.b === "" ? null : Number(s.b) }))
+      .filter(s => s.a != null && s.b != null && s.a !== s.b);
+
+    if (!filled.length) {
+      alert("Ingresá al menos un set válido (A y B, sin empate).");
+      return;
+    }
+
+    // ganador por cantidad de sets
+    let aw = 0, bw = 0;
+    filled.forEach(s => { if (s.a > s.b) aw++; else bw++; });
+
+    // opcional: respetar Bo1/Bo3/Bo5 si lo definiste en reglas
+    const koSets = (reglas?.ko?.sets || reglas?.setsKo || reglas?.koSets || "Bo1");
+    const needWins = koSets === "Bo5" ? 3 : (koSets === "Bo3" ? 2 : 1);
+    // si el usuario cargó más sets de los necesarios, igual tomamos la mayoría
+    const winner = aw > bw ? "a" : "b";
+
+    onSave({ sets: filled, winner });
+  };
+
+  return (
+    <div className="p-2">
+      <div className="grid gap-2">
+        {[0,1,2].map(i => (
+          <div key={i} className="grid grid-cols-[auto,3rem,1rem,3rem] items-center gap-2">
+            <div className="text-xs text-slate-500">{`Set ${i+1}`}</div>
+            <input
+              type="number" min="0"
+              className="border rounded-lg px-2 py-1 w-16"
+              value={sets[i].a}
+              onChange={e => update(i, "a", e.target.value)}
+              placeholder="A"
+            />
+            <span className="text-slate-400 text-center">-</span>
+            <input
+              type="number" min="0"
+              className="border rounded-lg px-2 py-1 w-16"
+              value={sets[i].b}
+              onChange={e => update(i, "b", e.target.value)}
+              placeholder="B"
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <button className="px-3 py-2 rounded-xl bg-[#34745B] text-white" onClick={guardar}>
+          Guardar
+        </button>
+        <button className="px-3 py-2 rounded-xl border" onClick={onCancel}>
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SetRow({ label, va, vb, setVa, setVb, placeholderA='', placeholderB='' }) {
+  return (
+    <div>
+      <div className="text-sm text-slate-600 mb-1">{label}</div>
+      <div className="flex items-center gap-2">
+        <input type="number" className="w-20 border rounded-xl px-2 py-1" value={va} onChange={e=>setVa(e.target.value)} placeholder={placeholderA} />
+        <span className="text-slate-500">–</span>
+        <input type="number" className="w-20 border rounded-xl px-2 py-1" value={vb} onChange={e=>setVb(e.target.value)} placeholder={placeholderB} />
+      </div>
+    </div>
+  );
+}
+
+function BracketPreview({ cuadro, labelEntrada }) {
+  const rounds = Object.keys(cuadro).sort((a,b)=>parseInt(a)-parseInt(b));
+  return (
+    <div className="overflow-auto">
+      <div className="flex gap-6 min-w-[600px]">
+        {rounds.map(rk => (
+          <div key={rk} className="min-w-[250px]">
+            <div className="font-semibold mb-2">Ronda {rk}</div>
+            <div className="space-y-2">
+              {cuadro[rk].map(m => (
+                <div key={m.id} className="border rounded-xl p-2 text-sm">
+                  <div>{labelEntrada(m.a)}</div>
+                  <div>{labelEntrada(m.b)}</div>
+                  <div className="text-xs text-slate-500 mt-1">{m.done ? resumenMarcador(m) : '·'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InfoTip({ children }) {
+  return (
+    <div className="text-xs bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-600">{children}</div>
+  );
+}
+function IconButton({ title, onClick, icon:Icon }) {
+  return (
+    <button title={title} onClick={onClick} className="p-2 rounded-lg hover:bg-slate-100">
+      <Icon className="w-4 h-4" />
+    </button>
+  );
+}
+function IconCopy(props){return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={props.className}><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>);} 
+function IconTrash(props){return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={props.className}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>);} 
+
+// ================== Helpers de dominio ==================
+function newTorneo(){
+  return {
+    id: genId('t_'),
+    nombre: '',
+    formato: 'grupos_y_eliminacion', // 'grupos' | 'eliminacion' | 'grupos_y_eliminacion'
+    modalidad: 'singles', // 'singles' | 'dobles'
+    reglas: normalizeReglas(),
+    gruposCount: 2,
+    idaVuelta: false,
+    topK: 2,
+    participantes: [],
+    teams: [],
+    grupos: [],
+    fixture: {}, // { G1: [ { id,a,b,done,result }, ... por rondas ] }
+    cuadro: null, // { '1': [ {id,a,b,done,result,next:{round,slot}} ], '2': [...] }
+    estado: 'config',
+  };
+}
+
+function normalizeReglas(r={}){
+  return {
+    grupos: { puntos: { win: 3, draw: 1, loss: 0 }, ...(r.grupos||{}) },
+    sets: { formato: 'bo3', tb: 'tb7', ...(r.sets||{}) },
+    ko: { seeding: 'serpentina', sets: 'bo3', tb: 'tb7', ...(r.ko||{}) },
+  };
+}
+
+function formatLabel(f){
+  return f==='grupos' ? 'Sólo grupos' : f==='eliminacion' ? 'Eliminación directa' : 'Grupos + Eliminación';
+}
+function prettyEstado(e){
+  return e==='config' ? 'configuración' : e==='en_juego' ? 'en juego' : 'finalizado';
+}
+function inferStartTab(t){
+  if (!t.nombre || !t.formato) return 'formato';
+  if (!t.reglas) return 'reglas';
+  return 'participantes';
+}
+
+// ===== LocalStorage (placeholder simple) =====
+function loadTorneosLS(){
+  try{ return JSON.parse(localStorage.getItem('torneos_v2')||'[]'); }catch(e){ return []; }
+}
+function saveTorneosLS(arr){
+  try{ localStorage.setItem('torneos_v2', JSON.stringify(arr)); }catch(e){}
+}
+
+// ===== Generación de grupos y fixture =====
+function buildGroups(ids, gruposCount){
+  const G = [];
+  const by = Math.ceil(ids.length / gruposCount);
+  for (let i=0;i<gruposCount;i++){
+    const slice = ids.slice(i*by, (i+1)*by);
+    if (slice.length) G.push({ id: `G${i+1}`, nombre: `Grupo ${i+1}`, entradas: slice });
+  }
+  return G;
+}
+
+function buildRoundRobin(entries, idaVuelta=false){
+  // Algoritmo de círculo. Devuelve array de rondas; cada ronda = array de matches {id,a,b,done:false}
+  const arr = [...entries];
+  const isOdd = arr.length % 2 === 1;
+  if (isOdd) arr.push(null); // BYE
+  const n = arr.length;
+  const rounds = [];
+  for (let r=0;r<n-1;r++){
+    const matches = [];
+    for (let i=0;i<n/2;i++){
+      const a = arr[i];
+      const b = arr[n-1-i];
+      if (a!=null && b!=null) matches.push({ id: genId('m_'), a, b, done:false });
+    }
+    rounds.push(matches);
+    // rotación
+    const fixed = arr[0];
+    const rest = arr.slice(1);
+    rest.unshift(rest.pop());
+    arr.splice(0, arr.length, fixed, ...rest);
+  }
+  if (idaVuelta){
+    const rev = rounds.map(rs => rs.map(m => ({ id: genId('m_'), a:m.b, b:m.a, done:false })));
+    return [...rounds, ...rev];
+  }
+  return rounds;
+}
+
+function flattenFixture(fx){
+  const out = [];
+  Object.entries(fx).forEach(([gid, rondas]) => {
+    rondas.forEach(rs => rs.forEach(m => out.push({ ...m, grupo: gid })));
+  });
+  return out;
+}
+
+function resumenMarcador(m){
+  if (!m?.result?.sets?.length) return '';
+  const s = m.result.sets.map(x => `${x.a}-${x.b}${x.tb?' (TB)':''}`).join(', ');
+  return `${s} · Ganador ${m.result.winner?.toUpperCase?.()}`;
+}
+
+function applyResultToFixture(torneo, matchId, result){
+  const fx = torneo.fixture || {};
+  Object.keys(fx).forEach(gid => {
+    fx[gid] = fx[gid].map(rs => rs.map(m => (m.id===matchId ? { ...m, result, done:true } : m)));
+  });
+  torneo.fixture = fx;
+  return torneo;
+}
+
+// Espera a que carguen imágenes dentro de un nodo
+function waitImages(root) {
+  const imgs = Array.from(root.querySelectorAll('img')).filter(img => !img.complete);
+  if (!imgs.length) return Promise.resolve();
+  return Promise.all(imgs.map(img => new Promise(res => {
+    img.onload = img.onerror = () => res();
+  })));
+}
+
+// Construye un contenedor A4 apaisado y clona el bracket visible (id: #bracket-canvas)
+function buildA4Root(torneo) {
+  const root = document.createElement('div');
+  Object.assign(root.style, {
+    position: 'absolute',
+    left: '-99999px', top: '0',
+    width: '1123px', minHeight: '794px',          // A4 horizontal aprox a 96 dpi
+    background: '#fff',
+    padding: '16px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '12px',
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial'
+  });
+
+  // Header
+  const header = document.createElement('div');
+  header.style.display = 'flex';
+  header.style.alignItems = 'center';
+  header.style.gap = '12px';
+  header.style.marginBottom = '6px';
+
+  const logo = new Image();
+  logo.src = 'logo_favicon.png';
+  logo.width = 28; logo.height = 28;
+  header.appendChild(logo);
+
+  const title = document.createElement('div');
+  title.style.fontSize = '20px';
+  title.style.fontWeight = '700';
+  title.textContent = 'Coachex-Pro';
+  header.appendChild(title);
+  root.appendChild(header);
+
+  // Título y metadatos
+  const name = document.createElement('div');
+  name.style.fontSize = '16px';
+  name.style.fontWeight = '600';
+  name.textContent = torneo?.nombre || '(Sin nombre)';
+  root.appendChild(name);
+
+  const meta = document.createElement('div');
+  meta.style.fontSize = '12px';
+  meta.style.color = '#64748b';
+  meta.style.marginBottom = '12px';
+
+  const esDobles = torneo?.modalidad === 'dobles';
+  const parejas  = (torneo?.teams || []).length;
+  const jugadores = esDobles ? parejas*2 : (torneo?.participantes || []).length;
+
+  const formato = (typeof formatLabel === 'function')
+    ? formatLabel(torneo?.formato)
+    : (torneo?.formato === 'grupos' ? 'Sólo grupos'
+       : torneo?.formato === 'eliminacion' ? 'Eliminación directa'
+       : 'Grupos + Eliminación');
+
+  const creado = torneo?.createdAt || torneo?.fechaCreacion || Date.now();
+  const topK = torneo?.formato === 'grupos_y_eliminacion'
+    ? ` · Top-K: ${parseInt(torneo?.topK || 2, 10)}`
+    : '';
+  const idaV = torneo?.formato !== 'eliminacion'
+    ? ` · Ida y vuelta: ${torneo?.idaVuelta ? 'Sí' : 'No'}`
+    : '';
+
+  meta.textContent =
+    `${formato} · ${esDobles ? `${parejas} parejas (${jugadores} jugadores)` : `${jugadores} jugadores`} · ` +
+    `Creado: ${new Date(creado).toLocaleDateString()}${topK}${idaV}`;
+  root.appendChild(meta);
+
+  // Clonar el bracket visible
+  const src = document.getElementById('bracket-canvas');
+  if (src) {
+    const clone = src.cloneNode(true);
+    clone.style.transformOrigin = '0 0';
+    root.appendChild(clone);
+  } else {
+    const warn = document.createElement('div');
+    warn.style.fontSize = '12px';
+    warn.style.color = '#ef4444';
+    warn.textContent = '(No se pudo clonar las llaves)';
+    root.appendChild(warn);
+  }
+
+  document.body.appendChild(root);
+  return root;
+}
+
+// Exportar A4 a PNG (apaisado)
+async function exportPNG_A4(torneo, showBracket, setShowBracket) {
+  try {
+    let revert = false;
+    if (!document.getElementById('bracket-canvas') && typeof setShowBracket === 'function') {
+      setShowBracket(true);
+      revert = true;
+      await new Promise(r => setTimeout(r, 60));
+    }
+
+    const el = buildA4Root(torneo);
+    await waitImages(el);
+
+    const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 });
+    document.body.removeChild(el);
+    if (revert) setShowBracket(false);
+
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = (torneo?.nombre || 'llaves') + '.png';
+    a.click();
+  } catch (e) {
+    console.error(e);
+    alert('No se pudo exportar PNG.');
+  }
+}
+
+// Exportar A4 a PDF (apaisado)
+async function exportPDF_A4(torneo, showBracket, setShowBracket) {
+  try {
+    let revert = false;
+    if (!document.getElementById('bracket-canvas') && typeof setShowBracket === 'function') {
+      setShowBracket(true);
+      revert = true;
+      await new Promise(r => setTimeout(r, 60));
+    }
+
+    const el = buildA4Root(torneo);
+    await waitImages(el);
+
+    const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 });
+    document.body.removeChild(el);
+    if (revert) setShowBracket(false);
+
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) { alert('jsPDF no está disponible.'); return; }
+
+    const pdf = new jsPDF('l', 'pt', 'a4');
+    const W = pdf.internal.pageSize.getWidth();
+    const H = pdf.internal.pageSize.getHeight();
+    const ratio = Math.min(W / canvas.width, H / canvas.height);
+    const w = canvas.width * ratio;
+    const h = canvas.height * ratio;
+
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (W - w) / 2, (H - h) / 2, w, h);
+    pdf.save((torneo?.nombre || 'llaves') + '.pdf');
+  } catch (e) {
+    console.error(e);
+    alert('No se pudo exportar PDF.');
+  }
+}
+
+
+// ===== Bracket =====
+
+function buildBracket(ids){
+  const N = ids.length;
+  let size = 1; while (size < N) size <<= 1;
+
+  const positions = bracketSeedPositions(size);
+  const slots = new Array(size).fill(null);
+
+  // seeds + BYEs
+  for (let i = 0; i < N; i++){
+    const pos = positions[i] ?? i;
+    if (pos < size) slots[pos] = ids[i];
+  }
+  for (let i = 0; i < size; i++){
+    if (!slots[i]) slots[i] = { BYE:true, id:`bye_${i}` };
+  }
+
+  // Ronda 1
+  const round1 = [];
+  for (let i = 0; i < size; i += 2){
+    const matchIdx = round1.length; // 0,1,2,...
+    round1.push({
+      id: genId('ko_'),
+      a: slots[i],
+      b: slots[i+1],
+      done: false,
+      next: { round: 2, slot: Math.floor(matchIdx / 2), side: (matchIdx % 2 === 0 ? 'a' : 'b') }
+    });
+  }
+  const cuadro = { '1': round1 };
+
+  // Rondas siguientes
+  let prev = round1; let round = 2;
+  while (prev.length > 1){
+    const curr = [];
+    for (let i = 0; i < prev.length; i += 2){
+      const matchIdx = curr.length; // 0,1,...
+      curr.push({
+        id: genId('ko_'),
+        a: null, b: null,
+        done: false,
+        next: { round: round + 1, slot: Math.floor(matchIdx / 2), side: (matchIdx % 2 === 0 ? 'a' : 'b') }
+      });
+    }
+    cuadro[String(round)] = curr;
+    prev = curr; round++;
+  }
+
+  // Propagar BYEs iniciales
+  Object.values(cuadro).forEach(rs => rs.forEach(m => {
+    if (m.done) return;
+    if (isBYE(m.a) && !isBYE(m.b)) { m.result={winner:'b', sets:[]}; m.done=true; placeWinner(cuadro, m, m.b); }
+    else if (!isBYE(m.a) && isBYE(m.b)) { m.result={winner:'a', sets:[]}; m.done=true; placeWinner(cuadro, m, m.a); }
+    else if (isBYE(m.a) && isBYE(m.b)) { m.result={winner:'a', sets:[]}; m.done=true; placeWinner(cuadro, m, m.a); }
+  }));
+
+  return cuadro;
+}
+
+function bracketSeedPositions(n){
+  if (n <= 1) return [0];
+  const half   = bracketSeedPositions(n/2);
+  const mirror = half.map(x => (n - 1) - x);
+  return half.concat(mirror);
+}
+
+function serpentinaSeeds(n){
+  // 1..n en orden de serpentina básico
+  const arr = Array.from({length:n}, (_,i)=>i+1);
+  const out = [];
+  while (arr.length){
+    out.push(...arr.splice(0,2));
+    arr.reverse();
+  }
+  return out.slice(0,n);
+}
+function isBYE(x){ return !!(x && x.BYE); }
+function findEntry(id, torneo){
+  if (!id) return { id:"?" };
+  if (typeof id === 'object' && id.BYE) return id; // BYE
+  const arr = torneo.modalidad==='dobles' ? (torneo.teams||[]) : (torneo.participantes||[]);
+  if (torneo.modalidad==='dobles') return arr.find(t => t.id===id) || { id };
+  return id; // en singles, id es alumnoId
+}
+
+function applyResultToBracket(torneo, matchId, result){
+  const cuadro = torneo.cuadro; if (!cuadro) return torneo;
+  let found = null, rkFound=null, idx=null;
+  Object.entries(cuadro).forEach(([rk, arr]) => {
+    arr.forEach((m,i) => { if (m.id===matchId){ found=m; rkFound=rk; idx=i; } });
+  });
+  if (!found) return torneo;
+  found.result = result; found.done = true;
+  const winner = result.winner === 'a' ? found.a : found.b;
+  placeWinner(cuadro, found, winner);
+  torneo.cuadro = cuadro;
+  return torneo;
+}
+function placeWinner(cuadro, match, winnerEntry){
+  const n = match?.next;
+  if (!n) return;
+
+  const destRound = cuadro[String(n.round)];
+  if (!destRound) return;
+
+  const dest = destRound[n.slot];
+  if (!dest) return;
+
+  // Usar el side indicado por buildBracket; si no viene, inferir por paridad
+  let side = n.side;
+  if (!side) {
+    const prev = cuadro[String(n.round - 1)] || [];
+    const idx = prev.findIndex(m => m.id === match.id); // 0,1,2,...
+    side = (idx % 2 === 0) ? 'a' : 'b';
+  }
+
+  dest[side] = winnerEntry;
+}
+
+
+// Clasificados reales desde la tabla de posiciones por grupo
+function computeQualifiers(torneo, K) {
+  const standings = computeStandings(torneo);
+  const ids = [];
+  (torneo.grupos || []).forEach(g => {
+    const rows = standings[g.id] || [];
+    const take = Math.min(K, rows.length);
+    for (let i = 0; i < take; i++) {
+      const eid = rows[i] && rows[i].eid;
+      if (eid) ids.push(eid);
+    }
+  });
+  return Array.from(new Set(ids.filter(Boolean)));
+}
+
+function tomarTopK(torneo, K){
+  const standings = computeStandings(torneo);
+  const ids = [];
+  (torneo.grupos||[]).forEach(g => {
+    const rows = standings[g.id];
+    if (rows && rows.length) {
+      rows.slice(0, K).forEach(r => ids.push(r.eid));
+    } else {
+      ids.push(...(g.entradas||[]).slice(0, K));
+    }
+  });
+  return ids;
+}
+
+
+function renderTeamLabel(team, alumnos){
+  const a = alumnos.find(x=>x.id===team.members[0]);
+  const b = alumnos.find(x=>x.id===team.members[1]);
+  const la = a ? (a.apellido? a.apellido+", "+(a.nombre||a.name||'') : (a.nombre||a.name||'')) : team.members[0];
+  const lb = b ? (b.apellido? b.apellido+", "+(b.nombre||b.name||'') : (b.nombre||b.name||'')) : team.members[1];
+  return `${la} / ${lb}`;
+}
+
+// ================== Utilidades generales ==================
+function genId(prefix='id_'){ return prefix + Math.random().toString(36).slice(2, 9); }
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+function cx(){ return Array.from(arguments).filter(Boolean).join(' '); }
+function deepSet(obj, pathArr, value){
+  const o = deepClone(obj);
+  let cur = o;
+  for (let i=0;i<pathArr.length-1;i++){
+    const k = pathArr[i];
+    if (!cur[k] || typeof cur[k] !== 'object') cur[k] = {};
+    cur = cur[k];
+  }
+  cur[pathArr[pathArr.length-1]] = value;
+  return o;
+}
+// === Helpers robustos para alumnos ===
+function alumnoId(a){
+  return a?.id ?? a?.uid ?? a?._id ?? String(a?.dni ?? a?.email ?? Math.random());
+}
+function alumnoLabel(a){
+  const ap = a?.apellido ?? a?.lastName ?? a?.apellidos ?? "";
+  const no = a?.nombre   ?? a?.firstName ?? a?.name ?? a?.displayName ?? "";
+  const label = (ap && no) ? `${ap}, ${no}` : (ap || no);
+  return label || a?.alias || a?.nick || a?.email || alumnoId(a);
+}
+
+// Lee el PIN desde Perfil (3 dígitos). Intenta por club y luego global.
+function getPerfilPIN(perfil, clubId) {
+  const pin =
+    perfil?.clubs?.[clubId]?.pin ??
+    perfil?.clubs?.[clubId]?.pinSeguridad ??
+    perfil?.pin ??
+    perfil?.pinSeguridad ??
+    null;
+  return pin != null ? String(pin).trim() : null;
+}
+
+
+// Botón habilitado/inhabilitado
+function canButton(enabled){
+  return enabled
+    ? 'bg-[#34745B] text-white hover:opacity-90'
+    : 'bg-slate-200 text-slate-500 cursor-not-allowed';
+}
+
+// ¿Están todos los partidos de grupos cargados?
+function groupsAllMatchesDone(t) {
+  const fx = t.fixture || {};
+  const gids = Object.keys(fx);
+  if (!gids.length) return false;
+  for (const gid of gids) {
+    for (const ronda of (fx[gid] || [])) {
+      for (const m of (ronda || [])) {
+        if (!m?.done) return false;
+      }
+    }
+  }
+  return true;
+}
+
+// ¿Cuántos faltan?
+function countPendingGroupMatches(t) {
+  let pending = 0;
+  Object.values(t.fixture || {}).forEach(rounds =>
+    (rounds || []).forEach(rs =>
+      (rs || []).forEach(m => { if (!m?.done) pending++; })
+    )
+  );
+  return pending;
+}
+
+
+// ¿Ya hay resultados en KO?
+function hasKOResults(cuadro) {
+  if (!cuadro) return false;
+  return Object.values(cuadro).some(rounds => rounds.some(m => !!m?.done));
+}
+
+// === Liga / Solo grupos ===
+function isLeagueMode(t){
+  const f = t?.formato;
+  return f === 'grupos' || f === 'liga' || f === 'solo_grupos' || f === 'league';
+}
+
+// Campeón/Subcampeón en LIGA (un grupo). Si hay varios grupos sin KO,
+// devuelve ganador por cada grupo.
+function leagueWinnersInfo(torneo){
+  if (!isLeagueMode(torneo)) return null;
+  if (!groupsAllMatchesDone(torneo)) return { done:false };
+
+  const fx = torneo.fixture || {};
+  const gids = Object.keys(fx).filter(gid => Array.isArray(fx[gid]) && fx[gid].length);
+
+  if (gids.length <= 1) {
+    // Liga de un solo grupo: top1 y top2
+    const ids = computeQualifiers(torneo, 2) || [];
+    const [champion, runnerUp] = ids.filter(Boolean);
+    if (!champion) return { done:false };
+    return { done:true, type:'single', champion, runnerUp: runnerUp || null };
+  }
+
+  // Varios grupos sin KO: ganador por cada grupo
+  const byGroup = {};
+  for (const gid of gids) {
+    const temp = deepClone(torneo);
+    temp.fixture = { [gid]: fx[gid] };
+    temp.grupos  = (torneo.grupos || []).filter(g => g.id === gid);
+    const top = computeQualifiers(temp, 1) || [];
+    byGroup[gid] = top[0] || null;
+  }
+  return { done:true, type:'multi', byGroup };
+}
+
+// ===== Helper: arma el texto de reglas/formato a partir del torneo =====
+function buildReglamentoTexto(t) {
+  const modalidad = t?.modalidad === 'dobles' ? 'Dobles' : 'Singles';
+
+  const fmtFecha = (v) => {
+    if (!v) return '';
+    const d = new Date(v);
+    if (isNaN(d)) return '';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+  const fIni = fmtFecha(t?.fechaInicio);
+  const fFin = fmtFecha(t?.fechaFin);
+  const fechasLinea = fIni && fFin
+    ? `Se juega del ${fIni} al ${fFin}.`
+    : fIni ? `Se juega desde el ${fIni}.`
+    : fFin ? `Se juega hasta el ${fFin}.` : '';
+
+  const setsLabel = (k) =>
+    k === 'bo1' ? 'al mejor de 1 set' :
+    k === 'bo5' ? 'al mejor de 5 sets' :
+    k === 'match_tb10' ? 'match tiebreak a 10' :
+    'al mejor de 3 sets';
+
+  const tbLabel = (k) =>
+    k === 'tb10' ? 'tiebreak a 10' :
+    k === 'tb7'  ? 'tiebreak a 7'  :
+    'sin tiebreak';
+
+  const r = normalizeReglas?.(t?.reglas) || (t?.reglas || {});
+  const puntos = r?.grupos?.puntos || { win: 3, draw: 1, loss: 0 };
+
+  const partes = [];
+  partes.push(`Modalidad: ${modalidad}.`);
+  if (fechasLinea) partes.push(fechasLinea);
+
+  if (t?.formato === 'grupos' || t?.formato === 'grupos_y_eliminacion') {
+    const gruposCount = t?.gruposCount ?? null;
+    const idaVuelta = !!t?.idaVuelta;
+    const setsFmt = setsLabel(r?.sets?.formato);
+    const tbFmt   = tbLabel(r?.sets?.tb);
+    partes.push(
+      `Fase de grupos: ${gruposCount ?? '?'} grupo(s)` +
+      `${idaVuelta ? ', ida y vuelta' : ''}. ` +
+      `Puntaje: victoria ${puntos.win}, empate ${puntos.draw}, derrota ${puntos.loss}. ` +
+      `Partidos ${setsFmt} con ${tbFmt}.`
+    );
+  }
+
+  if (t?.formato === 'eliminacion' || t?.formato === 'grupos_y_eliminacion') {
+    const clasif = t?.formato === 'grupos_y_eliminacion'
+      ? `Clasifican ${parseInt(t?.topK ?? 2, 10)} por grupo. `
+      : '';
+    const koSets = setsLabel(r?.ko?.sets);
+    const koTB   = tbLabel(r?.ko?.tb);
+    partes.push(`Eliminación directa: ${clasif}Partidos ${koSets} con ${koTB}.`);
+  }
+
+  return partes.join(' ');
+}
+
+// ===== Panel reutilizable: muestra/copia/guarda el resumen =====
+function ResumenReglasBox({ torneo, disabled, onGuardar }) {
+  const texto = React.useMemo(() => buildReglamentoTexto(torneo), [torneo]);
+
+  return (
+    <div className="border rounded-xl p-3 mt-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-semibold text-slate-800">Resumen de formato y reglas</div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-xl border"
+            onClick={() => navigator.clipboard?.writeText(texto)}
+          >
+            Copiar
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-xl bg-[#34745B] text-white disabled:opacity-50"
+            onClick={() => onGuardar?.(texto)}
+            disabled={disabled}
+          >
+            Guardar en torneo
+          </button>
+        </div>
+      </div>
+
+      <textarea
+        readOnly
+        className="w-full border rounded-xl p-2 min-h-[120px]"
+        value={texto}
+      />
+
+      {!!torneo?.reglamentoTexto && (
+        <div className="text-xs text-slate-500 mt-2">
+          Guardado: {String(torneo.reglamentoTexto).slice(0, 140)}
+          {String(torneo.reglamentoTexto).length > 140 ? '…' : ''}
+        </div>
       )}
     </div>
   );
 }
+
+
+// ===== Tabla de posiciones (Standings) =====
+function idKey(e){ return (typeof e === 'string') ? e : (e && e.id) ? e.id : String(e); }
+
+function computeStandings(torneo){
+  const out = {};
+  const reglas = normalizeReglas(torneo.reglas);
+  const P = reglas.grupos?.puntos || { win:3, draw:1, loss:0 };
+
+  // Inicializa por grupo con entradas
+  (torneo.grupos || []).forEach(g => {
+    const map = {};
+    (g.entradas || []).forEach(eid => {
+      const k = idKey(eid);
+      map[k] = { eid, pj:0, pg:0, pe:0, pp:0, gf:0, gc:0, gd:0, pts:0 };
+    });
+    out[g.id] = map;
+  });
+
+  // Helper: suma de sets -> games/puntos a favor/en contra
+  const sumSets = (sets) => {
+    let ga = 0, gb = 0;
+    (sets || []).forEach(s => { ga += Number(s?.a || 0); gb += Number(s?.b || 0); });
+    return [ga, gb];
+  };
+
+  // Recorre fixture por grupo
+  Object.entries(torneo.fixture || {}).forEach(([gid, rondas]) => {
+    const map = out[gid]; if (!map) return;
+
+    // Soportar matriz de rondas o lista plana
+    const matches = Array.isArray(rondas?.[0]) ? rondas.flat() : (rondas || []);
+
+    matches.forEach(m => {
+      if (!m || !m.done) return;
+
+      const aK = idKey(m.a), bK = idKey(m.b);
+      if (!map[aK] || !map[bK]) return;
+
+      // Sumar PJ
+      map[aK].pj++; map[bK].pj++;
+
+      // 1) Puntos/Games: sets o scoreA/scoreB
+      let ga = 0, gb = 0;
+      if (m.result?.sets && Array.isArray(m.result.sets)) {
+        [ga, gb] = sumSets(m.result.sets);
+      } else {
+        const sA = Number(m.scoreA ?? m.result?.scoreA ?? NaN);
+        const sB = Number(m.scoreB ?? m.result?.scoreB ?? NaN);
+        if (Number.isFinite(sA) && Number.isFinite(sB)) {
+          ga = sA; gb = sB;
+        }
+      }
+      map[aK].gf += ga; map[aK].gc += gb;
+      map[bK].gf += gb; map[bK].gc += ga;
+
+      // 2) Ganador: admite 'a'/'b'/'draw' y 'A'/'B'
+      let w = m.result?.winner ?? m.winner ?? m.ganador ?? m.resultado?.winner ?? null;
+      if (w === 'A') w = 'a';
+      if (w === 'B') w = 'b';
+
+      // Si no vino winner pero sí hay score, lo inferimos
+      if (!w && Number.isFinite(ga) && Number.isFinite(gb)) {
+        if (ga > gb) w = 'a';
+        else if (gb > ga) w = 'b';
+        else w = 'draw';
+      }
+
+      if (w === 'a') {
+        map[aK].pg++; map[bK].pp++;
+        map[aK].pts += P.win; map[bK].pts += P.loss;
+      } else if (w === 'b') {
+        map[bK].pg++; map[aK].pp++;
+        map[bK].pts += P.win; map[aK].pts += P.loss;
+      } else {
+        // draw
+        map[aK].pe++; map[bK].pe++;
+        map[aK].pts += P.draw; map[bK].pts += P.draw;
+      }
+    });
+  });
+
+  // Cierra arrays y ordena por Pts, Dif, GF
+  const final = {};
+  Object.entries(out).forEach(([gid, map]) => {
+    const rows = Object.values(map).map(r => ({ ...r, gd: (r.gf - r.gc) }));
+    rows.sort((A,B) => (B.pts - A.pts) || (B.gd - A.gd) || (B.gf - A.gf));
+    final[gid] = rows;
+  });
+  return final;
+}
+
+function StandingsTable({ rows, getLabel }){
+  if (!rows || !rows.length) return <div className="text-sm text-slate-500">Aún sin posiciones.</div>;
+  return (
+    <div className="overflow-auto">
+      <table className="min-w-[680px] w-full text-sm">
+        <thead className="text-xs text-slate-500">
+          <tr>
+            <th className="text-left py-1 pr-2">#</th>
+            <th className="text-left py-1">Jugador / Pareja</th>
+            <th className="text-right py-1">PJ</th>
+            <th className="text-right py-1">PG</th>
+            <th className="text-right py-1">PE</th>
+            <th className="text-right py-1">PP</th>
+            <th className="text-right py-1">PF</th>
+            <th className="text-right py-1">PC</th>
+            <th className="text-right py-1">+/-</th>
+            <th className="text-right py-1">PF/PJ</th>
+            <th className="text-right py-1">Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const ppg = r.pj ? (r.gf / r.pj) : 0;
+            return (
+              <tr key={idKey(r.eid)} className="border-t">
+                <td className="py-1 pr-2">{i+1}</td>
+                <td className="py-1">{getLabel ? getLabel(r.eid) : String(idKey(r.eid))}</td>
+                <td className="py-1 text-right">{r.pj||0}</td>
+                <td className="py-1 text-right">{r.pg||0}</td>
+                <td className="py-1 text-right">{r.pe||0}</td>
+                <td className="py-1 text-right">{r.pp||0}</td>
+                <td className="py-1 text-right">{r.gf||0}</td>
+                <td className="py-1 text-right">{r.gc||0}</td>
+                <td className="py-1 text-right">{(r.gf - r.gc)||0}</td>
+                <td className="py-1 text-right">{ppg.toFixed(1)}</td>
+                <td className="py-1 text-right font-semibold">{r.pts||0}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 
     
     function Pagos({ pagos, alumnos, perfil, onPayMensual, clases, onEditarPago, onDeletePago }) {
@@ -10629,7 +11796,7 @@ const pagoCrud = {
   <Rankings alumnos={state.alumnos} user={user} clubActivoId={clubActivoId} />
 )}
 {current === "torneos" && (
-  <Torneos alumnos={state.alumnos} user={user} clubActivoId={clubActivoId} />
+  <Torneos alumnos={state.alumnos} user={user} clubActivoId={clubActivoId} perfil={state.perfil} />
 )}
         {current === "perfil" && <Perfil
           perfil={state.perfil}
