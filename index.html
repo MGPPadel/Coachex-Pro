@@ -5703,6 +5703,60 @@ function Torneos({ alumnos = [], user, clubActivoId, perfil = {} }) {
   const [selectedId, setSelectedId] = React.useState(null);
   const [creating, setCreating] = React.useState(false);
 
+  // ====== Defaults/normalización de reglas (fallback interno) ======
+  const REGLAS_BASE = React.useMemo(() => (
+    (typeof DEFAULT_REGLAS !== "undefined" && DEFAULT_REGLAS) || {
+      grupos: {
+        puntos: { win: 3, draw: 1, loss: 0 },
+        wo: {                // Walkover (no presentación)
+          ptsWin: 3,
+          ptsLoss: 0,
+          gf: 0,
+          gc: 0
+        },
+        bye: {               // BYE estructural (descanso)
+          cuenta: false,     // true = cuenta como victoria automática
+          ptsWin: 3,
+          gf: 0,
+          gc: 0
+        }
+      }
+    }
+  ), []);
+
+  const mergeReglas = React.useCallback((r = {}) => {
+    const g = r.grupos || {};
+    return {
+      ...REGLAS_BASE,
+      ...r,
+      grupos: {
+        ...REGLAS_BASE.grupos,
+        ...g,
+        puntos: {
+          ...REGLAS_BASE.grupos.puntos,
+          ...(g.puntos || {})
+        },
+        wo: {
+          ...REGLAS_BASE.grupos.wo,
+          ...(g.wo || {})
+        },
+        bye: {
+          ...REGLAS_BASE.grupos.bye,
+          ...(g.bye || {})
+        }
+      }
+    };
+  }, [REGLAS_BASE]);
+
+  // Normalizar reglas de torneos cargados (solo 1 vez)
+  const normalizedOnce = React.useRef(false);
+  React.useEffect(() => {
+    if (!normalizedOnce.current) {
+      setTorneos(ts => ts.map(t => ({ ...t, reglas: mergeReglas(t.reglas) })));
+      normalizedOnce.current = true;
+    }
+  }, [mergeReglas]);
+
   const selected = React.useMemo(
     () => torneos.find(t => t.id === selectedId) || null,
     [torneos, selectedId]
@@ -5713,17 +5767,47 @@ function Torneos({ alumnos = [], user, clubActivoId, perfil = {} }) {
     saveTorneosLS(torneos);
   }, [torneos]);
 
-  const handleCreate = () => {
-    const t = newTorneo();
-    setTorneos(prev => [t, ...prev]);
-    setSelectedId(t.id);
+  // ====== Helpers locales ======
+  const genId = React.useCallback(() => (
+    crypto?.randomUUID?.() ??
+    ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+      (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    )
+  ), []);
+
+  // Crear torneo con reglas por defecto + estructura base
+  const crearTorneo = React.useCallback(() => {
+    const nuevo = {
+      id: genId(),
+      nombre: "Torneo nuevo",
+      formato: "grupos",     // 'grupos' | 'eliminacion' | 'grupos_y_eliminacion'
+      modalidad: "singles",  // 'singles' | 'dobles'
+      reglas: REGLAS_BASE,   // defaults con WO/BYE
+      grupos: [],
+      fixture: {},
+      cuadro: {},
+      estado: "config",
+      createdAt: Date.now()
+    };
+    setTorneos(prev => [nuevo, ...prev]);
+    setSelectedId(nuevo.id);
     setCreating(true);
+  }, [genId, REGLAS_BASE]);
+
+  const handleCreate = () => {
+    crearTorneo();
   };
 
   const handleClone = (id) => {
     const base = torneos.find(t => t.id === id);
     if (!base) return;
-    const clone = { ...deepClone(base), id: genId("t_"), nombre: base.nombre + " (copia)", estado: "config" };
+    const clone = {
+      ...deepClone(base),
+      id: genId(),
+      nombre: (base.nombre || "Torneo") + " (copia)",
+      estado: "config",
+      reglas: mergeReglas(base.reglas) // asegurar defaults en el clon
+    };
     setTorneos(prev => [clone, ...prev]);
     setSelectedId(clone.id);
   };
@@ -5735,11 +5819,15 @@ function Torneos({ alumnos = [], user, clubActivoId, perfil = {} }) {
   };
 
   const upsert = (patch) => {
-    setTorneos(prev => prev.map(t => (t.id === patch.id ? { ...t, ...patch } : t)));
+    setTorneos(prev => prev.map(t => {
+      if (t.id !== patch.id) return t;
+      const next = { ...t, ...patch };
+      if (patch.reglas) next.reglas = mergeReglas({ ...(t.reglas || {}), ...(patch.reglas || {}) });
+      return next;
+    }));
   };
 
-  // === Helpers para etiquetar en la tarjeta ===
-    // === Helpers para etiquetar en la tarjeta (robustos) ===
+  // === Helpers para etiquetar en la tarjeta (robustos) ===
   const alumnoByIdCard = React.useCallback(
     (id) => (alumnos || []).find(a => a && a.id === id) || null,
     [alumnos]
@@ -5768,7 +5856,7 @@ function Torneos({ alumnos = [], user, clubActivoId, perfil = {} }) {
       console.error("labelEntradaCard error:", err, { e, t });
       return "—";
     }
-  };;
+  };
 
   // ================== UI ==================
   return (
@@ -5862,6 +5950,7 @@ function Torneos({ alumnos = [], user, clubActivoId, perfil = {} }) {
     </div>
   );
 }
+
 
 
 // ================== Editor PRO por pestañas ==================
@@ -6739,16 +6828,69 @@ function EstructuraTab({
 
 function PartidosTab({ torneo, onChange, labelEntrada, perfil, clubActivoId }) {
   const partidos = React.useMemo(() => flattenFixture(torneo.fixture || {}), [torneo.fixture]);
-  const [editId, setEditId] = React.useState(null);
+  const [editId, setEditId] = React.useState(null);       // editor de resultado
+  const [progEditId, setProgEditId] = React.useState(null); // editor de programación
 
   const standings = React.useMemo(() => computeStandings(torneo), [torneo]);
 
   // Liga
   const isLiga = isLeagueMode(torneo);
-  const locked = !!torneo.lockedGrupos; // reutilizamos el lock existente
+  const locked = !!torneo.lockedGrupos;
   const ligaInfo = React.useMemo(() => leagueWinnersInfo(torneo), [torneo]);
 
-  // Cerrar liga (PIN) y Desbloquear
+  // ---- Helpers labels / resumen ----
+  const isBYE = React.useCallback(
+    (side) => !!(side && (side.BYE || side === 'BYE' || side?.id === 'BYE')),
+    []
+  );
+
+  const sideLabel = React.useCallback(
+    (side) => (!side || isBYE(side)) ? "—" : labelEntrada(findEntry(side, torneo)),
+    [torneo, labelEntrada, isBYE]
+  );
+
+  const isPlayed = React.useCallback(
+    (m) => !!m && (m.done || m?.result?.done || m?.result?.wo || m?.wo || m?.woWinner || m?.winner != null || m?.result?.winner != null),
+    []
+  );
+
+  const safeResumen = React.useCallback(
+    (m) => {
+      if (!m) return "Sin resultado";
+      const wo = m?.result?.wo || m?.wo || m?.woWinner || null;
+      if (wo === 'a' || wo === 'b') {
+        const ganador = wo === 'a' ? sideLabel(m.a) : sideLabel(m.b);
+        return `WO ${ganador}`;
+      }
+      if (typeof resumenMarcador === 'function') return resumenMarcador(m);
+      return isPlayed(m) ? 'OK' : 'Sin resultado';
+    },
+    [sideLabel, isPlayed]
+  );
+
+  const formatDate = (iso) => {
+    if (!iso) return null;
+    const [y,m,d] = iso.split("-").map(Number);
+    if (!y || !m || !d) return iso;
+    return `${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${y}`;
+  };
+  const fmtProg = (m) => {
+    const p = m?.programacion || {};
+    const fecha  = p.fecha  ?? m.fecha  ?? null;
+    const hora   = p.hora   ?? m.hora   ?? null;
+    const cancha = p.cancha ?? m.cancha ?? null;
+    const sede   = p.sede   ?? m.sede   ?? m.club ?? null;
+    const partes = [];
+    if (fecha || hora) {
+      const fh = `${fecha ? formatDate(fecha) : ""}${fecha && hora ? " " : ""}${hora ? `${hora} hs` : ""}`.trim();
+      if (fh) partes.push(fh);
+    }
+    if (cancha) partes.push(`Cancha: ${cancha}`);
+    if (sede)   partes.push(`Club: ${sede}`);
+    return partes.join(" · ");
+  };
+
+  // ====== PIN cerrar/desbloquear liga ======
   const cerrarLiga = () => {
     if (!isLiga) return;
     if (!groupsAllMatchesDone(torneo)) {
@@ -6776,15 +6918,54 @@ function PartidosTab({ torneo, onChange, labelEntrada, perfil, clubActivoId }) {
     }
   };
 
+  // ====== Persistir RESULTADO ======
   const guardarResultado = (matchId, result) => {
     const nuevo = applyResultToFixture(deepClone(torneo), matchId, result);
     onChange(nuevo);
     setEditId(null);
   };
 
+  // ====== Persistir PROGRAMACIÓN (fixture) ======
+  const guardarProgramacion = (gid, matchId, prog) => {
+    const t = deepClone(torneo);
+    const rounds = t.fixture?.[gid] || [];
+    if (Array.isArray(rounds[0])) {
+      t.fixture[gid] = rounds.map(r =>
+        r.map(mm => mm.id === matchId ? { ...mm, programacion: prog, fecha: prog.fecha, hora: prog.hora, cancha: prog.cancha, sede: prog.sede } : mm)
+      );
+    } else {
+      t.fixture[gid] = rounds.map(mm =>
+        mm.id === matchId ? { ...mm, programacion: prog, fecha: prog.fecha, hora: prog.hora, cancha: prog.cancha, sede: prog.sede } : mm
+      );
+    }
+    onChange(t);
+    setProgEditId(null);
+  };
+
+  // Mini editor Programación
+  const ProgramacionEditor = ({ initial = {}, onSave, onCancel }) => {
+    const [fecha, setFecha]   = React.useState(initial.fecha  || "");
+    const [hora, setHora]     = React.useState(initial.hora   || "");
+    const [cancha, setCancha] = React.useState(initial.cancha || "");
+    const [sede, setSede]     = React.useState(initial.sede   || initial.club || "");
+    const save = () => onSave({ fecha: fecha || null, hora: hora || null, cancha: cancha || null, sede: sede || null });
+    return (
+      <div className="grid sm:grid-cols-4 gap-2 text-xs mt-2">
+        <input type="date" className="border rounded-lg px-2 py-1" value={fecha} onChange={e=>setFecha(e.target.value)} />
+        <input type="time" className="border rounded-lg px-2 py-1" value={hora} onChange={e=>setHora(e.target.value)} />
+        <input type="text"  className="border rounded-lg px-2 py-1" placeholder="Cancha" value={cancha} onChange={e=>setCancha(e.target.value)} />
+        <div className="flex gap-2">
+          <input type="text" className="border rounded-lg px-2 py-1 w-full" placeholder="Club" value={sede} onChange={e=>setSede(e.target.value)} />
+          <button className="px-2 py-1 rounded-lg border" onClick={onCancel}>Cancelar</button>
+          <button className="px-2 py-1 rounded-lg bg-[#34745B] text-white" onClick={save}>Guardar</button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="grid gap-4">
-      {/* Banner de estado para LIGA */}
+      {/* Banner estado LIGA */}
       {isLiga && (
         <div className={`p-3 rounded-xl border ${locked ? "bg-amber-50 border-amber-300" : "bg-sky-50 border-sky-300"}`}>
           <div className="flex items-center justify-between">
@@ -6814,18 +6995,12 @@ function PartidosTab({ torneo, onChange, labelEntrada, perfil, clubActivoId }) {
         </div>
       )}
 
-      {/* Campeón / Subcampeón (Liga) */}
+      {/* Campeón/Subcampeón (Liga) */}
       {isLiga && ligaInfo?.done && (
         ligaInfo.type === 'single' ? (
           <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300">
-            <div className="font-semibold">
-              🏆 Campeón: {labelEntrada(findEntry(ligaInfo.champion, torneo))}
-            </div>
-            {ligaInfo.runnerUp && (
-              <div className="text-sm">
-                🥈 Subcampeón: {labelEntrada(findEntry(ligaInfo.runnerUp, torneo))}
-              </div>
-            )}
+            <div className="font-semibold">🏆 Campeón: {labelEntrada(findEntry(ligaInfo.champion, torneo))}</div>
+            {ligaInfo.runnerUp && <div className="text-sm">🥈 Subcampeón: {labelEntrada(findEntry(ligaInfo.runnerUp, torneo))}</div>}
           </div>
         ) : (
           <div className="p-3 rounded-xl bg-sky-50 border border-sky-300">
@@ -6842,71 +7017,105 @@ function PartidosTab({ torneo, onChange, labelEntrada, perfil, clubActivoId }) {
         )
       )}
 
-{/* Tabla + lista de partidos (actualizada con standings) */}
-{Object.keys(torneo.fixture || {}).map((gid) => {
-  const rounds = torneo.fixture[gid] || [];
-  const listaPartidos = Array.isArray(rounds[0]) ? rounds.flat() : rounds;
+      {/* Tabla + lista de partidos */}
+      {Object.keys(torneo.fixture || {}).map((gid) => {
+        const rounds = torneo.fixture[gid] || [];
+        const listaPartidos = Array.isArray(rounds[0]) ? rounds.flat() : rounds;
 
-  const grupoName = torneo.grupos?.find(g => g.id === gid)?.nombre || gid;
-  const p = torneo?.reglas?.grupos?.puntos ?? { win: 3, draw: 1, loss: 0 };
+        const grupoName = torneo.grupos?.find(g => g.id === gid)?.nombre || gid;
+        const p = torneo?.reglas?.grupos?.puntos ?? { win: 3, draw: 1, loss: 0 };
 
-  return (
-    <div key={gid} className="border rounded-xl p-3">
-      <div className="font-semibold mb-1">{grupoName} · Tabla de posiciones</div>
-      <div className="text-xs text-slate-500 mb-2">
-        Puntaje: victoria {p.win}, empate {p.draw}, derrota {p.loss}.
-      </div>
-
-      {/* ✅ Tabla completa */}
-      <StandingsTable
-        rows={standings[gid] || []}
-        getLabel={(eid) => labelEntrada(findEntry(eid, torneo))}
-      />
-
-      {/* Lista de partidos debajo (tu UI existente) */}
-      <div className="mt-4 font-semibold">Partidos</div>
-      {listaPartidos.map((m) => {
-        const editable = !locked; // en liga cerrada no se puede editar
         return (
-          <div key={m.id} className="border rounded-xl p-2 mt-2">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium">
-                {grupoName} · {labelEntrada(findEntry(m.a, torneo))} vs {labelEntrada(findEntry(m.b, torneo))}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500">
-                  {m.done ? resumenMarcador(m) : "Sin resultado"}
-                </span>
-                <button
-                  className="px-2 py-1 rounded-lg text-xs bg-slate-800 text-white disabled:opacity-50"
-                  onClick={() => editable && setEditId(editId === m.id ? null : m.id)}
-                  disabled={!editable}
-                  title={locked ? "Liga cerrada" : ""}
-                >
-                  {editId === m.id ? "Cerrar" : "Cargar"}
-                </button>
-              </div>
-            </div>
-            {editId === m.id && (
-              <div className="mt-2">
-                <ResultadoEditor
-                  reglas={torneo.reglas}
-                  initial={m.result}
-                  onSave={(res) => guardarResultado(m.id, res)}
-                  onCancel={() => setEditId(null)}
-                />
-              </div>
-            )}
+          <div key={gid} className="border rounded-xl p-3">
+            <div className="font-semibold mb-1">{grupoName} · Tabla de posiciones</div>
+            <div className="text-xs text-slate-500 mb-2">Puntaje: victoria {p.win}, empate {p.draw}, derrota {p.loss}.</div>
+
+            <StandingsTable rows={standings[gid] || []} getLabel={(eid) => labelEntrada(findEntry(eid, torneo))} />
+
+            <div className="mt-4 font-semibold">Partidos</div>
+            {listaPartidos.map((m) => {
+              const byeA = isBYE(m.a), byeB = isBYE(m.b);
+              const editable = !locked && !byeA && !byeB;
+              const pInit = m.programacion || { fecha: m.fecha, hora: m.hora, cancha: m.cancha, sede: m.sede || m.club };
+              return (
+                <div key={m.id} className="border rounded-xl p-2 mt-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-medium">
+                      {grupoName} · {sideLabel(m.a)} {" vs "} {sideLabel(m.b)}
+                      <div className="text-xs text-slate-500 mt-1">
+                        🗓️ {fmtProg(m) || "Sin programación"}
+                        <button className="ml-2 underline hover:no-underline" onClick={() => setProgEditId(progEditId === m.id ? null : m.id)}>
+                          {progEditId === m.id ? "cerrar" : "programar"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">{safeResumen(m)}</span>
+
+                      {/* WO rápidos */}
+                      <button
+                        type="button"
+                        className="px-2 py-1 rounded-lg text-xs border border-slate-300 disabled:opacity-50"
+                        onClick={() => { if (!editable) return; if (confirm(`Confirmar WO: gana ${sideLabel(m.a)}.`)) guardarResultado(m.id, { wo: 'a', done: true }); }}
+                        disabled={!editable}
+                        title={`WO para ${sideLabel(m.a)}`}
+                      >
+                        WO {sideLabel(m.a)}
+                      </button>
+                      <button
+                        type="button"
+                        className="px-2 py-1 rounded-lg text-xs border border-slate-300 disabled:opacity-50"
+                        onClick={() => { if (!editable) return; if (confirm(`Confirmar WO: gana ${sideLabel(m.b)}.`)) guardarResultado(m.id, { wo: 'b', done: true }); }}
+                        disabled={!editable}
+                        title={`WO para ${sideLabel(m.b)}`}
+                      >
+                        WO {sideLabel(m.b)}
+                      </button>
+
+                      <button
+                        className="px-2 py-1 rounded-lg text-xs bg-slate-800 text-white disabled:opacity-50"
+                        onClick={() => editable && setEditId(editId === m.id ? null : m.id)}
+                        disabled={!editable}
+                        title={locked ? "Liga cerrada" : ""}
+                      >
+                        {editId === m.id ? "Cerrar" : (isPlayed(m) ? "Editar" : "Cargar")}
+                      </button>
+                    </div>
+                  </div>
+
+                  {progEditId === m.id && (
+                    <ProgramacionEditor
+                      initial={pInit}
+                      onCancel={() => setProgEditId(null)}
+                      onSave={(prog) => guardarProgramacion(gid, m.id, prog)}
+                    />
+                  )}
+
+                  {editId === m.id && (
+                    <div className="mt-2">
+                      <ResultadoEditor
+                        reglas={torneo.reglas}
+                        initial={m.result}
+                        onSave={(res) => guardarResultado(m.id, res)}
+                        onCancel={() => setEditId(null)}
+                        aLabel={sideLabel(m.a)}
+                        bLabel={sideLabel(m.b)}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         );
       })}
     </div>
   );
-})}
-
-    </div>
-  );
 }
+
+
+
 
 
 // === Info de la final (campeón / subcampeón) ===
@@ -6928,7 +7137,8 @@ function bracketFinalInfo(cuadro){
 
 
 function FaseFinalTab({ torneo, onChange, labelEntrada }) {
-  const [edit, setEdit] = React.useState(null);
+  const [edit, setEdit] = React.useState(null);       // editor de resultado
+  const [progEdit, setProgEdit] = React.useState(null); // editor de programación
   const [showBracket, setShowBracket] = React.useState(true);
 
   const koHasResults = React.useMemo(() => hasKOResults(torneo.cuadro), [torneo.cuadro]);
@@ -6959,6 +7169,7 @@ function FaseFinalTab({ torneo, onChange, labelEntrada }) {
     return <div className="text-slate-500">Aún no se generó el cuadro.</div>;
   }
 
+  // Guardar RESULTADO
   const guardar = (matchId, result) => {
     const nuevo = applyResultToBracket(deepClone(torneo), matchId, result);
     onChange(nuevo);
@@ -6971,9 +7182,89 @@ function FaseFinalTab({ torneo, onChange, labelEntrada }) {
     }
   };
 
-  // Metadatos (para encabezado A4)
-  const esDobles = torneo.modalidad === 'dobles';
-  const parejas  = (torneo.teams || []).length;
+  // ===== Programación (helpers) =====
+  const sideLabel = (side) => (!side || side?.BYE) ? "—" : labelEntrada(findEntry(side, torneo));
+
+  const isPlayed = (m) =>
+    !!m && (m.done || m?.result?.done || m?.result?.wo || m?.wo || m?.woWinner || m?.winner != null || m?.result?.winner != null);
+
+  const safeResumen = (m) => {
+    if (!m) return "Sin resultado";
+    const wo = m?.result?.wo || m?.wo || m?.woWinner || null;
+    if (wo === 'a' || wo === 'b') {
+      const ganador = wo === 'a' ? sideLabel(m.a) : sideLabel(m.b);
+      return `WO ${ganador}`;
+    }
+    if (typeof resumenMarcador === 'function') return resumenMarcador(m);
+    return isPlayed(m) ? 'OK' : 'Sin resultado';
+  };
+
+  const formatDate = (iso) => {
+    if (!iso) return null;
+    const [y,m,d] = iso.split("-").map(Number);
+    if (!y || !m || !d) return iso;
+    return `${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${y}`;
+  };
+  const fmtProg = (m) => {
+    const p = m?.programacion || {};
+    const fecha  = p.fecha  ?? m.fecha  ?? null;
+    const hora   = p.hora   ?? m.hora   ?? null;
+    const cancha = p.cancha ?? m.cancha ?? null;
+    const sede   = p.sede   ?? m.sede   ?? m.club ?? null;
+
+    const partes = [];
+    if (fecha || hora) {
+      const fh = `${fecha ? formatDate(fecha) : ""}${fecha && hora ? " " : ""}${hora ? `${hora} hs` : ""}`.trim();
+      if (fh) partes.push(fh);
+    }
+    if (cancha) partes.push(`Cancha: ${cancha}`);
+    if (sede)   partes.push(`Club: ${sede}`);
+    return partes.join(" · ");
+  };
+
+  // Guardar PROGRAMACIÓN en KO
+  const guardarProgramacion = (matchId, prog) => {
+    const t = deepClone(torneo);
+    Object.keys(t.cuadro || {}).forEach(k => {
+      t.cuadro[k] = (t.cuadro[k] || []).map(mm =>
+        mm.id === matchId
+          ? { ...mm, programacion: prog, fecha: prog.fecha, hora: prog.hora, cancha: prog.cancha, sede: prog.sede }
+          : mm
+      );
+    });
+    onChange(t);
+    setProgEdit(null);
+  };
+
+  // Editor mini de programación
+  const ProgramacionEditor = ({ initial = {}, onSave, onCancel }) => {
+    const [fecha, setFecha]   = React.useState(initial.fecha  || "");
+    const [hora, setHora]     = React.useState(initial.hora   || "");
+    const [cancha, setCancha] = React.useState(initial.cancha || "");
+    const [sede, setSede]     = React.useState(initial.sede   || initial.club || "");
+    const save = () => onSave({ fecha: fecha || null, hora: hora || null, cancha: cancha || null, sede: sede || null });
+    return (
+      <div className="grid sm:grid-cols-4 gap-2 text-xs mt-2">
+        <input type="date" className="border rounded-lg px-2 py-1" value={fecha} onChange={e=>setFecha(e.target.value)} />
+        <input type="time" className="border rounded-lg px-2 py-1" value={hora} onChange={e=>setHora(e.target.value)} />
+        <input type="text"  className="border rounded-lg px-2 py-1" placeholder="Cancha" value={cancha} onChange={e=>setCancha(e.target.value)} />
+        <div className="flex gap-2">
+          <input type="text" className="border rounded-lg px-2 py-1 w-full" placeholder="Club" value={sede} onChange={e=>setSede(e.target.value)} />
+          <button className="px-2 py-1 rounded-lg border" onClick={onCancel}>Cancelar</button>
+          <button className="px-2 py-1 rounded-lg bg-[#34745B] text-white" onClick={save}>Guardar</button>
+        </div>
+      </div>
+    );
+  };
+
+  const nombreRondaPorPartidos = (n) => {
+    const map = { 1:"Final", 2:"Semifinales", 4:"Cuartos de final", 8:"Octavos de final", 16:"Dieciseisavos", 32:"Treintaidosavos" };
+    return map[n] || `Ronda (${n} partido${n !== 1 ? "s" : ""})`;
+  };
+
+  // --- Encabezados informativos ---
+  const esDobles  = torneo.modalidad === 'dobles';
+  const parejas   = (torneo.teams || []).length;
   const jugadores = esDobles ? parejas * 2 : (torneo.participantes || []).length;
   const formatoLabel =
     torneo.formato === "grupos" ? "Sólo grupos (Liga)" :
@@ -6981,10 +7272,7 @@ function FaseFinalTab({ torneo, onChange, labelEntrada }) {
     torneo.formato === "grupos_y_eliminacion" ? "Grupos + Eliminación" : (torneo.formato || "—");
   const creado = new Date(torneo.createdAt || torneo.fechaCreacion || Date.now()).toLocaleDateString();
 
-  const safeResumen = (m) => (typeof resumenMarcador === 'function' ? resumenMarcador(m) : (m?.done ? 'OK' : 'Sin resultado'));
-  const sideLabel = (side) => (!side || side?.BYE) ? "—" : labelEntrada(findEntry(side, torneo));
-
-  // ---- UI -------------------------------------------------------------------
+  // ---- UI ----
   return (
     <div className="grid gap-4">
       {/* Toolbar */}
@@ -6994,9 +7282,7 @@ function FaseFinalTab({ torneo, onChange, labelEntrada }) {
           <button className="px-3 py-1.5 rounded-lg border" onClick={() => setShowBracket(s => !s)}>
             {showBracket ? "Ver lista" : "Ver llaves"}
           </button>
-          <button className="px-3 py-1.5 rounded-lg border" onClick={regenerarDesdeTabla}>
-            Regenerar desde tabla
-          </button>
+          <button className="px-3 py-1.5 rounded-lg border" onClick={regenerarDesdeTabla}>Regenerar desde tabla</button>
           <button className="px-3 py-1.5 rounded-lg border" onClick={exportPNG} title="Exportar a PNG">PNG</button>
           <button className="px-3 py-1.5 rounded-lg bg-[#34745B] text-white" onClick={exportPDF} title="Exportar a PDF">PDF</button>
         </div>
@@ -7005,20 +7291,13 @@ function FaseFinalTab({ torneo, onChange, labelEntrada }) {
       {/* Campeón/Subcampeón */}
       {finalInfo?.done && (
         <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300">
-          <div className="font-semibold">
-            🏆 Campeón: {labelEntrada(findEntry(finalInfo.champion, torneo))}
-          </div>
+          <div className="font-semibold">🏆 Campeón: {labelEntrada(findEntry(finalInfo.champion, torneo))}</div>
           <div className="text-sm">🥈 Subcampeón: {labelEntrada(findEntry(finalInfo.runnerUp, torneo))}</div>
         </div>
       )}
 
-      {/* CONTENEDOR A4 OFF-SCREEN (para exportar con id=bracket-canvas) */}
-      <div
-        id="a4-export-root"
-        style={{ position:'absolute', left:-99999, top:0, width:'1123px', minHeight:'794px', background:'#fff', padding:'16px',
-                 border:'1px solid #e2e8f0', borderRadius:'12px' }}
-        aria-hidden="true"
-      >
+      {/* Contenedor A4 off-screen */}
+      <div id="a4-export-root" style={{ position:'absolute', left:-99999, top:0, width:'1123px', minHeight:'794px', background:'#fff', padding:'16px', border:'1px solid #e2e8f0', borderRadius:'12px' }} aria-hidden="true">
         <div className="flex items-center gap-3 mb-2">
           <img src="logo_favicon.png" alt="Coachex-Pro" width="28" height="28" />
           <div className="text-xl font-bold">Coachex-Pro</div>
@@ -7030,7 +7309,6 @@ function FaseFinalTab({ torneo, onChange, labelEntrada }) {
           {torneo.formato !== "eliminacion" ? ` · Ida y vuelta: ${torneo.idaVuelta ? "Sí" : "No"}` : ""}
         </div>
 
-        {/* Bracket para exportar (con id) */}
         {showBracket ? (
           <BracketViewSVG
             cuadro={torneo.cuadro}
@@ -7043,7 +7321,7 @@ function FaseFinalTab({ torneo, onChange, labelEntrada }) {
         ) : null}
       </div>
 
-      {/* Vista HORIZONTAL en pantalla: dos columnas en pantallas grandes */}
+      {/* Vista principal */}
       <div className="grid lg:grid-cols-[1fr,320px] gap-4">
         <div className="border rounded-2xl p-3">
           {showBracket ? (
@@ -7055,61 +7333,104 @@ function FaseFinalTab({ torneo, onChange, labelEntrada }) {
               layout={{ colW: 300, rowGap: 130, boxW: 360, boxH: 68 }}
             />
           ) : (
-            // Lista por rondas (modo “vertical” simple)
-            Object.keys(torneo.cuadro)
-              .map(Number).sort((a,b)=>b-a).map((rk) => (
-                <div key={rk} className="border rounded-xl p-3 mb-3">
-                  <div className="font-semibold">
-                    {rk===1?'Final':rk===2?'Semifinales':rk===4?'Cuartos':rk===8?'Octavos':`Ronda (${rk} partidos)`}
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-3 mt-2">
-                    {(torneo.cuadro[String(rk)] || []).map((m) => {
-                      const byeA = !!(m?.a && m.a.BYE), byeB = !!(m?.b && m.b.BYE);
-                      const editable = !byeA && !byeB;
-                      return (
-                        <div key={m.id} className="border rounded-xl p-2">
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm font-medium">
-                              {sideLabel(m.a)} {" vs "} {sideLabel(m.b)}
+            Object.entries(torneo.cuadro || {})
+              .sort((a, b) => (b[1]?.length || 0) - (a[1]?.length || 0))
+              .map(([rk, matches]) => {
+                const rondaName = nombreRondaPorPartidos((matches || []).length);
+                return (
+                  <div key={rk} className="border rounded-xl p-3 mb-3">
+                    <div className="font-semibold">{rondaName}</div>
+
+                    <div className="grid md:grid-cols-2 gap-3 mt-2">
+                      {(matches || []).map((m) => {
+                        const byeA = !!(m?.a && m.a.BYE), byeB = !!(m?.b && m.b.BYE);
+                        const editable = !byeA && !byeB;
+                        const pInit = m.programacion || { fecha: m.fecha, hora: m.hora, cancha: m.cancha, sede: m.sede || m.club };
+                        return (
+                          <div key={m.id} className="border rounded-xl p-2">
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-medium">
+                                {sideLabel(m.a)} {" vs "} {sideLabel(m.b)}
+                                <div className="text-xs text-slate-500 mt-1">
+                                  🗓️ {fmtProg(m) || "Sin programación"}
+                                  <button className="ml-2 underline hover:no-underline" onClick={() => setProgEdit(progEdit === m.id ? null : m.id)}>
+                                    {progEdit === m.id ? "cerrar" : "programar"}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500">{safeResumen(m)}</span>
+
+                                {/* WO rápidos */}
+                                <button
+                                  type="button"
+                                  className="px-2 py-1 rounded-lg text-xs border border-slate-300 disabled:opacity-50"
+                                  onClick={() => { if (!editable) return; if (confirm(`Confirmar WO: gana ${sideLabel(m.a)}.`)) guardar(m.id, { wo: 'a', done: true }); }}
+                                  disabled={!editable}
+                                  title={`WO para ${sideLabel(m.a)}`}
+                                >
+                                  WO {sideLabel(m.a)}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="px-2 py-1 rounded-lg text-xs border border-slate-300 disabled:opacity-50"
+                                  onClick={() => { if (!editable) return; if (confirm(`Confirmar WO: gana ${sideLabel(m.b)}.`)) guardar(m.id, { wo: 'b', done: true }); }}
+                                  disabled={!editable}
+                                  title={`WO para ${sideLabel(m.b)}`}
+                                >
+                                  WO {sideLabel(m.b)}
+                                </button>
+
+                                <button
+                                  className="px-2 py-1 rounded-lg text-xs bg-slate-800 text-white disabled:opacity-50"
+                                  onClick={() => editable && setEdit(edit === m.id ? null : m.id)}
+                                  disabled={!editable}
+                                >
+                                  {edit === m.id ? "Cerrar" : (isPlayed(m) ? "Editar" : "Cargar")}
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500">{safeResumen(m)}</span>
-                              <button
-                                className="px-2 py-1 rounded-lg text-xs bg-slate-800 text-white disabled:opacity-50"
-                                onClick={() => editable && setEdit(edit === m.id ? null : m.id)}
-                                disabled={!editable}
-                              >
-                                {edit === m.id ? "Cerrar" : "Cargar"}
-                              </button>
-                            </div>
-                          </div>
-                          {edit === m.id && editable && (
-                            <div className="mt-2">
-                              <ResultadoEditor
-                                reglas={torneo.reglas}
-                                initial={m.result}
-                                onSave={(res) => guardar(m.id, res)}
-                                onCancel={() => setEdit(null)}
+
+                            {progEdit === m.id && (
+                              <ProgramacionEditor
+                                initial={pInit}
+                                onCancel={() => setProgEdit(null)}
+                                onSave={(prog)=> guardarProgramacion(m.id, prog)}
                               />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                            )}
+
+                            {edit === m.id && editable && (
+                              <div className="mt-2">
+                                <ResultadoEditor
+                                  reglas={torneo.reglas}
+                                  initial={m.result}
+                                  onSave={(res) => guardar(m.id, res)}
+                                  onCancel={() => setEdit(null)}
+                                  aLabel={sideLabel(m.a)}
+                                  bLabel={sideLabel(m.b)}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
           )}
         </div>
 
-        {/* Panel derecho: resumen */}
+        {/* Panel derecho */}
         <aside className="lg:sticky lg:top-2 self-start border rounded-2xl p-3 bg-slate-50">
           <div className="font-semibold text-slate-800 mb-2">Resumen</div>
           <div className="text-sm text-slate-600 space-y-1">
             {(() => {
               const niveles = Object.values(torneo.cuadro || {});
-              const partidos = niveles.flat().length || 0;
-              const jugados = niveles.flat().filter(m => m?.done).length || 0;
+              const all = niveles.flat();
+              const partidos   = all.length || 0;
+              const jugados    = all.filter(isPlayed).length || 0;
               const pendientes = Math.max(0, partidos - jugados);
               return (
                 <>
@@ -7130,14 +7451,15 @@ function FaseFinalTab({ torneo, onChange, labelEntrada }) {
           )}
 
           <div className="h-px bg-slate-200 my-3" />
-          <div className="text-xs text-slate-500">
-            Tip: podés exportar PNG/PDF apaisado desde los botones de arriba.
-          </div>
+          <div className="text-xs text-slate-500">Tip: podés exportar PNG/PDF apaisado desde los botones de arriba.</div>
         </aside>
       </div>
     </div>
   );
 }
+
+
+
 
 
 
@@ -7191,78 +7513,184 @@ function SelectAlumno({ value, onChange, alumnos, placeholder }) {
 }
 
 // === Editor de resultado: 3 sets con A y B por set
-function ResultadoEditor({ reglas, onSave, onCancel, initial }) {
-  // inicial: por si ya hay resultado guardado
-  const seeded = (initial && Array.isArray(initial.sets)) ? initial.sets : [];
-  const seed3 = [0,1,2].map(i => ({ a: seeded[i]?.a ?? "", b: seeded[i]?.b ?? "" }));
+function ResultadoEditor({ reglas, initial, onSave, onCancel, aLabel = "A", bLabel = "B" }) {
+  // Modo: sets (3) vs WO
+  const [mode, setMode] = React.useState(initial?.wo ? "wo" : "sets");
 
-  const [sets, setSets] = React.useState(seed3);
+  // Sets: array de 3 objetos {a:"", b:""} en UI (strings para inputs)
+  const initSets = (() => {
+    const s = Array.isArray(initial?.sets) ? initial.sets : [];
+    const toStr = (x) => (Number.isFinite(Number(x)) ? String(Number(x)) : "");
+    return [
+      { a: toStr(s[0]?.a), b: toStr(s[0]?.b) },
+      { a: toStr(s[1]?.a), b: toStr(s[1]?.b) },
+      { a: toStr(s[2]?.a), b: toStr(s[2]?.b) },
+    ];
+  })();
+  const [sets, setSets] = React.useState(initSets);
 
-  const update = (i, side, val) => {
-    const v = val === "" ? "" : Number(val);
-    setSets(prev => prev.map((s, idx) => idx === i ? { ...s, [side]: v } : s));
+  // WO winner
+  const [woWinner, setWoWinner] = React.useState(initial?.wo || null);
+
+  const setSetVal = (i, side, val) => {
+    setSets(prev => {
+      const next = prev.map(x => ({ ...x }));
+      // Sólo números >= 0 o vacío
+      const clean = val === "" ? "" : Math.max(0, Number(val));
+      next[i][side] = (val === "" || Number.isFinite(clean)) ? String(val).replace(/^0+(\d)$/, "$1") : prev[i][side];
+      return next;
+    });
   };
 
-  const guardar = () => {
-    // tomar sólo sets completos (ambos lados) y sin empate
-    const filled = sets
-      .map(s => ({ a: s.a === "" ? null : Number(s.a), b: s.b === "" ? null : Number(s.b) }))
-      .filter(s => s.a != null && s.b != null && s.a !== s.b);
+  // Calcula ganador por sets ganados
+  const computeWinnerFromSets = (arr) => {
+    let winA = 0, winB = 0;
+    arr.forEach(s => {
+      const a = Number(s.a), b = Number(s.b);
+      if (Number.isFinite(a) && Number.isFinite(b)) {
+        if (a > b) winA++;
+        else if (b > a) winB++;
+      }
+    });
+    if (winA > winB) return 'a';
+    if (winB > winA) return 'b';
+    return 'draw';
+  };
 
-    if (!filled.length) {
-      alert("Ingresá al menos un set válido (A y B, sin empate).");
+  const save = () => {
+    if (mode === "wo") {
+      if (woWinner !== "a" && woWinner !== "b") {
+        alert("Elegí quién gana por WO.");
+        return;
+      }
+      onSave({ wo: woWinner, done: true });
       return;
     }
 
-    // ganador por cantidad de sets
-    let aw = 0, bw = 0;
-    filled.forEach(s => { if (s.a > s.b) aw++; else bw++; });
+    // Validar que haya al menos 1 set con ambos lados cargados
+    const filled = sets.filter(s => s.a !== "" && s.b !== "");
+    if (filled.length === 0) {
+      alert("Cargá al menos un set con Puntos para ambos lados.");
+      return;
+    }
 
-    // opcional: respetar Bo1/Bo3/Bo5 si lo definiste en reglas
-    const koSets = (reglas?.ko?.sets || reglas?.setsKo || reglas?.koSets || "Bo1");
-    const needWins = koSets === "Bo5" ? 3 : (koSets === "Bo3" ? 2 : 1);
-    // si el usuario cargó más sets de los necesarios, igual tomamos la mayoría
-    const winner = aw > bw ? "a" : "b";
+    // Normalizar a números (vacíos -> 0)
+    const norm = sets.map(s => ({
+      a: Number.isFinite(Number(s.a)) ? Number(s.a) : 0,
+      b: Number.isFinite(Number(s.b)) ? Number(s.b) : 0,
+    }));
 
-    onSave({ sets: filled, winner });
+    const winner = computeWinnerFromSets(norm);
+    onSave({ sets: norm, winner, done: true });
+  };
+
+  const limpiar = () => {
+    setSets([{a:"",b:""}, {a:"",b:""}, {a:"",b:""}]);
+    setWoWinner(null);
+    setMode("sets");
   };
 
   return (
-    <div className="p-2">
-      <div className="grid gap-2">
-        {[0,1,2].map(i => (
-          <div key={i} className="grid grid-cols-[auto,3rem,1rem,3rem] items-center gap-2">
-            <div className="text-xs text-slate-500">{`Set ${i+1}`}</div>
-            <input
-              type="number" min="0"
-              className="border rounded-lg px-2 py-1 w-16"
-              value={sets[i].a}
-              onChange={e => update(i, "a", e.target.value)}
-              placeholder="A"
-            />
-            <span className="text-slate-400 text-center">-</span>
-            <input
-              type="number" min="0"
-              className="border rounded-lg px-2 py-1 w-16"
-              value={sets[i].b}
-              onChange={e => update(i, "b", e.target.value)}
-              placeholder="B"
-            />
-          </div>
-        ))}
+    <div className="border rounded-xl p-3 space-y-3 bg-white">
+      {/* Modo */}
+      <div className="flex gap-4 text-sm">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="radio"
+            name="modo-res"
+            checked={mode === "sets"}
+            onChange={() => setMode("sets")}
+          />
+          <span>Resultado por sets (3)</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="radio"
+            name="modo-res"
+            checked={mode === "wo"}
+            onChange={() => setMode("wo")}
+          />
+          <span>WO (no presentación)</span>
+        </label>
       </div>
 
-      <div className="mt-3 flex gap-2">
-        <button className="px-3 py-2 rounded-xl bg-[#34745B] text-white" onClick={guardar}>
-          Guardar
+      {mode === "wo" ? (
+        // ---- UI WO ----
+        <div className="space-y-2">
+          <div className="text-sm text-slate-600">Marcá quién gana por WO.</div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={`px-3 py-1 rounded-lg border ${woWinner === "a" ? "bg-emerald-600 text-white border-emerald-600" : "border-slate-300"}`}
+              onClick={() => setWoWinner("a")}
+              title={`Gana ${aLabel} por WO`}
+            >
+              Gana {aLabel} por WO
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1 rounded-lg border ${woWinner === "b" ? "bg-emerald-600 text-white border-emerald-600" : "border-slate-300"}`}
+              onClick={() => setWoWinner("b")}
+              title={`Gana ${bLabel} por WO`}
+            >
+              Gana {bLabel} por WO
+            </button>
+          </div>
+          <p className="text-xs text-slate-500">
+            Los <b>puntos</b> por WO se toman de <code>reglas.grupos.wo</code> (si configuraste gf/gc, se usan como “puntos”).
+          </p>
+        </div>
+      ) : (
+        // ---- UI SETS (3) ----
+        <div className="space-y-3">
+          {[0,1,2].map(i => (
+            <div key={i} className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Set {i+1} · Puntos {aLabel}</label>
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={sets[i].a}
+                  onChange={(e) => setSetVal(i, "a", e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Set {i+1} · Puntos {bLabel}</label>
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={sets[i].b}
+                  onChange={(e) => setSetVal(i, "b", e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+          ))}
+          <p className="text-xs text-slate-500">
+            Ingresá los <b>puntos</b> de cada set (mejor de 3). El ganador se calcula por cantidad de sets ganados.
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-end gap-2 pt-2">
+        <button className="px-3 py-2 rounded-lg border border-slate-300" onClick={limpiar}>
+          Limpiar
         </button>
-        <button className="px-3 py-2 rounded-xl border" onClick={onCancel}>
+        <button className="px-3 py-2 rounded-lg border border-slate-300" onClick={onCancel}>
           Cancelar
+        </button>
+        <button className="px-3 py-2 rounded-lg bg-[#34745B] text-white" onClick={save}>
+          Guardar
         </button>
       </div>
     </div>
   );
 }
+
+
 
 function SetRow({ label, va, vb, setVa, setVb, placeholderA='', placeholderB='' }) {
   return (
@@ -7336,11 +7764,46 @@ function newTorneo(){
   };
 }
 
-function normalizeReglas(r={}){
+// ==== REGLAS POR DEFECTO (arriba del archivo) ====
+const DEFAULT_REGLAS = {
+  grupos: {
+    puntos: { win: 3, draw: 1, loss: 0 },
+    wo: {              // Walkover (no presentación)
+      ptsWin: 3,
+      ptsLoss: 0,
+      gf: 0,          // ej: 12 para 6-0 6-0 si querés reflejar games
+      gc: 0
+    },
+    bye: {            // BYE estructural (descanso)
+      cuenta: false,  // true = cuenta como victoria automática
+      ptsWin: 3,
+      gf: 0,
+      gc: 0
+    }
+  }
+};
+
+function normalizeReglas(r = {}) {
+  const g = r.grupos || {};
   return {
-    grupos: { puntos: { win: 3, draw: 1, loss: 0 }, ...(r.grupos||{}) },
-    sets: { formato: 'bo3', tb: 'tb7', ...(r.sets||{}) },
-    ko: { seeding: 'serpentina', sets: 'bo3', tb: 'tb7', ...(r.ko||{}) },
+    ...DEFAULT_REGLAS,
+    ...r,
+    grupos: {
+      ...DEFAULT_REGLAS.grupos,
+      ...g,
+      puntos: {
+        ...DEFAULT_REGLAS.grupos.puntos,
+        ...(g.puntos || {})
+      },
+      wo: {
+        ...DEFAULT_REGLAS.grupos.wo,
+        ...(g.wo || {})
+      },
+      bye: {
+        ...DEFAULT_REGLAS.grupos.bye,
+        ...(g.bye || {})
+      }
+    }
   };
 }
 
@@ -8039,70 +8502,144 @@ function ResumenReglasBox({ torneo, disabled, onGuardar }) {
 // ===== Tabla de posiciones (Standings) =====
 function idKey(e){ return (typeof e === 'string') ? e : (e && e.id) ? e.id : String(e); }
 
-function computeStandings(torneo){
+function computeStandings(torneo) {
   const out = {};
   const reglas = normalizeReglas(torneo.reglas);
-  const P = reglas.grupos?.puntos || { win:3, draw:1, loss:0 };
+  const P  = (reglas?.grupos?.puntos) || { win: 3, draw: 1, loss: 0 };
+  const WO = { ptsWin: P.win, ptsLoss: P.loss, gf: 0, gc: 0, ...(reglas?.grupos?.wo || {}) };
+  const BYE = { cuenta: false, ptsWin: P.win, gf: 0, gc: 0, ...(reglas?.grupos?.bye || {}) };
 
-  // Inicializa por grupo con entradas
-  (torneo.grupos || []).forEach(g => {
-    const map = {};
-    (g.entradas || []).forEach(eid => {
-      const k = idKey(eid);
-      map[k] = { eid, pj:0, pg:0, pe:0, pp:0, gf:0, gc:0, gd:0, pts:0 };
-    });
-    out[g.id] = map;
-  });
+  // === Helpers ===
+  const idDe = (eid) => idKey(eid);
+  const isBYE = (side) => !!(side && (side.BYE || side.id === 'BYE' || side === 'BYE'));
 
-  // Helper: suma de sets -> games/puntos a favor/en contra
+  const getWO = (m) => {
+    // ganador por WO
+    if (m?.result?.wo === 'a' || m?.wo === 'a' || m?.woWinner === 'a') return { winner: 'a', loser: 'b' };
+    if (m?.result?.wo === 'b' || m?.wo === 'b' || m?.woWinner === 'b') return { winner: 'b', loser: 'a' };
+    // perdedor explícito
+    const np = m?.result?.noPresento ?? m?.noPresento;
+    if (np === 'a') return { winner: 'b', loser: 'a' };
+    if (np === 'b') return { winner: 'a', loser: 'b' };
+    return null;
+  };
+
   const sumSets = (sets) => {
     let ga = 0, gb = 0;
-    (sets || []).forEach(s => { ga += Number(s?.a || 0); gb += Number(s?.b || 0); });
+    (sets || []).forEach(s => {
+      ga += Number(s?.a || 0);
+      gb += Number(s?.b || 0);
+    });
     return [ga, gb];
   };
 
-  // Recorre fixture por grupo
-  Object.entries(torneo.fixture || {}).forEach(([gid, rondas]) => {
-    const map = out[gid]; if (!map) return;
+  const parseScores = (m) => {
+    if (m?.result?.sets && Array.isArray(m.result.sets)) return sumSets(m.result.sets);
+    const sA = Number(m?.scoreA ?? m?.result?.scoreA ?? NaN);
+    const sB = Number(m?.scoreB ?? m?.result?.scoreB ?? NaN);
+    if (Number.isFinite(sA) && Number.isFinite(sB)) return [sA, sB];
+    return [0, 0];
+  };
 
-    // Soportar matriz de rondas o lista plana
-    const matches = Array.isArray(rondas?.[0]) ? rondas.flat() : (rondas || []);
-
-    matches.forEach(m => {
-      if (!m || !m.done) return;
-
-      const aK = idKey(m.a), bK = idKey(m.b);
-      if (!map[aK] || !map[bK]) return;
-
-      // Sumar PJ
-      map[aK].pj++; map[bK].pj++;
-
-      // 1) Puntos/Games: sets o scoreA/scoreB
-      let ga = 0, gb = 0;
-      if (m.result?.sets && Array.isArray(m.result.sets)) {
-        [ga, gb] = sumSets(m.result.sets);
-      } else {
-        const sA = Number(m.scoreA ?? m.result?.scoreA ?? NaN);
-        const sB = Number(m.scoreB ?? m.result?.scoreB ?? NaN);
-        if (Number.isFinite(sA) && Number.isFinite(sB)) {
-          ga = sA; gb = sB;
-        }
-      }
-      map[aK].gf += ga; map[aK].gc += gb;
-      map[bK].gf += gb; map[bK].gc += ga;
-
-      // 2) Ganador: admite 'a'/'b'/'draw' y 'A'/'B'
-      let w = m.result?.winner ?? m.winner ?? m.ganador ?? m.resultado?.winner ?? null;
-      if (w === 'A') w = 'a';
-      if (w === 'B') w = 'b';
-
-      // Si no vino winner pero sí hay score, lo inferimos
-      if (!w && Number.isFinite(ga) && Number.isFinite(gb)) {
+  const inferWinner = (m, ga, gb) => {
+    let w = m?.result?.winner ?? m?.winner ?? m?.ganador ?? m?.resultado?.winner ?? null;
+    if (w === 'A') w = 'a';
+    if (w === 'B') w = 'b';
+    if (typeof w === 'number') w = (w === 1 ? 'a' : (w === 2 ? 'b' : null));
+    if (w === 'empate') w = 'draw';
+    if (!w) {
+      if (Number.isFinite(ga) && Number.isFinite(gb)) {
         if (ga > gb) w = 'a';
         else if (gb > ga) w = 'b';
         else w = 'draw';
       }
+    }
+    return w; // 'a' | 'b' | 'draw' | null
+  };
 
+  const partidoJugado = (m) => {
+    if (!m) return false;
+    if (getWO(m)) return true; // WO cuenta como jugado
+    if (m.done || m?.result?.done) return true;
+    if (m?.result?.winner != null || m?.winner != null || m?.ganador != null) return true;
+    const sA = Number(m?.scoreA ?? m?.result?.scoreA ?? NaN);
+    const sB = Number(m?.scoreB ?? m?.result?.scoreB ?? NaN);
+    return Number.isFinite(sA) && Number.isFinite(sB);
+  };
+
+  // === Inicializa por grupo con entradas ===
+  (torneo.grupos || []).forEach(g => {
+    const map = {};
+    (g.entradas || []).forEach(eid => {
+      const k = idDe(eid);
+      map[k] = { eid, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, gd: 0, pts: 0 };
+    });
+    out[g.id] = map;
+  });
+
+  // === Recorrer fixture por grupo ===
+  Object.entries(torneo.fixture || {}).forEach(([gid, rondas]) => {
+    const map = out[gid];
+    if (!map) return;
+
+    const matches = Array.isArray(rondas?.[0]) ? rondas.flat() : (rondas || []);
+
+    matches.forEach(m => {
+      if (!m || !partidoJugado(m)) return;
+
+      const aK = idDe(m.a), bK = idDe(m.b);
+      const aIsBye = isBYE(m.a), bIsBye = isBYE(m.b);
+
+      // --- Caso BYE estructural ---
+      if (aIsBye || bIsBye) {
+        // si no querés que cuente, salimos
+        if (!BYE.cuenta) return;
+
+        // si sí cuenta, gana el no-BYE (si existe en el mapa)
+        const winKey = aIsBye ? bK : aK;
+        const loseKey = aIsBye ? aK : bK;
+        if (!map[winKey]) return;
+
+        map[winKey].pj++; map[winKey].pg++;
+        map[winKey].pts += BYE.ptsWin;
+        map[winKey].gf  += BYE.gf; map[winKey].gc  += BYE.gc;
+
+        if (map[loseKey]) {
+          map[loseKey].pj++; map[loseKey].pp++;
+          // por default, no sumamos puntos al que tiene BYE
+          map[loseKey].gf += BYE.gc; map[loseKey].gc += BYE.gf;
+        }
+        return;
+      }
+
+      // --- Caso WO (no presentación) ---
+      const wo = getWO(m);
+      if (wo) {
+        const wKey = wo.winner === 'a' ? aK : bK;
+        const lKey = wo.loser  === 'a' ? aK : bK;
+        if (!map[wKey] || !map[lKey]) return;
+
+        map[wKey].pj++; map[lKey].pj++;
+        map[wKey].pg++; map[lKey].pp++;
+
+        map[wKey].pts += WO.ptsWin;
+        map[lKey].pts += (WO.ptsLoss ?? 0);
+
+        map[wKey].gf += WO.gf; map[wKey].gc += WO.gc;
+        map[lKey].gf += WO.gc; map[lKey].gc += WO.gf;
+        return;
+      }
+
+      // --- Partido normal ---
+      if (!map[aK] || !map[bK]) return;
+
+      map[aK].pj++; map[bK].pj++;
+
+      const [ga, gb] = parseScores(m);
+      map[aK].gf += ga; map[aK].gc += gb;
+      map[bK].gf += gb; map[bK].gc += ga;
+
+      const w = inferWinner(m, ga, gb);
       if (w === 'a') {
         map[aK].pg++; map[bK].pp++;
         map[aK].pts += P.win; map[bK].pts += P.loss;
@@ -8110,22 +8647,28 @@ function computeStandings(torneo){
         map[bK].pg++; map[aK].pp++;
         map[bK].pts += P.win; map[aK].pts += P.loss;
       } else {
-        // draw
         map[aK].pe++; map[bK].pe++;
         map[aK].pts += P.draw; map[bK].pts += P.draw;
       }
     });
   });
 
-  // Cierra arrays y ordena por Pts, Dif, GF
+  // === Cerrar arrays y ordenar ===
   const final = {};
   Object.entries(out).forEach(([gid, map]) => {
     const rows = Object.values(map).map(r => ({ ...r, gd: (r.gf - r.gc) }));
-    rows.sort((A,B) => (B.pts - A.pts) || (B.gd - A.gd) || (B.gf - A.gf));
+    rows.sort((A, B) =>
+      (B.pts - A.pts) ||
+      (B.gd  - A.gd)  ||
+      (B.gf  - A.gf)  ||
+      (B.pg  - A.pg)
+    );
     final[gid] = rows;
   });
+
   return final;
 }
+
 
 function StandingsTable({ rows, getLabel }){
   if (!rows || !rows.length) return <div className="text-sm text-slate-500">Aún sin posiciones.</div>;
