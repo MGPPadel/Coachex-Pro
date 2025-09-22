@@ -20,7 +20,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
 
   <!-- jsPDF (si ya lo usás en el archivo, no lo dupliques) -->
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <!-- html2canvas para capturar el DOM del cuadro -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
@@ -74,6 +73,26 @@
       .loader, .loader::after{ animation:none; }
     }
   </style>
+
+
+<style id="a4-clean-export-styles">
+/* A4 CLEAN EXPORT v2 */
+#a4-sheet{width:1123px;min-height:794px;background:#fff;color:#0f172a;padding:40px 48px;box-sizing:border-box;border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,.04)}
+#a4-header{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:12px}
+#a4-brand{display:flex;align-items:center;justify-content:center;gap:10px;font-weight:800;font-size:22px;margin:0 auto}
+#a4-brand img{width:28px;height:28px;border-radius:9999px;object-fit:cover}
+#a4-title{font-size:26px;line-height:1.2;font-weight:800;text-align:center;margin-top:4px}
+#a4-sub{font-size:12px;line-height:1.5;color:#64748b;text-align:center}
+#a4-section{margin-top:16px;display:flex;flex-direction:column;gap:8px}
+.a4-card{border:1px solid #e2e8f0;border-radius:10px;padding:10px}
+.a4-grid{display:grid;grid-template-columns:1fr;gap:10px}
+.a4-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;line-height:1.4}
+.a4-muted{color:#64748b}
+.a4-item{
+  border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px;line-height:1.4;white-space:normal;word-break:break-word
+}
+#a4-sheet a{color:#0ea5e9;text-decoration:none}
+</style>
 
 </head>
 <body>
@@ -4733,32 +4752,53 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
   );
 }
 
-function Rankings({ alumnos, user, clubActivoId }) {
+function Rankings({ alumnos = [], user, clubActivoId }) {
+  // === Tabs de vista ===
+  const [view, setView] = React.useState('interno'); // 'interno' | 'torneos'
+
+  // === Listado de rankings y selección ===
   const [rankings, setRankings] = React.useState([]);
   const [selectedId, setSelectedId] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
 
-  // Crear ranking
+  // === Crear ranking ===
   const [newNombre, setNewNombre] = React.useState("");
   const [newNotas, setNewNotas] = React.useState("");
 
-  // Detalle ranking
-  const [participantes, setParticipantes] = React.useState([]); // array alumnoIds
+  // === Detalle del ranking seleccionado ===
+  const [participantes, setParticipantes] = React.useState([]); // array de alumnoIds
   const [puntosCfg, setPuntosCfg] = React.useState({ win: 3, draw: 1, loss: 0 });
-  const [ajustes, setAjustes] = React.useState({}); // { alumnoId: number }
 
-  // Partidos
+  // Ajustes separados por vista
+  const [ajustesManual, setAjustesManual] = React.useState({});   // para Ranking Interno
+  const [ajustesTorneos, setAjustesTorneos] = React.useState({}); // para Ranking Torneos
+
+  // === Partidos (Ranking Interno) ===
   const [matches, setMatches] = React.useState([]);
+
+  // === Torneos aplicados (Ranking Torneos) ===
+  const [awardsTotals, setAwardsTotals] = React.useState({}); // { alumnoId: {PJ,G,E,P} }
+  const [awardsList, setAwardsList] = React.useState([]);     // [{id, torneoNombre, finalizado?, resumen:{alumnoId:{PJ,G,E,P,PTS}} }]
+
+  // === PIN / Finalizado (Torneos) ===
+  const [perfilPin, setPerfilPin] = React.useState(null);  // '123' string o null
+  const [pinInput, setPinInput] = React.useState('');
+  const [pinVerificado, setPinVerificado] = React.useState(false);
+
   const [matchForm, setMatchForm] = React.useState({
     fecha: formatDate(new Date()),
     jugadorA: "",
     jugadorB: "",
-    resultado: "A", // "A" | "B" | "D" (empate/Draw)
+    resultado: "A", // "A" | "B" | "D"
     score: ""
   });
 
-  const alumnosMap = React.useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
+  const alumnosMap = React.useMemo(
+    () => new Map(alumnos.map(a => [a.id, a])),
+    [alumnos]
+  );
 
+  // === Col de rankings ===
   const rankingsCol = React.useMemo(() => {
     if (!user || !clubActivoId) return null;
     return db
@@ -4767,57 +4807,158 @@ function Rankings({ alumnos, user, clubActivoId }) {
       .collection('rankings');
   }, [user, clubActivoId]);
 
-  // === Cargar rankings
+  // === Cargar PIN desde perfil ===
+  React.useEffect(() => {
+    if (!user) return;
+
+    // 1) Perfil principal (profile/main) con preferencia por PIN del club activo
+    const unsubProfile = db.collection('users').doc(user.uid).collection('profile').doc('main')
+      .onSnapshot(doc => {
+        const d = doc.data() || {};
+        let p = null;
+        try {
+          if (clubActivoId) {
+            p = d?.clubs?.[clubActivoId]?.pin || d?.clubs?.[clubActivoId]?.pinSeguridad || null;
+          }
+          if (!p) p = d?.pin || d?.pinSeguridad || d?.perfil?.pin || null;
+        } catch (e) {}
+        if (p != null && p !== undefined) setPerfilPin(String(p).padStart(3, '0'));
+      }, err => console.warn('perfil/main pin onSnapshot error', err));
+
+    // 2) Fallback: doc raíz del usuario (por compatibilidad con setups antiguos)
+    const unsubRoot = db.collection('users').doc(user.uid).onSnapshot(doc => {
+      const d = doc.data() || {};
+      const p = d?.pin ?? d?.perfil?.pin ?? d?.pinSeguridad ?? null;
+      if (p != null && p !== undefined) setPerfilPin(String(p).padStart(3, '0'));
+    }, err => console.warn('root pin onSnapshot error', err));
+
+    return () => { try { unsubProfile(); } catch (e) {}; try { unsubRoot(); } catch (e) {}; };
+  }, [user, clubActivoId]);
+
+  // === Cargar rankings ===
+  const migratedRef = React.useRef(false);
   React.useEffect(() => {
     if (!rankingsCol) return;
     let mounted = true;
     const unsub = rankingsCol.orderBy('createdAt', 'desc').onSnapshot(
-      snap => {
+      async snap => {
         if (!mounted) return;
         const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setRankings(items);
         setLoading(false);
-        // si no hay seleccionado, elegir el primero
-        if (!selectedId && items[0]) setSelectedId(items[0].id);
+
+        // Migración: setear tipo 'interno' donde no exista (solo 1 vez)
+        if (!migratedRef.current) {
+          const sinTipo = items.filter(r => typeof r.tipo === 'undefined' || r.tipo === null);
+          if (sinTipo.length > 0) {
+            try {
+              const batch = db.batch();
+              sinTipo.forEach(r => {
+                batch.set(rankingsCol.doc(r.id), { tipo: 'interno', updatedAt: Date.now() }, { merge: true });
+              });
+              await batch.commit();
+            } catch (e) {
+              console.warn('Migración tipo->interno falló:', e);
+            }
+          }
+          migratedRef.current = true;
+        }
+
+        // Autoseleccionar si no hay seleccionado
+        if (!selectedId) {
+          const firstOfView = items.find(r => ((r.tipo || 'interno') === view));
+          if (firstOfView) setSelectedId(firstOfView.id);
+        }
       },
       err => { console.error('rankings onSnapshot', err); setLoading(false); }
     );
     return () => { mounted = false; unsub && unsub(); };
-  }, [rankingsCol]);
+  }, [rankingsCol, selectedId, view]);
 
   const selectedRanking = React.useMemo(
     () => rankings.find(r => r.id === selectedId) || null,
     [rankings, selectedId]
   );
 
-  // === Cargar detalle del ranking seleccionado
+  // Al cambiar de pestaña, si el seleccionado no corresponde, elegir primero del tipo
+  React.useEffect(() => {
+    const cur = rankings.find(r => r.id === selectedId);
+    const curTipo = cur ? (cur.tipo || 'interno') : null;
+    if (!cur || curTipo !== view) {
+      const first = rankings.find(r => (r.tipo || 'interno') === view);
+      setSelectedId(first ? first.id : null);
+    }
+    // reset PIN verificado cuando cambia pestaña o ranking
+    setPinVerificado(false);
+    setPinInput('');
+  }, [view, rankings, selectedId]);
+
+  // === Subcolecciones del ranking seleccionado ===
   const matchesCol = React.useMemo(() => {
     if (!rankingsCol || !selectedRanking) return null;
     return rankingsCol.doc(selectedRanking.id).collection('matches');
   }, [rankingsCol, selectedRanking]);
 
+  const awardsCol = React.useMemo(() => {
+    if (!rankingsCol || !selectedRanking) return null;
+    try { return rankingsCol.doc(selectedRanking.id).collection('awards'); }
+    catch (e) { console.warn('awardsCol error', e); return null; }
+  }, [rankingsCol, selectedRanking]);
+
+  // === Efecto: hidratar estado local desde el ranking seleccionado ===
   React.useEffect(() => {
     if (!selectedRanking) {
       setParticipantes([]);
       setPuntosCfg({ win: 3, draw: 1, loss: 0 });
-      setAjustes({});
+      setAjustesManual({});
+      setAjustesTorneos({});
       setMatches([]);
+      setAwardsList([]);
+      setAwardsTotals({});
       return;
     }
-    // estado local desde documento
     setParticipantes(Array.isArray(selectedRanking.participantes) ? selectedRanking.participantes : []);
     setPuntosCfg(selectedRanking.puntosCfg || { win: 3, draw: 1, loss: 0 });
-    setAjustes(selectedRanking.ajustes || {});
+    setAjustesManual(selectedRanking.ajustesManual || selectedRanking.ajustes || {}); // back-compat
+    setAjustesTorneos(selectedRanking.ajustesTorneos || {});
+    setPinVerificado(false);
+    setPinInput('');
+  }, [selectedRanking]);
 
+  // === Efecto: suscripción a matches (interno) ===
+  React.useEffect(() => {
     if (!matchesCol) return;
     const unsub = matchesCol.orderBy('fecha', 'desc').onSnapshot(
       snap => setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
       err => console.error('matches onSnapshot', err)
     );
     return () => unsub && unsub();
-  }, [selectedRanking, matchesCol]);
+  }, [matchesCol]);
 
-  // === CRUD Rankings
+  // === Efecto: suscripción a awards (torneos) ===
+  React.useEffect(() => {
+    if (!awardsCol) { setAwardsTotals({}); setAwardsList([]); return; }
+    const unsub = awardsCol.onSnapshot(
+      snap => {
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAwardsList(docs);
+        const tot = {};
+        for (const doc of docs) {
+          const res = doc.resumen || {};
+          for (const [id, v] of Object.entries(res)) {
+            const t = tot[id] || { PJ:0, G:0, E:0, P:0 };
+            t.PJ += (v.PJ||0); t.G += (v.G||0); t.E += (v.E||0); t.P += (v.P||0);
+            tot[id] = t;
+          }
+        }
+        setAwardsTotals(tot);
+      },
+      err => { console.error('awards onSnapshot', err); setAwardsTotals({}); setAwardsList([]); }
+    );
+    return () => unsub && unsub();
+  }, [awardsCol]);
+
+  // === CRUD Rankings ===
   const createRanking = async () => {
     if (!rankingsCol) return;
     if (!newNombre.trim()) return alert("Poné un nombre para el ranking.");
@@ -4826,7 +4967,10 @@ function Rankings({ alumnos, user, clubActivoId }) {
       notas: newNotas.trim(),
       participantes: [],
       puntosCfg: { win: 3, draw: 1, loss: 0 },
-      ajustes: {},
+      ajustesManual: {},
+      ajustesTorneos: {},
+      tipo: view, // IMPORTANT: guarda el tipo según pestaña
+      torneosFinalizado: false, // arranca abierto
       createdAt: Date.now(),
       updatedAt: Date.now()
     });
@@ -4838,17 +4982,27 @@ function Rankings({ alumnos, user, clubActivoId }) {
     const payload = {
       participantes,
       puntosCfg,
-      ajustes,
+      ajustesManual,
+      ajustesTorneos,
+      torneosFinalizado: !!selectedRanking.torneosFinalizado,
       updatedAt: Date.now()
     };
     await rankingsCol.doc(selectedRanking.id).set(payload, { merge: true });
     alert("Ranking guardado");
   };
 
+  const handleSave = async () => {
+    // Si estamos en Torneos y está finalizado sin PIN verificado, no guardar
+    if (view === 'torneos' && selectedRanking?.torneosFinalizado && !pinVerificado) {
+      alert('Para editar/guardar el Ranking de Torneos finalizado, ingresá tu PIN de 3 dígitos.');
+      return;
+    }
+    await updateRanking();
+  };
+
   const deleteRanking = async (id) => {
     if (!rankingsCol) return;
     if (!confirm("¿Eliminar este ranking? Se borrarán también los partidos.")) return;
-    // borrar matches
     const col = rankingsCol.doc(id).collection('matches');
     const snap = await col.get();
     const batch = db.batch();
@@ -4858,7 +5012,7 @@ function Rankings({ alumnos, user, clubActivoId }) {
     if (selectedId === id) setSelectedId(null);
   };
 
-  // === Partidos
+  // === Partidos (alta) ===
   const submitMatch = async (e) => {
     e.preventDefault();
     if (!matchesCol) return;
@@ -4892,12 +5046,15 @@ function Rankings({ alumnos, user, clubActivoId }) {
     await matchesCol.doc(id).delete();
   };
 
-  // === Standings (tabla)
-  const standings = React.useMemo(() => {
+  // === Standings: Interno ===
+  const standingsInterno = React.useMemo(() => {
     const ids = participantes || [];
-    const base = new Map(ids.map(id => [id, {
-      alumnoId: id, PJ: 0, G: 0, E: 0, P: 0, PTS: 0
-    }]));
+    const base = new Map(ids.map(id => [id, { alumnoId: id, PJ: 0, G: 0, E: 0, P: 0, PTS: 0 }]));
+
+    // asegurar filas para ids con ajustes manuales aunque no estén en participantes
+    Object.keys(ajustesManual || {}).forEach(id => {
+      if (!base.has(id)) base.set(id, { alumnoId: id, PJ: 0, G: 0, E: 0, P: 0, PTS: 0 });
+    });
 
     for (const m of matches) {
       const A = base.get(m.jugadorA); const B = base.get(m.jugadorB);
@@ -4909,7 +5066,7 @@ function Rankings({ alumnos, user, clubActivoId }) {
     }
 
     // ajustes manuales
-    for (const [id, extra] of Object.entries(ajustes || {})) {
+    for (const [id, extra] of Object.entries(ajustesManual || {})) {
       const row = base.get(id);
       if (row) row.PTS += Number(extra) || 0;
     }
@@ -4923,7 +5080,50 @@ function Rankings({ alumnos, user, clubActivoId }) {
       return nameA.localeCompare(nameB);
     });
     return arr;
-  }, [participantes, matches, ajustes, puntosCfg, alumnosMap]);
+  }, [participantes, matches, ajustesManual, puntosCfg, alumnosMap]);
+
+  // === Standings: Torneos aplicados ===
+  const standingsTorneos = React.useMemo(() => {
+    // PTS sumados desde awardsList.resumen[*].PTS
+    const torneoPTS = {};
+    for (const doc of (awardsList || [])) {
+      const res = doc.resumen || {};
+      for (const [id, v] of Object.entries(res)) {
+        torneoPTS[id] = (torneoPTS[id] || 0) + (Number(v.PTS || 0));
+      }
+    }
+    // base: unión de ids para que aparezcan aunque no estén en participantes
+    const ids = Array.from(new Set([
+      ...Object.keys(awardsTotals || {}),
+      ...Object.keys(torneoPTS || {}),
+      ...Object.keys(ajustesTorneos || {})
+    ]));
+    const base = new Map(ids.map(id => [id, { alumnoId: id, PJ: 0, G: 0, E: 0, P: 0, PTS: 0 }]));
+
+    // conteos PJ/G/E/P
+    for (const [id, cnt] of Object.entries(awardsTotals || {})) {
+      const row = base.get(id);
+      row.PJ += (cnt.PJ||0); row.G += (cnt.G||0); row.E += (cnt.E||0); row.P += (cnt.P||0);
+    }
+    // PTS de torneos
+    for (const [id, pts] of Object.entries(torneoPTS)) {
+      base.get(id).PTS += pts || 0;
+    }
+    // ajustes de torneos
+    for (const [id, extra] of Object.entries(ajustesTorneos || {})) {
+      base.get(id).PTS += Number(extra) || 0;
+    }
+
+    const arr = Array.from(base.values());
+    arr.sort((a, b) => {
+      if (b.PTS !== a.PTS) return b.PTS - a.PTS;
+      if (b.G !== a.G) return b.G - a.G;
+      const nameA = (getNombreCompleto(alumnosMap.get(a.alumnoId)) || "").toLowerCase();
+      const nameB = (getNombreCompleto(alumnosMap.get(b.alumnoId)) || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+    return arr;
+  }, [awardsTotals, awardsList, ajustesTorneos, alumnosMap]);
 
   const addParticipante = (id) => {
     if (!id) return;
@@ -4931,225 +5131,401 @@ function Rankings({ alumnos, user, clubActivoId }) {
   };
   const removeParticipante = (id) => setParticipantes(prev => prev.filter(x => x !== id));
 
-  return (
-    <div className="grid md:grid-cols-12 gap-6">
-      {/* Lista de Rankings */}
-      <div className="md:col-span-4">
-        <Card title={<span className="text-[#34745B]">Rankings</span>}
-              right={null}>
-          {loading && <p className="text-sm text-slate-500">Cargando...</p>}
-          <ul className="space-y-2">
-            {rankings.map(r => (
-              <li key={r.id}
-                  className={`p-2 rounded-lg border cursor-pointer ${selectedId === r.id ? 'bg-green-50 border-green-300' : 'bg-white'}`}
-                  onClick={() => setSelectedId(r.id)}>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold text-slate-800">{r.nombre}</p>
-                    {r.notas && <p className="text-xs text-slate-500 mt-0.5">{r.notas}</p>}
-                  </div>
-                  <button
-                    className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
-                    onClick={(e) => { e.stopPropagation(); deleteRanking(r.id); }}
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+  // Helpers para bloqueo/edición en Torneos
+  const torneosFinalizado = !!selectedRanking?.torneosFinalizado;
+  const puedeEditarTorneos = !torneosFinalizado || pinVerificado;
 
-          <div className="mt-4 border-t pt-4">
-            <p className="text-sm font-semibold text-slate-700 mb-1">Nuevo ranking</p>
-            <input
-              type="text" value={newNombre}
-              onChange={e => setNewNombre(e.target.value)}
-              placeholder="Ej: Ranking Avanzados 2024"
-              className="w-full border rounded-lg px-3 py-2 mb-2"
-            />
-            <input
-              type="text" value={newNotas}
-              onChange={e => setNewNotas(e.target.value)}
-              placeholder="Notas (opcional)"
-              className="w-full border rounded-lg px-3 py-2 mb-2"
-            />
-            <button
-              onClick={createRanking}
-              className="px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm"
-            >
-              + Crear
-            </button>
-          </div>
-        </Card>
+  const onCheckPin = () => {
+    if (!perfilPin) {
+      alert('No hay PIN configurado en tu Perfil. Configuralo para poder editar rankings finalizados.');
+      return;
+    }
+    const val = String(pinInput || '').trim();
+    if (!/^\d{3}$/.test(val)) {
+      alert('El PIN debe tener 3 dígitos.');
+      return;
+    }
+    if (val === perfilPin) {
+      setPinVerificado(true);
+      alert('PIN verificado. Edición habilitada hasta que cambies de pestaña o ranking.');
+    } else {
+      alert('PIN incorrecto.');
+    }
+  };
+
+  const toggleFinalizado = async () => {
+    if (!rankingsCol || !selectedRanking) return;
+    const next = !torneosFinalizado;
+    // Si voy a re-abrir (pasar de true -> false), pedimos PIN
+    if (torneosFinalizado && !pinVerificado) {
+      alert('Para reabrir la edición de Torneos, ingresá tu PIN.');
+      return;
+    }
+    await rankingsCol.doc(selectedRanking.id).set({ torneosFinalizado: next, updatedAt: Date.now() }, { merge: true });
+    if (next === true) { // al finalizar, reseteo PIN verificado por seguridad
+      setPinVerificado(false);
+      setPinInput('');
+    }
+  };
+
+  // === UI ===
+  const filteredRankings = rankings.filter(r => ((r.tipo || 'interno') === view));
+
+  return (
+    <div className="space-y-3">
+      {/* TABS de vista */}
+      <div className="mb-3 flex gap-2">
+        <button
+          className={`px-3 py-1.5 rounded-lg border ${view==='interno' ? 'bg-emerald-50 border-emerald-300' : 'bg-white'}`}
+          onClick={() => setView('interno')}
+        >
+          Ranking Interno
+        </button>
+        <button
+          className={`px-3 py-1.5 rounded-lg border ${view==='torneos' ? 'bg-emerald-50 border-emerald-300' : 'bg-white'}`}
+          onClick={() => setView('torneos')}
+        >
+          Ranking Torneos
+        </button>
       </div>
 
-      {/* Detalle */}
-      <div className="md:col-span-8">
-        {selectedRanking ? (
-          <Card title={<span className="text-[#34745B]">{selectedRanking.nombre}</span>}
-                right={<button onClick={updateRanking} className="px-3 py-1.5 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">Guardar</button>}>
-            {/* Participantes */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm font-semibold text-slate-700 mb-1">Agregar participante</p>
-                <select
-                  value=""
-                  onChange={e => addParticipante(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2"
+      {/* Layout en 2 columnas */}
+      <div className="grid md:grid-cols-12 gap-6">
+        {/* Columna izquierda: lista de rankings */}
+        <div className="md:col-span-4">
+          <Card title={<span className="text-[#34745B]">Rankings</span>} right={null}>
+            {loading && <p className="text-sm text-slate-500">Cargando...</p>}
+
+            <ul className="space-y-2">
+              {filteredRankings.map(r => (
+                <li
+                  key={r.id}
+                  className={`p-2 rounded-lg border cursor-pointer ${selectedId === r.id ? 'bg-green-50 border-green-300' : 'bg-white'}`}
+                  onClick={() => setSelectedId(r.id)}
                 >
-                  <option value="">— Seleccionar alumno —</option>
-                  {alumnos.map(a => (
-                    <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>
-                  ))}
-                </select>
-                {participantes.length > 0 && (
-                  <ul className="mt-2 space-y-1 text-sm">
-                    {participantes.map(id => (
-                      <li key={id} className="flex justify-between items-center border rounded-lg px-2 py-1">
-                        <span>{getNombreCompleto(alumnosMap.get(id))}</span>
-                        <button className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50" onClick={() => removeParticipante(id)}>Quitar</button>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-slate-800">{r.nombre}</p>
+                      {r.notas && <p className="text-xs text-slate-500 mt-0.5">{r.notas}</p>}
+                      <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wide">Tipo: {(r.tipo||'interno')}</p>
+                    </div>
+                    <button
+                      className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
+                      onClick={(e) => { e.stopPropagation(); deleteRanking(r.id); }}
+                      title="Eliminar ranking"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </li>
+              ))}
+              {filteredRankings.length === 0 && (
+                <li className="text-sm text-slate-500 p-2">No hay rankings de tipo “{view}”.</li>
+              )}
+            </ul>
+
+            <div className="mt-4 border-t pt-4">
+              <p className="text-sm font-semibold text-slate-700 mb-1">
+                Nuevo ranking <span className="text-xs text-slate-500">(tipo: {view})</span>
+              </p>
+              <input
+                type="text"
+                value={newNombre}
+                onChange={e => setNewNombre(e.target.value)}
+                placeholder="Ej: Ranking Avanzados 2024"
+                className="w-full border rounded-lg px-3 py-2 mb-2"
+              />
+              <input
+                type="text"
+                value={newNotas}
+                onChange={e => setNewNotas(e.target.value)}
+                placeholder="Notas (opcional)"
+                className="w-full border rounded-lg px-3 py-2 mb-2"
+              />
+              <button
+                onClick={createRanking}
+                className="px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm"
+              >
+                + Crear
+              </button>
+            </div>
+          </Card>
+        </div>
+
+        {/* Columna derecha: detalle según vista */}
+        <div className="md:col-span-8">
+          {selectedRanking ? (
+            view === 'interno' ? (
+              <Card
+                title={<span className="text-[#34745B]">{selectedRanking.nombre}</span>}
+                right={<button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">Guardar</button>}
+              >
+                {/* Participantes */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 mb-1">Agregar participante</p>
+                    <select
+                      value=""
+                      onChange={e => addParticipante(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2"
+                    >
+                      <option value="">— Seleccionar alumno —</option>
+                      {alumnos.map(a => (
+                        <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>
+                      ))}
+                    </select>
+                    {participantes.length > 0 && (
+                      <ul className="mt-2 space-y-1 text-sm">
+                        {participantes.map(id => (
+                          <li key={id} className="flex justify-between items-center border rounded-lg px-2 py-1">
+                            <span>{getNombreCompleto(alumnosMap.get(id))}</span>
+                            <button className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50" onClick={() => removeParticipante(id)}>Quitar</button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Config de puntos y ajustes manuales */}
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 mb-1">Puntos</p>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <div><label className="text-xs">Ganar</label><input type="number" value={puntosCfg.win} onChange={e => setPuntosCfg(cfg => ({...cfg, win: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
+                      <div><label className="text-xs">Empatar</label><input type="number" value={puntosCfg.draw} onChange={e => setPuntosCfg(cfg => ({...cfg, draw: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
+                      <div><label className="text-xs">Perder</label><input type="number" value={puntosCfg.loss} onChange={e => setPuntosCfg(cfg => ({...cfg, loss: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
+                    </div>
+
+                    <p className="text-sm font-semibold text-slate-700 mb-1">Ajustes manuales</p>
+                    <div className="space-y-1">
+                      {participantes.map(id => (
+                        <div key={id} className="flex items-center gap-2">
+                          <span className="text-sm w-44 truncate">{getNombreCompleto(alumnosMap.get(id))}</span>
+                          <input
+                            type="number"
+                            value={Number(ajustesManual?.[id] || 0)}
+                            onChange={e => setAjustesManual(prev => ({ ...prev, [id]: Number(e.target.value) })) }
+                            className="w-24 border rounded-lg px-2 py-1 text-sm"
+                            placeholder="+/-"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Registrar partido */}
+                <div className="mt-6 border-t pt-4">
+                  <p className="text-sm font-semibold text-slate-700 mb-2">Registrar partido</p>
+                  <form onSubmit={submitMatch} className="grid md:grid-cols-6 gap-2 items-end">
+                    <div className="md:col-span-2">
+                      <label className="text-xs">Fecha</label>
+                      <input type="date" value={matchForm.fecha} onChange={e => setMatchForm(f => ({ ...f, fecha: e.target.value }))} className="w-full border rounded-lg px-2 py-1" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs">Jugador A</label>
+                      <select value={matchForm.jugadorA} onChange={e => setMatchForm(f => ({ ...f, jugadorA: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                        <option value="">—</option>
+                        {participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs">Jugador B</label>
+                      <select value={matchForm.jugadorB} onChange={e => setMatchForm(f => ({ ...f, jugadorB: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                        <option value="">—</option>
+                        {participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs">Resultado</label>
+                      <select value={matchForm.resultado} onChange={e => setMatchForm(f => ({ ...f, resultado: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                        <option value="A">Gana A</option>
+                        <option value="B">Gana B</option>
+                        <option value="D">Empate</option>
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs">Score (opcional)</label>
+                      <input type="text" value={matchForm.score} onChange={e => setMatchForm(f => ({ ...f, score: e.target.value }))} className="w-full border rounded-lg px-2 py-1" placeholder="Ej: 6-4 4-6 10-8" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <button type="submit" className="w-full px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">+ Registrar</button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Tabla: interno */}
+                <div className="mt-6 border-t pt-4">
+                  <p className="text-sm font-semibold text-slate-700 mb-2">Tabla de Posiciones — Ranking Interno</p>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-slate-600">
+                          <th className="p-2">#</th>
+                          <th className="p-2">Alumno</th>
+                          <th className="p-2">PJ</th>
+                          <th className="p-2">G</th>
+                          <th className="p-2">E</th>
+                          <th className="p-2">P</th>
+                          <th className="p-2">PTS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {standingsInterno.length === 0 && (
+                          <tr><td colSpan={7} className="text-center py-6 text-slate-400">Sin participantes o partidos</td></tr>
+                        )}
+                        {standingsInterno.map((row, idx) => (
+                          <tr key={row.alumnoId} className="border-t">
+                            <td className="p-2">{idx + 1}</td>
+                            <td className="p-2">{getNombreCompleto(alumnosMap.get(row.alumnoId))}</td>
+                            <td className="p-2">{row.PJ}</td>
+                            <td className="p-2">{row.G}</td>
+                            <td className="p-2">{row.E}</td>
+                            <td className="p-2">{row.P}</td>
+                            <td className="p-2 font-bold">{row.PTS}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Historial de partidos */}
+                <div className="mt-6 border-t pt-4">
+                  <p className="text-sm font-semibold text-slate-700 mb-2">Partidos</p>
+                  {matches.length === 0 && <p className="text-sm text-slate-500">Sin partidos registrados.</p>}
+                  <ul className="space-y-2">
+                    {matches.map(m => (
+                      <li key={m.id} className="p-2 border rounded-lg bg-white flex justify-between items-center">
+                        <div className="text-sm">
+                          <span className="text-slate-500 mr-2">{m.fecha}</span>
+                          <b>{getNombreCompleto(alumnosMap.get(m.jugadorA))}</b> vs <b>{getNombreCompleto(alumnosMap.get(m.jugadorB))}</b>
+                          {m.score ? <> — <span className="text-slate-600">{m.score}</span></> : null}
+                          <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                            {m.resultado === "A" ? "Gana A" : m.resultado === "B" ? "Gana B" : "Empate"}
+                          </span>
+                        </div>
+                        <button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
+                                onClick={() => deleteMatch(m.id)}>
+                          🗑️
+                        </button>
                       </li>
                     ))}
                   </ul>
-                )}
-              </div>
-
-              {/* Config de puntos y ajustes */}
-              <div>
-                <p className="text-sm font-semibold text-slate-700 mb-1">Puntos</p>
-                <div className="grid grid-cols-3 gap-2 mb-2">
-                  <div><label className="text-xs">Ganar</label><input type="number" value={puntosCfg.win} onChange={e => setPuntosCfg(cfg => ({...cfg, win: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
-                  <div><label className="text-xs">Empatar</label><input type="number" value={puntosCfg.draw} onChange={e => setPuntosCfg(cfg => ({...cfg, draw: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
-                  <div><label className="text-xs">Perder</label><input type="number" value={puntosCfg.loss} onChange={e => setPuntosCfg(cfg => ({...cfg, loss: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
                 </div>
-
-                <p className="text-sm font-semibold text-slate-700 mb-1">Ajustes manuales</p>
-                <div className="space-y-1">
-                  {participantes.map(id => (
-                    <div key={id} className="flex items-center gap-2">
-                      <span className="text-sm w-44 truncate">{getNombreCompleto(alumnosMap.get(id))}</span>
-                      <input
-                        type="number"
-                        value={Number(ajustes?.[id] || 0)}
-                        onChange={e => setAjustes(prev => ({ ...prev, [id]: Number(e.target.value) })) }
-                        className="w-24 border rounded-lg px-2 py-1 text-sm"
-                        placeholder="+/-"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Registrar partido */}
-            <div className="mt-6 border-t pt-4">
-              <p className="text-sm font-semibold text-slate-700 mb-2">Registrar partido</p>
-              <form onSubmit={submitMatch} className="grid md:grid-cols-6 gap-2 items-end">
-                <div className="md:col-span-2">
-                  <label className="text-xs">Fecha</label>
-                  <input type="date" value={matchForm.fecha} onChange={e => setMatchForm(f => ({ ...f, fecha: e.target.value }))} className="w-full border rounded-lg px-2 py-1" />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs">Jugador A</label>
-                  <select value={matchForm.jugadorA} onChange={e => setMatchForm(f => ({ ...f, jugadorA: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
-                    <option value="">—</option>
-                    {participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs">Jugador B</label>
-                  <select value={matchForm.jugadorB} onChange={e => setMatchForm(f => ({ ...f, jugadorB: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
-                    <option value="">—</option>
-                    {participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs">Resultado</label>
-                  <select value={matchForm.resultado} onChange={e => setMatchForm(f => ({ ...f, resultado: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
-                    <option value="A">Gana A</option>
-                    <option value="B">Gana B</option>
-                    <option value="D">Empate</option>
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs">Score (opcional)</label>
-                  <input type="text" value={matchForm.score} onChange={e => setMatchForm(f => ({ ...f, score: e.target.value }))} className="w-full border rounded-lg px-2 py-1" placeholder="Ej: 6-4 4-6 10-8" />
-                </div>
-                <div className="md:col-span-2">
-                  <button type="submit" className="w-full px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">+ Registrar</button>
-                </div>
-              </form>
-            </div>
-
-            {/* Tabla de posiciones */}
-            <div className="mt-6 border-t pt-4">
-              <p className="text-sm font-semibold text-slate-700 mb-2">Tabla de Posiciones</p>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-slate-600">
-                      <th className="p-2">#</th>
-                      <th className="p-2">Alumno</th>
-                      <th className="p-2">PJ</th>
-                      <th className="p-2">G</th>
-                      <th className="p-2">E</th>
-                      <th className="p-2">P</th>
-                      <th className="p-2">PTS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {standings.length === 0 && (
-                      <tr><td colSpan={7} className="text-center py-6 text-slate-400">Sin participantes o partidos</td></tr>
-                    )}
-                    {standings.map((row, idx) => (
-                      <tr key={row.alumnoId} className="border-t">
-                        <td className="p-2">{idx + 1}</td>
-                        <td className="p-2">{getNombreCompleto(alumnosMap.get(row.alumnoId))}</td>
-                        <td className="p-2">{row.PJ}</td>
-                        <td className="p-2">{row.G}</td>
-                        <td className="p-2">{row.E}</td>
-                        <td className="p-2">{row.P}</td>
-                        <td className="p-2 font-bold">{row.PTS}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Historial de partidos */}
-            <div className="mt-6 border-t pt-4">
-              <p className="text-sm font-semibold text-slate-700 mb-2">Partidos</p>
-              {matches.length === 0 && <p className="text-sm text-slate-500">Sin partidos registrados.</p>}
-              <ul className="space-y-2">
-                {matches.map(m => (
-                  <li key={m.id} className="p-2 border rounded-lg bg-white flex justify-between items-center">
-                    <div className="text-sm">
-                      <span className="text-slate-500 mr-2">{m.fecha}</span>
-                      <b>{getNombreCompleto(alumnosMap.get(m.jugadorA))}</b> vs <b>{getNombreCompleto(alumnosMap.get(m.jugadorB))}</b>
-                      {m.score ? <> — <span className="text-slate-600">{m.score}</span></> : null}
-                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                        {m.resultado === "A" ? "Gana A" : m.resultado === "B" ? "Gana B" : "Empate"}
-                      </span>
-                    </div>
-                    <button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
-                            onClick={() => deleteMatch(m.id)}>
-                      🗑️
+              </Card>
+            ) : (
+              // ====== VISTA TORNEOS ======
+              <Card
+                title={<span className="text-[#34745B]">{selectedRanking.nombre}</span>}
+                right={<button onClick={handleSave} disabled={torneosFinalizado && !pinVerificado} className={`px-3 py-1.5 rounded-lg text-white text-sm ${torneosFinalizado && !pinVerificado ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#34745B] hover:bg-green-800'}`}>Guardar</button>}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-slate-500">Vista basada en torneos aplicados</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs ${torneosFinalizado ? 'text-rose-600' : 'text-emerald-700'}`}>
+                      Estado: {torneosFinalizado ? 'Finalizado (bloqueado)' : 'Abierto'}
+                    </span>
+                    <button onClick={toggleFinalizado} className="text-xs px-2 py-1 rounded-lg border hover:bg-slate-50">
+                      {torneosFinalizado ? 'Reabrir' : 'Marcar finalizado'}
                     </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </Card>
-        ) : (
-          <Card title={<span className="text-[#34745B]">Detalle</span>}>
-            <p className="text-sm text-slate-500">Seleccioná o creá un ranking para comenzar.</p>
-          </Card>
-        )}
+                  </div>
+                </div>
+
+                {torneosFinalizado && !pinVerificado && (
+                  <div className="mb-4 p-3 rounded-lg border bg-amber-50">
+                    <p className="text-sm font-semibold text-amber-800">Edición bloqueada</p>
+                    <p className="text-xs text-amber-700 mb-2">Este ranking de torneos está marcado como finalizado. Ingresá tu PIN (3 dígitos) para habilitar la edición.</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={3}
+                        value={pinInput}
+                        onChange={e => setPinInput(e.target.value.replace(/\\D/g,''))}
+                        className="w-24 border rounded-lg px-2 py-1 text-sm tracking-widest text-center"
+                        placeholder="•••"
+                      />
+                      <button onClick={onCheckPin} className="text-xs px-3 py-1.5 rounded-lg bg-[#34745B] hover:bg-green-800 text-white">Desbloquear</button>
+                    </div>
+                    {!perfilPin && <p className="text-xs text-rose-600 mt-2">No hay PIN configurado en tu Perfil.</p>}
+                  </div>
+                )}
+
+                {/* Ajustes de torneos (solo lectura de PJ/G/E/P desde awards; editás PTS extra acá si querés) */}
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-slate-700 mb-1">Ajustes de puntos (torneos)</p>
+                  <div className="space-y-1">
+                    {Object.keys({
+                      ...awardsTotals,
+                      ...awardsList.reduce((acc, d) => ({...acc, ...(d.resumen || {})}), {})
+                    }).map(id => (
+                      <div key={id} className="flex items-center gap-2">
+                        <span className="text-sm w-56 truncate">{getNombreCompleto(alumnosMap.get(id))}</span>
+                        <input
+                          type="number"
+                          value={Number(ajustesTorneos?.[id] || 0)}
+                          onChange={e => setAjustesTorneos(prev => ({ ...prev, [id]: Number(e.target.value) }))}
+                          className="w-24 border rounded-lg px-2 py-1 text-sm"
+                          placeholder="+/-"
+                          disabled={!puedeEditarTorneos}
+                          title={!puedeEditarTorneos ? 'Bloqueado. Ingresá PIN para editar.' : ''}
+                        />
+                      </div>
+                    ))}
+                    {Object.keys({
+                      ...awardsTotals,
+                      ...awardsList.reduce((acc, d) => ({...acc, ...(d.resumen || {})}), {})
+                    }).length === 0 && (
+                      <p className="text-xs text-slate-500">No hay torneos aplicados todavía.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tabla: torneos */}
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-slate-600">
+                        <th className="p-2">#</th>
+                        <th className="p-2">Alumno</th>
+                        <th className="p-2">PJ</th>
+                        <th className="p-2">G</th>
+                        <th className="p-2">E</th>
+                        <th className="p-2">P</th>
+                        <th className="p-2">PTS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {standingsTorneos.length === 0 && (
+                        <tr><td colSpan={7} className="text-center py-6 text-slate-400">Sin torneos aplicados</td></tr>
+                      )}
+                      {standingsTorneos.map((row, idx) => (
+                        <tr key={row.alumnoId} className="border-t">
+                          <td className="p-2">{idx + 1}</td>
+                          <td className="p-2">{getNombreCompleto(alumnosMap.get(row.alumnoId))}</td>
+                          <td className="p-2">{row.PJ}</td>
+                          <td className="p-2">{row.G}</td>
+                          <td className="p-2">{row.E}</td>
+                          <td className="p-2">{row.P}</td>
+                          <td className="p-2 font-bold">{row.PTS}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )
+          ) : (
+            <Card title={<span className="text-[#34745B]">Detalle</span>}>
+              <p className="text-sm text-slate-500">Seleccioná o creá un ranking para comenzar.</p>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+
 
 // =========================
 // RulesEditor (usa props)
@@ -5363,27 +5739,36 @@ function Torneos({ alumnos = [], user, clubActivoId, perfil = {} }) {
   };
 
   // === Helpers para etiquetar en la tarjeta ===
+    // === Helpers para etiquetar en la tarjeta (robustos) ===
   const alumnoByIdCard = React.useCallback(
-    (id) => (alumnos || []).find(a => a.id === id) || { id, nombre: id },
+    (id) => (alumnos || []).find(a => a && a.id === id) || null,
     [alumnos]
   );
 
   const labelEntradaCard = (e, t) => {
-    if (t.modalidad !== 'dobles') {
-      const id = typeof e === 'string' ? e : e?.id;
-      const a = alumnoByIdCard(id);
-      const ap = a.apellido || "";
-      const no = a.nombre || a.name || "";
-      return `${ap ? ap + ", " : ""}${no || a.id}`.trim();
-    } else {
-      let team = e && e.members ? e : (t.teams || []).find(tt => tt.id === (typeof e === 'string' ? e : e?.id));
-      if (!team) return "—";
-      const [id1, id2] = team.members || [];
-      const A = alumnoByIdCard(id1), B = alumnoByIdCard(id2);
-      const l = (x)=>`${x.apellido ? x.apellido + ", " : ""}${x.nombre || x.name || x.id}`.trim();
-      return `${l(A)} / ${l(B)}`;
+    try {
+      if (!t || t.modalidad !== 'dobles') {
+        const id = typeof e === 'string' ? e : e?.id;
+        const a = alumnoByIdCard(id) || {};
+        const ap = a.apellido || "";
+        const no = a.nombre || a.name || "";
+        return `${ap ? ap + ", " : ""}${no || a.id || "—"}`.trim();
+      } else {
+        let team = e && e.members ? e : (t.teams || []).find(tt => tt.id === (typeof e === 'string' ? e : e?.id));
+        if (!team) return "—";
+        const [id1, id2] = team.members || [];
+        const A = alumnoByIdCard(id1) || {};
+        const B = alumnoByIdCard(id2) || {};
+        const fmt = (x) => `${x.apellido ? x.apellido + ", " : ""}${x.nombre || x.name || x.id || ""}`.trim();
+        const la = fmt(A);
+        const lb = fmt(B);
+        return (la && lb) ? `${la} / ${lb}` : (la || lb || "—");
+      }
+    } catch (err) {
+      console.error("labelEntradaCard error:", err, { e, t });
+      return "—";
     }
-  };
+  };;
 
   // ================== UI ==================
   return (
@@ -5681,7 +6066,11 @@ function TorneoEditorPro({ torneo, onChange, alumnos, perfil, clubActivoId }) {
             setFormato={v => !locked && setFormato(v)}
             modalidad={torneo.modalidad}
             setModalidad={v => !locked && setModalidad(v)}
-          disabled={locked}
+                      fechaInicio={torneo.fechaInicio}
+            setFechaInicio={(v) => !locked && patch({ fechaInicio: v })}
+            fechaFin={torneo.fechaFin}
+            setFechaFin={(v) => !locked && patch({ fechaFin: v })}
+disabled={locked}
           />
         )}
 
@@ -5693,6 +6082,10 @@ function TorneoEditorPro({ torneo, onChange, alumnos, perfil, clubActivoId }) {
       modalidad={torneo.modalidad}
       disabled={locked}
     />
+    <div className="mt-4">
+      <RankingConfigPanel clubId={clubActivoId} torneo={torneo} setReglas={patchReglas} disabled={false} />
+    </div>
+
 
     {/* Resumen automático (copiar/guardar) */}
     <ResumenReglasBox
@@ -7042,153 +7435,226 @@ function waitImages(root) {
   })));
 }
 
-// Construye un contenedor A4 apaisado y clona el bracket visible (id: #bracket-canvas)
-function buildA4Root(torneo) {
-  const root = document.createElement('div');
-  Object.assign(root.style, {
-    position: 'absolute',
-    left: '-99999px', top: '0',
-    width: '1123px', minHeight: '794px',          // A4 horizontal aprox a 96 dpi
-    background: '#fff',
-    padding: '16px',
-    border: '1px solid #e2e8f0',
-    borderRadius: '12px',
-    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial'
-  });
+(function(){
+  function defaultLabel(x, t){
+    return (typeof x === 'string') ? x : (x?.label || x?.id || '—');
+  }
+  const lab = (e,t) => (window.labelEntradaCard ? window.labelEntradaCard(e,t) : defaultLabel(e,t));
 
-  // Header
-  const header = document.createElement('div');
-  header.style.display = 'flex';
-  header.style.alignItems = 'center';
-  header.style.gap = '12px';
-  header.style.marginBottom = '6px';
-
-  const logo = new Image();
-  logo.src = 'logo_favicon.png';
-  logo.width = 28; logo.height = 28;
-  header.appendChild(logo);
-
-  const title = document.createElement('div');
-  title.style.fontSize = '20px';
-  title.style.fontWeight = '700';
-  title.textContent = 'Coachex-Pro';
-  header.appendChild(title);
-  root.appendChild(header);
-
-  // Título y metadatos
-  const name = document.createElement('div');
-  name.style.fontSize = '16px';
-  name.style.fontWeight = '600';
-  name.textContent = torneo?.nombre || '(Sin nombre)';
-  root.appendChild(name);
-
-  const meta = document.createElement('div');
-  meta.style.fontSize = '12px';
-  meta.style.color = '#64748b';
-  meta.style.marginBottom = '12px';
-
-  const esDobles = torneo?.modalidad === 'dobles';
-  const parejas  = (torneo?.teams || []).length;
-  const jugadores = esDobles ? parejas*2 : (torneo?.participantes || []).length;
-
-  const formato = (typeof formatLabel === 'function')
-    ? formatLabel(torneo?.formato)
-    : (torneo?.formato === 'grupos' ? 'Sólo grupos'
-       : torneo?.formato === 'eliminacion' ? 'Eliminación directa'
-       : 'Grupos + Eliminación');
-
-  const creado = torneo?.createdAt || torneo?.fechaCreacion || Date.now();
-  const topK = torneo?.formato === 'grupos_y_eliminacion'
-    ? ` · Top-K: ${parseInt(torneo?.topK || 2, 10)}`
-    : '';
-  const idaV = torneo?.formato !== 'eliminacion'
-    ? ` · Ida y vuelta: ${torneo?.idaVuelta ? 'Sí' : 'No'}`
-    : '';
-
-  meta.textContent =
-    `${formato} · ${esDobles ? `${parejas} parejas (${jugadores} jugadores)` : `${jugadores} jugadores`} · ` +
-    `Creado: ${new Date(creado).toLocaleDateString()}${topK}${idaV}`;
-  root.appendChild(meta);
-
-  // Clonar el bracket visible
-  const src = document.getElementById('bracket-canvas');
-  if (src) {
-    const clone = src.cloneNode(true);
-    clone.style.transformOrigin = '0 0';
-    root.appendChild(clone);
-  } else {
-    const warn = document.createElement('div');
-    warn.style.fontSize = '12px';
-    warn.style.color = '#ef4444';
-    warn.textContent = '(No se pudo clonar las llaves)';
-    root.appendChild(warn);
+  // Recorre cualquier estructura de KO (cuadro) y junta los matches
+  function collectKOMatches(node, acc){
+    acc = acc || [];
+    if (!node) return acc;
+    if (Array.isArray(node)){ node.forEach(n => collectKOMatches(n, acc)); return acc; }
+    if (typeof node === 'object'){
+      if ('jugadorA' in node || 'jugadorB' in node || 'resultado' in node || 'score' in node) acc.push(node);
+      Object.values(node).forEach(v => { if (v && typeof v === 'object') collectKOMatches(v, acc); });
+    }
+    return acc;
   }
 
-  document.body.appendChild(root);
-  return root;
-}
+  // Aplana el fixture por grupo (si existe)
+  function flattenGroupFixture(t){
+    const out = [];
+    const fixture = t?.fixture || {};
+    const grupos = t?.grupos || [];
+    grupos.forEach(g => {
+      const gid = g.id || g.nombre;
+      const rondas = fixture[gid];
+      const list = [];
+      if (Array.isArray(rondas)){
+        rondas.forEach(r => ((r?.matches || r?.partidos || r || [])).forEach(m => {
+          if (m && (m.jugadorA != null || m.jugadorB != null)) list.push(m);
+        }));
+      }
+      out.push({ group: g, matches: list });
+    });
+    return out;
+  }
 
-// Exportar A4 a PNG (apaisado)
-async function exportPNG_A4(torneo, showBracket, setShowBracket) {
-  try {
-    let revert = false;
-    if (!document.getElementById('bracket-canvas') && typeof setShowBracket === 'function') {
-      setShowBracket(true);
-      revert = true;
-      await new Promise(r => setTimeout(r, 60));
+  // Intenta determinar campeón desde KO
+  function computeChampion(t){
+    const ms = collectKOMatches(t?.cuadro, []);
+    if (!ms.length) return null;
+    // Preferí el que marque final; sino, el último
+    const finalM = ms.find(m => m.isFinal || m.final || m.ronda === 'final' || m.round === 'final') || ms[ms.length-1];
+    const res = finalM?.resultado;
+    if (res === 'A' || res === 'B') {
+      const winner = res === 'A' ? finalM.jugadorA : finalM.jugadorB;
+      return { label: lab(winner, t), score: finalM.score || '', match: finalM };
+    }
+    return null;
+  }
+
+  // Construye una hoja A4 limpia y centrada con todo el contenido
+  function buildA4TorneoSheet(torneo, showBracket){
+    const sheet = document.createElement('div');
+    sheet.style.cssText = [
+      'width:1123px','min-height:794px','background:#fff','color:#0f172a',
+      'padding:40px 48px','box-sizing:border-box','border-radius:12px',
+      'box-shadow:0 0 0 1px rgba(0,0,0,.04)','font-family:ui-sans-serif,system-ui'
+    ].join(';');
+
+    // ===== Header centrado =====
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:16px';
+
+    const brand = document.createElement('div');
+    brand.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:10px;font-weight:800;font-size:22px;margin:0 auto';
+    (function setLogo(){
+      const trySel = ['img[alt*="Coachex"]','img[alt*="logo"]','.topbar img','link[rel="icon"]'];
+      let src = null;
+      for (const s of trySel){
+        const el = document.querySelector(s);
+        if (!el) continue;
+        src = el.tagName === 'LINK' ? el.href : el.src;
+        if (src) break;
+      }
+      if (src){
+        const img = document.createElement('img');
+        img.src = src; img.alt = 'Coachex-Pro';
+        img.style.cssText = 'width:28px;height:28px;border-radius:9999px;object-fit:cover';
+        brand.appendChild(img);
+      }
+    })();
+    const btxt = document.createElement('div'); btxt.textContent = 'Coachex-Pro';
+    brand.appendChild(btxt);
+
+    const title = document.createElement('div');
+    title.textContent = torneo?.nombre || 'Torneo';
+    title.style.cssText = 'font-size:26px;line-height:1.2;font-weight:800;text-align:center;margin-top:4px';
+
+    const sub = document.createElement('div');
+    const modo = torneo?.formato === 'eliminacion' ? 'Eliminación' : (torneo?.formato === 'grupos_y_eliminacion' ? 'Grupos + Eliminación' : 'Grupos');
+    const count = (torneo?.modalidad === 'dobles' ? (torneo?.teams || []).length + ' parejas' : (torneo?.participantes || []).length + ' jugadores');
+    const created = torneo?.createdAt ? new Date(torneo.createdAt).toLocaleDateString() : '';
+    const topk = (torneo?.topK != null ? `Top-K: ${torneo.topK}` : '');
+    const idaVuelta = torneo?.idaVuelta ? 'Ida y vuelta: Sí' : 'Ida y vuelta: No';
+    sub.textContent = [modo, count, (created ? 'Creado: ' + created : ''), topk, idaVuelta].filter(Boolean).join(' · ');
+    sub.style.cssText = 'font-size:12px;line-height:1.5;color:#64748b;text-align:center';
+
+    header.appendChild(brand); header.appendChild(title); header.appendChild(sub);
+    sheet.appendChild(header);
+
+    const section = document.createElement('div');
+    section.style.cssText = 'display:flex;flex-direction:column;gap:12px';
+
+    // ===== Resultado Final =====
+    const champion = computeChampion(torneo);
+    if (champion){
+      const card = document.createElement('div');
+      card.style.cssText = 'border:1px solid #e2e8f0;border-radius:10px;padding:12px';
+      const h = document.createElement('div');
+      h.textContent = 'Resultado final';
+      h.style.cssText = 'font-weight:700;margin-bottom:6px';
+      const line = document.createElement('div');
+      line.style.cssText = 'font-size:13px';
+      line.textContent = `Campeón: ${champion.label}${champion.score ? ' · ' + champion.score : ''}`;
+      card.appendChild(h); card.appendChild(line);
+      section.appendChild(card);
     }
 
-    const el = buildA4Root(torneo);
-    await waitImages(el);
+    // ===== Fase Final (resumen) =====
+    if (showBracket && torneo?.cuadro){
+      const ko = document.createElement('div');
+      ko.style.cssText = 'border:1px solid #e2e8f0;border-radius:10px;padding:12px';
+      const h = document.createElement('div');
+      h.textContent = 'Fase Final (resumen)';
+      h.style.cssText = 'font-weight:700;margin-bottom:6px';
+      ko.appendChild(h);
 
-    const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 });
-    document.body.removeChild(el);
-    if (revert) setShowBracket(false);
+      const list = document.createElement('div');
+      list.style.cssText = 'display:grid;grid-template-columns:1fr;gap:6px';
 
-    const a = document.createElement('a');
-    a.href = canvas.toDataURL('image/png');
-    a.download = (torneo?.nombre || 'llaves') + '.png';
-    a.click();
-  } catch (e) {
-    console.error(e);
-    alert('No se pudo exportar PNG.');
+      const matches = collectKOMatches(torneo.cuadro, []);
+      if (!matches.length){
+        const item = document.createElement('div');
+        item.style.cssText = 'border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px';
+        item.textContent = 'No hay cruces registrados.';
+        list.appendChild(item);
+      } else {
+        matches.forEach(m => {
+          const A = lab(m.jugadorA, torneo), B = lab(m.jugadorB, torneo);
+          const res = (m.resultado==='A' ? 'Ganador A' : (m.resultado==='B' ? 'Ganador B' : (m.resultado==='D' ? 'Empate' : '')));
+          const item = document.createElement('div');
+          item.style.cssText = 'border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px';
+          item.textContent = `${A || '—'} vs ${B || '—'}${m.score ? ' · ' + m.score : ''}${res ? ' · ' + res : ''}`;
+          list.appendChild(item);
+        });
+      }
+      ko.appendChild(list);
+      section.appendChild(ko);
+    }
+
+    // ===== Grupos (resumen) =====
+    if (torneo?.grupos){
+      const gc = document.createElement('div');
+      gc.style.cssText = 'border:1px solid #e2e8f0;border-radius:10px;padding:12px';
+      const h2 = document.createElement('div');
+      h2.textContent = 'Grupos (resumen)';
+      h2.style.cssText = 'font-weight:700;margin-bottom:6px';
+      gc.appendChild(h2);
+
+      const fx = flattenGroupFixture(torneo);
+      (torneo.grupos || []).forEach((g, idx) => {
+        const gh = document.createElement('div');
+        gh.textContent = `Grupo ${g.nombre || g.id || ''}`;
+        gh.style.cssText = 'color:#64748b;margin:6px 0 4px 0';
+        gc.appendChild(gh);
+
+        // Entradas
+        const elist = document.createElement('div');
+        elist.style.cssText = 'display:grid;grid-template-columns:1fr;gap:4px';
+        (g.entradas || []).forEach(e => {
+          const item = document.createElement('div');
+          item.style.cssText = 'border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px';
+          item.textContent = lab(e, torneo);
+          elist.appendChild(item);
+        });
+        gc.appendChild(elist);
+
+        // Partidos del fixture (si hay)
+        const mx = fx[idx]?.matches || [];
+        if (mx.length){
+          const t = document.createElement('div');
+          t.textContent = 'Partidos:';
+          t.style.cssText = 'color:#64748b;margin:6px 0 2px 0';
+          gc.appendChild(t);
+
+          const mlist = document.createElement('div');
+          mlist.style.cssText = 'display:grid;grid-template-columns:1fr;gap:4px';
+          mx.forEach(m => {
+            const A = lab(m.jugadorA, torneo), B = lab(m.jugadorB, torneo);
+            const res = (m.resultado==='A' ? 'Ganador A' : (m.resultado==='B' ? 'Ganador B' : (m.resultado==='D' ? 'Empate' : '')));
+            const item = document.createElement('div');
+            item.style.cssText = 'border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px';
+            item.textContent = `${A || '—'} vs ${B || '—'}${m.score ? ' · ' + m.score : ''}${res ? ' · ' + res : ''}`;
+            mlist.appendChild(item);
+          });
+          gc.appendChild(mlist);
+        }
+      });
+
+      section.appendChild(gc);
+    }
+
+    if (!section.children.length){
+      const empty = document.createElement('div');
+      empty.style.cssText = 'border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px';
+      empty.textContent = 'Sin datos para mostrar.';
+      section.appendChild(empty);
+    }
+
+    sheet.appendChild(section);
+    return sheet;
   }
-}
+
+  // Exponer helpers en window
+  window.__buildA4TorneoSheet = buildA4TorneoSheet;
+})();
 
 // Exportar A4 a PDF (apaisado)
-async function exportPDF_A4(torneo, showBracket, setShowBracket) {
-  try {
-    let revert = false;
-    if (!document.getElementById('bracket-canvas') && typeof setShowBracket === 'function') {
-      setShowBracket(true);
-      revert = true;
-      await new Promise(r => setTimeout(r, 60));
-    }
 
-    const el = buildA4Root(torneo);
-    await waitImages(el);
-
-    const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 });
-    document.body.removeChild(el);
-    if (revert) setShowBracket(false);
-
-    const { jsPDF } = window.jspdf || {};
-    if (!jsPDF) { alert('jsPDF no está disponible.'); return; }
-
-    const pdf = new jsPDF('l', 'pt', 'a4');
-    const W = pdf.internal.pageSize.getWidth();
-    const H = pdf.internal.pageSize.getHeight();
-    const ratio = Math.min(W / canvas.width, H / canvas.height);
-    const w = canvas.width * ratio;
-    const h = canvas.height * ratio;
-
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (W - w) / 2, (H - h) / 2, w, h);
-    pdf.save((torneo?.nombre || 'llaves') + '.pdf');
-  } catch (e) {
-    console.error(e);
-    alert('No se pudo exportar PDF.');
-  }
-}
 
 
 // ===== Bracket =====
@@ -12089,5 +12555,1050 @@ class ErrorBoundary extends React.Component {
 ReactDOM.render(<ErrorBoundary><AppGPadel /></ErrorBoundary>, document.getElementById('root'));
 </script>
 
+<script type="text/babel">
+// ====== RANKING INTEGRATION (non-invasive) ======
+// This block adds ranking configuration + award application without altering existing logic.
+// It relies on existing globals: React, db (Firestore), bracketFinalInfo, computeTablaGrupo (if present).
+
+(function(){
+  // ---- Safe helpers ----
+  function defaultRankingCfg() {
+    return {
+      destinoId: null,
+      modo: 'mixto',                   // 'partidos' | 'posiciones' | 'mixto'
+      multiplicador: 1,
+      liga: { top: [100,60,40,20,10], participacion: 5 },
+      ko:   { winPerMatch: 10, champion:120, runnerUp:80, semi:50, quarter:25, roundOf16:10 },
+      dobles: { dividir: false }
+    };
+  }
+
+  function withRankingDefaults(reglas) {
+    const r = reglas || {};
+    const base = defaultRankingCfg();
+    return { 
+      ...r, 
+      ranking: { 
+        ...base, 
+        ...(r.ranking || {}) 
+      } 
+    };
+  }
+
+  function rankingsColRef(user, clubId) {
+    try {
+      var uid = (user && user.uid) || (window && window.__USER_UID) || (window && window.firebase && window.firebase.auth && window.firebase.auth().currentUser && window.firebase.auth().currentUser.uid) || null;
+      if (!uid) { console.error('rankingsColRef: no UID'); return null; }
+      return db
+        .collection('users').doc(uid)
+        .collection('clubs').doc(clubId)
+        .collection('rankings');
+    } catch (e) {
+      console.error("rankingsColRef error", e);
+      return null;
+    }
+  }
+
+  // Devuelve array de alumnoIds desde una entrada (alumno o pareja).
+  function expandEntryToAlumnoIds(entry, torneo) {
+    if (!torneo) return [];
+    if (torneo.modalidad !== 'dobles') {
+      const id = (typeof entry === 'string') ? entry : (entry && entry.id);
+      return id ? [id] : [];
+    }
+    const teams = torneo.teams || [];
+    const team = (entry && entry.members) ? entry
+      : (typeof entry === 'string' ? teams.find(t => t.id === entry) : entry);
+    return (team && Array.isArray(team.members)) ? team.members.filter(Boolean) : [];
+  }
+
+  // ¿Todos los partidos de grupos están "done"?
+  function groupsAllMatchesDone(torneo) {
+    if (!torneo || !torneo.fixture) return false;
+    const fx = torneo.fixture;
+    let hasAny = false;
+    for (const gid of Object.keys(fx)) {
+      const rondas = fx[gid] || [];
+      for (const rs of rondas) {
+        for (const m of (rs || [])) {
+          hasAny = true;
+          if (!m || !m.done) return false;
+        }
+      }
+    }
+    return hasAny;
+  }
+
+  // --- Puntos por partidos en grupos ---
+  function collectGroupMatchPoints(torneo) {
+    const out = new Map();
+    const reglas = withRankingDefaults(torneo.reglas);
+    const P = (reglas.grupos && reglas.grupos.puntos) ? reglas.grupos.puntos : { win:3, draw:1, loss:0 };
+    const fx = torneo.fixture || {};
+    Object.values(fx).forEach(rondas => (rondas || []).forEach(rs => (rs || []).forEach(m => {
+      if (!m?.done || !m?.result) return;
+      const winner = m.result.winner;
+      const aIds = expandEntryToAlumnoIds(m.a, torneo);
+      const bIds = expandEntryToAlumnoIds(m.b, torneo);
+      let aPts = 0, bPts = 0;
+      if (winner === 'a') { aPts = P.win; bPts = P.loss; }
+      else if (winner === 'b') { aPts = P.loss; bPts = P.win; }
+      else { aPts = P.draw; bPts = P.draw; }
+      aIds.forEach(id => out.set(id, (out.get(id)||0) + aPts));
+      bIds.forEach(id => out.set(id, (out.get(id)||0) + bPts));
+    })));
+    return out;
+  }
+
+  // --- Puntos por KO (victorias + bonos por posición) ---
+  function collectKOPoints(torneo) {
+    const out = new Map();
+    const reglas = withRankingDefaults(torneo.reglas);
+    const K = reglas.ko || {};
+    const cuadro = torneo.cuadro || {};
+
+    // 1) por victoria
+    Object.values(cuadro).forEach(rondas => (rondas || []).forEach(m => {
+      if (!m?.done || !m?.result?.winner) return;
+      const winnerEntry = (m.result.winner === 'a') ? m.a : m.b;
+      expandEntryToAlumnoIds(winnerEntry, torneo).forEach(id => {
+        out.set(id, (out.get(id)||0) + (K.winPerMatch || 0));
+      });
+    }));
+
+    // 2) bonos por posición (si tenemos helpers del KO)
+    try {
+      const fin = (typeof bracketFinalInfo === 'function') ? bracketFinalInfo(cuadro) : null;
+      if (fin?.done) {
+        const bonus = (key, entry) => {
+          const val = K[key] || 0;
+          expandEntryToAlumnoIds(entry, torneo).forEach(id => {
+            out.set(id, (out.get(id)||0) + val);
+          });
+        };
+        bonus('champion',  fin.champion);
+        bonus('runnerUp',  fin.runnerUp);
+
+        // Semifinales perdedores
+        const semiR = cuadro[String(fin.lastRound-1)] || [];
+        semiR.forEach(m => {
+          const loser = (m?.result?.winner === 'a') ? m.b : m.a;
+          bonus('semi', loser);
+        });
+        // Cuartos perdedores
+        const qR = cuadro[String(fin.lastRound-2)] || [];
+        qR.forEach(m => {
+          const loser = (m?.result?.winner === 'a') ? m.b : m.a;
+          bonus('quarter', loser);
+        });
+      }
+    } catch (e) {
+      console.warn("KO bonus skipped (no bracket helper?)", e);
+    }
+    return out;
+  }
+
+  // --- Bonos por posición en Liga (y participación) ---
+  function collectLeaguePlacementPoints(torneo) {
+    const out = new Map();
+    const reglas = withRankingDefaults(torneo.reglas);
+    const top = (reglas.ranking && reglas.ranking.liga && Array.isArray(reglas.ranking.liga.top)) ? reglas.ranking.liga.top : [];
+    const part = (reglas.ranking && reglas.ranking.liga) ? (reglas.ranking.liga.participacion || 0) : 0;
+
+    // Necesitamos computeTablaGrupo si existe
+    if (!torneo.grupos || !Array.isArray(torneo.grupos)) return out;
+
+    torneo.grupos.forEach(g => {
+      let rows = [];
+      try {
+        if (typeof computeTablaGrupo === 'function') rows = computeTablaGrupo(torneo, g.id) || [];
+      } catch (e) {
+        console.warn("computeTablaGrupo error", e);
+      }
+      rows.forEach((row, i) => {
+        const ids = expandEntryToAlumnoIds(row?.eid, torneo);
+        const base = (i < top.length) ? (top[i] || 0) : 0;
+        ids.forEach(id => out.set(id, (out.get(id)||0) + base));
+      });
+
+      // participación: quien haya jugado al menos un partido
+      const fx = (torneo.fixture || {})[g.id] || [];
+      const jugo = new Set();
+      fx.forEach(rs => (rs || []).forEach(m => {
+        if (m?.done) {
+          expandEntryToAlumnoIds(m.a, torneo).forEach(id => jugo.add(id));
+          expandEntryToAlumnoIds(m.b, torneo).forEach(id => jugo.add(id));
+        }
+      }));
+      jugo.forEach(id => out.set(id, (out.get(id)||0) + part));
+    });
+    return out;
+  }
+
+  function mergePoints(maps) {
+    const out = new Map();
+    (maps || []).forEach(m => m && m.forEach((v,k) => out.set(k, (out.get(k)||0) + v)));
+    return out;
+  }
+
+  async function applyAwardsToRanking({ user, clubId, torneo, force=false }) {
+    const reglas = withRankingDefaults(torneo.reglas);
+    const cfg = reglas.ranking || defaultRankingCfg();
+    if (!cfg.destinoId) { alert('Elegí un Ranking destino en Reglas → Ranking.'); return null; }
+
+    const parts = [];
+    if (cfg.modo === 'partidos' || cfg.modo === 'mixto') {
+      // Liga
+      parts.push(collectGroupMatchPoints(torneo));
+      // KO
+      if (torneo.cuadro) parts.push(collectKOPoints(torneo));
+    }
+    if (cfg.modo === 'posiciones' || cfg.modo === 'mixto') {
+      if (torneo.formato !== 'eliminacion') parts.push(collectLeaguePlacementPoints(torneo));
+    }
+
+    const tot = mergePoints(parts);
+    const mult = cfg.multiplicador || 1;
+    const awards = {};
+    tot.forEach((v,k)=> awards[k] = Math.round(v * mult));
+
+    const col = rankingsColRef(user, clubId);
+    if (!col) { alert('No se pudo ubicar la colección de rankings.'); return null; }
+    const ref = col.doc(cfg.destinoId);
+    const snap = await ref.get();
+    const data = snap.exists ? snap.data() : {};
+    
+const ajustesTorneos = { ...(data.ajustesTorneos || {}) };
+const participantesSet = new Set(Array.isArray(data.participantes) ? data.participantes : []);
+Object.entries(awards).forEach(([id, pts]) => {
+  ajustesTorneos[id] = (parseInt(ajustesTorneos[id]||0,10)) + (pts||0);
+  participantesSet.add(id);
+});
+const participantes = Array.from(participantesSet);
+await ref.set({ ajustesTorneos, participantes, updatedAt: Date.now() }, { merge: true });
+    // Además, persistimos un documento de 'awards' con el resumen PJ/G/E/P y PTS de este torneo
+    try {
+      const counts = (function() {
+        const out = new Map();
+        const ensure = (id) => { if (!out.has(id)) out.set(id, {PJ:0,G:0,E:0,P:0}); return out.get(id); };
+        // Conteo por fase de grupos (si aplica)
+        const gids = (typeof groups === 'function') ? groups(torneo) : Object.keys(torneo.grupos||{});
+        for (const gid of gids) {
+          let tabla = [];
+          try {
+            tabla = (typeof computeTablaGrupo === 'function') ? (computeTablaGrupo(torneo, gid) || []) : [];
+          } catch (e) { tabla = []; }
+          for (const row of (tabla || [])) {
+            const ids = (typeof expandEntryToAlumnoIds === 'function') ? (expandEntryToAlumnoIds(row.eid, torneo) || []) : [row.eid].filter(Boolean);
+            for (const id of ids) {
+              const r = ensure(id);
+              r.PJ += (row.pj||0);
+              r.G  += (row.pg||0);
+              r.E  += (row.pe||0);
+              r.P  += (row.pp||0);
+            }
+          }
+        }
+        // Conteo por cuadros (eliminación directa)
+        const isBYE = (e) => e && typeof e==='object' && e.BYE;
+        for (const rd of Object.values(torneo.cuadro || {})) {
+          for (const m of (rd || [])) {
+            if (!m || !m.done || !m.result) continue;
+            const aIds = (typeof expandEntryToAlumnoIds === 'function') ? (expandEntryToAlumnoIds(m.a, torneo) || []) : [m.a].filter(Boolean);
+            const bIds = (typeof expandEntryToAlumnoIds === 'function') ? (expandEntryToAlumnoIds(m.b, torneo) || []) : [m.b].filter(Boolean);
+            if (aIds.length === 0 || bIds.length === 0) continue; // probablemente BYE
+            for (const id of aIds) ensure(id).PJ += 1;
+            for (const id of bIds) ensure(id).PJ += 1;
+            if (m.result.winner === 'a') {
+              for (const id of aIds) ensure(id).G += 1;
+              for (const id of bIds) ensure(id).P += 1;
+            } else if (m.result.winner === 'b') {
+              for (const id of bIds) ensure(id).G += 1;
+              for (const id of aIds) ensure(id).P += 1;
+            }
+          }
+        }
+        return out;
+      })();
+
+      const resumen = {};
+      const allIds = new Set([ ...(awards ? Object.keys(awards) : []), ...Array.from(counts.keys()) ]);
+      for (const id of allIds) {
+        const c = counts.get(id) || {PJ:0,G:0,E:0,P:0};
+        const pts = awards && awards[id] ? awards[id] : 0;
+        resumen[id] = { PJ: c.PJ||0, G: c.G||0, E: c.E||0, P: c.P||0, PTS: pts };
+      }
+
+      await ref.collection('awards')
+        .doc(String(torneo.id || torneo.torneoId || torneo.nombre || Date.now()))
+        .set({
+          torneoId: torneo.id || torneo.torneoId || null,
+          torneoNombre: torneo.nombre || '',
+          categoria: torneo.categoria || null,
+          sexo: torneo.sexo || null,
+          modalidad: (torneo.reglas && torneo.reglas.modalidad) || torneo.modalidad || null,
+          aplicadoAt: Date.now(),
+          resumen
+        }, { merge: true });
+    } catch (e) {
+      console.warn('No se pudo guardar awards del torneo en ranking', e);
+    }
+
+
+
+    console.log("Ranking awards applied:", awards);
+    alert('Puntos del torneo aplicados al Ranking.');
+    return awards;
+  }
+
+  // Exponer helpers mínimos por si querés llamarlos desde consola
+  window.__rankingHelpers = {
+    withRankingDefaults, groupsAllMatchesDone,
+    collectGroupMatchPoints, collectKOPoints, collectLeaguePlacementPoints,
+    applyAwardsToRanking
+  };
+
+  // ---- UI: Panel de configuración + botón aplicar ----
+  function RankingConfigPanel({ user, clubId, torneo, setReglas, disabled }) {
+    const [rankings, setRankings] = React.useState([]);
+    const reglas = withRankingDefaults(torneo.reglas);
+    const r = reglas.ranking;
+
+    React.useEffect(() => {
+      const col = rankingsColRef(user, clubId);
+      if (!col) return;
+      const unsub = col.orderBy('nombre', 'asc').onSnapshot(
+        s => (()=>{ const arr = s.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b)=>(a?.nombre||'').localeCompare(b?.nombre||'')); setRankings(arr); })(),
+        err => console.error('rankings list', err)
+      );
+      return () => unsub && unsub();
+    }, [user, clubId]);
+
+    const patch = (p) => setReglas({ ranking: { ...r, ...p } });
+
+    // Elegibilidad para aplicar
+    let readyReason = null;
+    let ready = false;
+    try {
+      const fin = (typeof bracketFinalInfo === 'function') ? bracketFinalInfo(torneo.cuadro || {}) : null;
+      if (fin?.done) { ready = true; readyReason = "Fase final completada"; }
+    } catch {}
+    if (!ready && groupsAllMatchesDone(torneo)) { ready = true; readyReason = "Todos los partidos de liga están cargados"; }
+
+    const onApply = async () => {
+      if (!ready) {
+        if (!confirm("Aún no detecto el torneo como 'finalizado'. ¿Aplicar de todos modos?")) return;
+      }
+      await applyAwardsToRanking({ user, clubId, torneo, force: !ready });
+    };
+
+    return (
+      <div className="border rounded-2xl p-4 space-y-3 bg-white dark:bg-slate-900">
+        <div className="font-semibold text-slate-700 dark:text-slate-200">Ranking (puntos del torneo)</div>
+        <div className="grid md:grid-cols-3 gap-3">
+          <label className="text-sm">
+            <div className="text-slate-500 mb-1">Ranking destino</div>
+            <select className="w-full border rounded-xl p-2"
+                    value={r.destinoId || ''}
+                    onChange={e=>patch({ destinoId: e.target.value || null })}
+                    disabled={disabled}>
+              <option value="">— Elegí un ranking —</option>
+              {rankings.map(x => <option key={x.id} value={x.id}>{x.nombre || x.id}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">
+            <div className="text-slate-500 mb-1">Modo de puntaje</div>
+            <select className="w-full border rounded-xl p-2"
+                    value={r.modo}
+                    onChange={e=>patch({ modo: e.target.value })}
+                    disabled={disabled}>
+              <option value="partidos">Por partidos</option>
+              <option value="posiciones">Por posiciones</option>
+              <option value="mixto">Mixto</option>
+            </select>
+          </label>
+          <label className="text-sm">
+            <div className="text-slate-500 mb-1">Multiplicador categoría</div>
+            <input className="w-full border rounded-xl p-2" type="number" step="0.05" min="0"
+                  value={r.multiplicador}
+                  onChange={e=>patch({ multiplicador: parseFloat(e.target.value || '1') })}
+                  disabled={disabled}/>
+          </label>
+        </div>
+
+        <div className="grid md:grid-cols-6 gap-3">
+          {r.liga.top.map((v,i)=>(
+            <label key={i} className="text-sm">
+              <div className="text-slate-500 mb-1">Liga: Pos {i+1}</div>
+              <input className="w-full border rounded-xl p-2" type="number"
+                    value={v} onChange={e=>{
+                      const top=[...r.liga.top]; top[i]=parseInt(e.target.value||'0',10);
+                      patch({ liga:{...r.liga, top} });
+                    }} disabled={disabled}/>
+            </label>
+          ))}
+          <label className="text-sm">
+            <div className="text-slate-500 mb-1">Liga: Participación</div>
+            <input className="w-full border rounded-xl p-2" type="number"
+                  value={r.liga.participacion}
+                  onChange={e=>patch({ liga:{...r.liga, participacion: parseInt(e.target.value||'0',10)} })}
+                  disabled={disabled}/>
+          </label>
+        </div>
+
+        <div className="grid md:grid-cols-6 gap-3">
+          {[
+            ['KO: Campeón','champion'],
+            ['KO: Subcampeón','runnerUp'],
+            ['KO: Semifinal','semi'],
+            ['KO: Cuartos','quarter'],
+            ['KO: R16','roundOf16'],
+          ].map(([lbl,key])=>(
+            <label key={key} className="text-sm">
+              <div className="text-slate-500 mb-1">{lbl}</div>
+              <input className="w-full border rounded-xl p-2" type="number"
+                    value={r.ko[key]||0}
+                    onChange={e=>patch({ ko:{...r.ko, [key]: parseInt(e.target.value||'0',10)} })}
+                    disabled={disabled}/>
+            </label>
+          ))}
+          <label className="text-sm">
+            <div className="text-slate-500 mb-1">KO: puntos por victoria</div>
+            <input className="w-full border rounded-xl p-2" type="number"
+                  value={r.ko.winPerMatch||0}
+                  onChange={e=>patch({ ko:{...r.ko, winPerMatch: parseInt(e.target.value||'0',10)} })}
+                  disabled={disabled}/>
+          </label>
+        </div>
+
+        <label className="text-sm">
+          <div className="text-slate-500 mb-1">Dobles</div>
+          <select className="w-full border rounded-xl p-2"
+                  value={r.dobles.dividir ? 'dividir' : 'completo'}
+                  onChange={e=>patch({ dobles:{ dividir: e.target.value==='dividir' } })}
+                  disabled={disabled}>
+            <option value="completo">Cada jugador recibe el total</option>
+            <option value="dividir">Dividir puntos entre la pareja</option>
+          </select>
+        </label>
+
+        <div className="flex items-center gap-3 pt-2">
+          <span className={"inline-flex items-center px-2 py-1 rounded-full text-xs " + (ready ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+            {ready ? (readyReason || "Listo para aplicar") : "Aún no detecto el torneo finalizado"}
+          </span>
+          <button className="px-3 py-1.5 rounded-lg border hover:bg-slate-50"
+                  onClick={onApply}
+                  disabled={!r.destinoId || disabled}>
+            Aplicar puntos al Ranking
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Exponer el componente para que el código existente pueda usarlo (inserción automática abajo)
+  window.RankingConfigPanel = RankingConfigPanel;
+})();
+</script>
+
+<script>
+/* A4 CLEAN EXPORT v2 */
+(function(){
+  function findLogoSrc(){
+    const sel = [
+      'img[alt*="Coachex"]',
+      'img[alt*="logo"]',
+      '.topbar img',
+      'link[rel="icon"]'
+    ];
+    for(const s of sel){
+      const el = document.querySelector(s);
+      if(!el) continue;
+      if(el.tagName === 'LINK' && el.href) return el.href;
+      if(el.src) return el.src;
+    }
+    return null;
+  }
+
+  function formatMeta(t){
+    const modo = t.formato === 'eliminacion' ? 'Eliminación' : (t.formato === 'grupos_y_eliminacion' ? 'Grupos + Eliminación' : 'Grupos');
+    const modal = t.modalidad === 'dobles' ? 'Dobles' : 'Singles';
+    const count = (t.modalidad === 'dobles' ? (t.teams || []).length + ' parejas' : (t.participantes || []).length + ' jugadores');
+    const created = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '';
+    const topk = (t.topK != null ? `Top-K: ${t.topK}` : '');
+    const idaVuelta = t.idaVuelta ? 'Ida y vuelta: Sí' : 'Ida y vuelta: No';
+    return [modo, count, (created ? 'Creado: ' + created : ''), topk, idaVuelta].filter(Boolean).join(' · ');
+  }
+
+  
+function buildA4Sheet(torneo, showBracket){
+  const sheet = document.createElement('div');
+  sheet.id = 'a4-sheet';
+  sheet.setAttribute('role','document');
+
+  // ===== Header =====
+  const header = document.createElement('div');
+  header.id = 'a4-header';
+
+  const brand = document.createElement('div');
+  brand.id = 'a4-brand';
+  const logoSrc = (window.__findLogoSrc ? window.__findLogoSrc() : null);
+  if (logoSrc){
+    const img = document.createElement('img');
+    img.src = logoSrc;
+    img.alt = 'Coachex-Pro';
+    brand.appendChild(img);
+  }
+  const btxt = document.createElement('div');
+  btxt.textContent = 'Coachex-Pro';
+  brand.appendChild(btxt);
+
+  const title = document.createElement('div');
+  title.id = 'a4-title';
+  title.textContent = (torneo?.nombre || 'Torneo');
+
+  const sub = document.createElement('div');
+  sub.id = 'a4-sub';
+  sub.textContent = (function(){
+    const modo = torneo?.formato === 'eliminacion' ? 'Eliminación' : (torneo?.formato === 'grupos_y_eliminacion' ? 'Grupos + Eliminación' : 'Grupos');
+    const count = (torneo?.modalidad === 'dobles' ? (torneo?.teams || []).length + ' parejas' : (torneo?.participantes || []).length + ' jugadores');
+    const created = torneo?.createdAt ? new Date(torneo.createdAt).toLocaleDateString() : '';
+    const topk = (torneo?.topK != null ? `Top-K: ${torneo.topK}` : '');
+    const idaVuelta = torneo?.idaVuelta ? 'Ida y vuelta: Sí' : 'Ida y vuelta: No';
+    return [modo, count, (created ? 'Creado: ' + created : ''), topk, idaVuelta].filter(Boolean).join(' · ');
+  })();
+
+  header.appendChild(brand);
+  header.appendChild(title);
+  header.appendChild(sub);
+  sheet.appendChild(header);
+
+  // ===== Helpers =====
+  const label = (window.labelEntradaCard ? window.labelEntradaCard : (x, t)=> (typeof x==='string'?x:(x?.label||x?.id||'—')));
+
+  function collectKOMatches(node, acc){
+    acc = acc || [];
+    if (!node) return acc;
+    if (Array.isArray(node)){
+      node.forEach(n => collectKOMatches(n, acc));
+      return acc;
+    }
+    if (typeof node === 'object'){
+      // If looks like a match
+      if ('jugadorA' in node || 'jugadorB' in node || 'resultado' in node || 'score' in node){
+        acc.push(node);
+      }
+      // Recurse props
+      Object.keys(node).forEach(k => {
+        const v = node[k];
+        if (v && (typeof v === 'object')) collectKOMatches(v, acc);
+      });
+    }
+    return acc;
+  }
+
+  function flattenGroupFixture(t){
+    const out = [];
+    const fixture = t?.fixture || {};
+    const grupos = t?.grupos || [];
+    grupos.forEach(g => {
+      const gid = g.id || g.nombre;
+      const rondas = fixture[gid];
+      const list = [];
+      if (Array.isArray(rondas)){
+        rondas.forEach(r => {
+          (r?.matches || r?.partidos || r || []).forEach(m => {
+            if (m && (m.jugadorA != null || m.jugadorB != null)){
+              list.push(m);
+            }
+          });
+        });
+      }
+      out.push({ group: g, matches: list });
+    });
+    return out;
+  }
+
+  // ===== Body =====
+  const sec = document.createElement('div');
+  sec.id = 'a4-section';
+
+  // KO Summary
+  if (showBracket && torneo?.cuadro){
+    const koCard = document.createElement('div');
+    koCard.className = 'a4-card';
+    const h = document.createElement('div');
+    h.style.fontWeight = '700';
+    h.style.marginBottom = '6px';
+    h.textContent = 'Fase Final (resumen)';
+    koCard.appendChild(h);
+
+    const table = document.createElement('div');
+    table.style.display = 'grid';
+    table.style.gridTemplateColumns = '1fr';
+    table.style.gap = '6px';
+
+    const matches = collectKOMatches(torneo.cuadro, []);
+    if (matches.length === 0){
+      const item = document.createElement('div');
+      item.className = 'a4-item';
+      item.textContent = 'No hay cruces registrados.';
+      table.appendChild(item);
+    } else {
+      matches.forEach(m => {
+        const A = label(m.jugadorA, torneo);
+        const B = label(m.jugadorB, torneo);
+        const res = (m.resultado==='A' ? 'Ganador A' : (m.resultado==='B' ? 'Ganador B' : (m.resultado==='D' ? 'Empate' : '')));
+        const line = `${A || '—'} vs ${B || '—'}${m.score ? ' · ' + m.score : ''}${res ? ' · ' + res : ''}`;
+        const item = document.createElement('div');
+        item.className = 'a4-item';
+        item.textContent = line;
+        table.appendChild(item);
+      });
+    }
+
+    koCard.appendChild(table);
+    sec.appendChild(koCard);
+  }
+
+  // Groups Summary (entries + fixture results if exist)
+  if (torneo?.grupos){
+    const gcard = document.createElement('div');
+    gcard.className = 'a4-card';
+    const h2 = document.createElement('div');
+    h2.style.fontWeight = '700';
+    h2.style.marginBottom = '6px';
+    h2.textContent = 'Grupos (resumen)';
+    gcard.appendChild(h2);
+
+    const groupsWithFx = flattenGroupFixture(torneo);
+
+    (torneo.grupos || []).forEach((g, idx) => {
+      const gh = document.createElement('div');
+      gh.className = 'a4-muted';
+      gh.style.margin = '6px 0';
+      gh.textContent = `Grupo ${g.nombre || g.id || ''}`;
+      gcard.appendChild(gh);
+
+      // Entradas
+      const list = document.createElement('div');
+      list.style.display = 'grid';
+      list.style.gridTemplateColumns = '1fr';
+      list.style.gap = '4px';
+      (g.entradas || []).forEach(e => {
+        const item = document.createElement('div');
+        item.className = 'a4-item';
+        item.textContent = label(e, torneo);
+        list.appendChild(item);
+      });
+      gcard.appendChild(list);
+
+      // Partidos del fixture (si hay)
+      const fx = groupsWithFx[idx]?.matches || [];
+      if (fx.length){
+        const fxTitle = document.createElement('div');
+        fxTitle.className = 'a4-muted';
+        fxTitle.style.margin = '6px 0 2px 0';
+        fxTitle.textContent = 'Partidos:';
+        gcard.appendChild(fxTitle);
+
+        const fxList = document.createElement('div');
+        fxList.style.display = 'grid';
+        fxList.style.gridTemplateColumns = '1fr';
+        fxList.style.gap = '4px';
+        fx.forEach(m => {
+          const A = label(m.jugadorA, torneo);
+          const B = label(m.jugadorB, torneo);
+          const res = (m.resultado==='A' ? 'Ganador A' : (m.resultado==='B' ? 'Ganador B' : (m.resultado==='D' ? 'Empate' : '')));
+          const line = `${A || '—'} vs ${B || '—'}${m.score ? ' · ' + m.score : ''}${res ? ' · ' + res : ''}`;
+          const item = document.createElement('div');
+          item.className = 'a4-item';
+          item.textContent = line;
+          fxList.appendChild(item);
+        });
+        gcard.appendChild(fxList);
+      }
+    });
+
+    sec.appendChild(gcard);
+  }
+
+  // Empty state
+  if (!sec.children.length){
+    const empty = document.createElement('div');
+    empty.className = 'a4-item';
+    empty.textContent = 'Sin datos para mostrar.';
+    sec.appendChild(empty);
+  }
+
+  sheet.appendChild(sec);
+  return sheet;
+}
+
+  window.__findLogoSrc = findLogoSrc;
+})();
+</script>
+
+
+<!-- === PDF A4 (centrado + info real) - injected by ChatGPT === -->
+<script>
+(function(){
+  function makeLabelFn(torneo){
+    const pools = [
+      torneo?.alumnos, torneo?.alumnosList,
+      (torneo && torneo.alumnosSnapshot && torneo.alumnosSnapshot.alumnos),
+      window.__alumnos, window.alumnos,
+      (window.__appState && window.__appState.alumnos)
+    ].filter(Boolean);
+    const map = new Map();
+    pools.forEach(arr => { try{ (arr||[]).forEach(a=>{ if(a?.id) map.set(a.id,a); }); }catch(_){} });
+    function alumnoById(id){ return (id ? (map.get(id) || null) : null); }
+    function labelAlumnoById(id){
+      const a = alumnoById(id);
+      if (!a) return id || "—";
+      const ap = a.apellido || ""; const no = a.nombre || a.name || "";
+      return `${ap ? ap + ", " : ""}${no || a.id || "—"}`.trim();
+    }
+    return function labelEntrada(e, t){
+      t = t || torneo;
+      if (t?.modalidad === "dobles") {
+        const team = (e && e.members) ? e : (t.teams || []).find(tt => tt.id === (typeof e === "string" ? e : e?.id));
+        if (!team) return (e?.label || e?.id || "—");
+        if (team.label) return team.label;
+        const [id1, id2] = team.members || [];
+        const A = labelAlumnoById(id1); const B = labelAlumnoById(id2);
+        return (A && B) ? `${A} / ${B}` : (A || B || "—");
+      } else {
+        if (e?.label) return e.label;
+        const id = (typeof e === "string") ? e : e?.id;
+        return labelAlumnoById(id);
+      }
+    };
+  }
+
+  function collectKOMatches(node, acc){
+    acc = acc || [];
+    if (!node) return acc;
+    if (Array.isArray(node)){ node.forEach(n => collectKOMatches(n, acc)); return acc; }
+    if (typeof node === "object"){
+      const isMatch = ("jugadorA" in node) || ("jugadorB" in node) || ("resultado" in node) || ("score" in node);
+      if (isMatch) acc.push(node);
+      Object.values(node).forEach(v => { if (v && typeof v === "object") collectKOMatches(v, acc); });
+    }
+    return acc;
+  }
+
+  function flattenGroupFixture(t){
+    const out = [];
+    const fixture = t?.fixture || {};
+    const grupos = t?.grupos || [];
+    grupos.forEach(g => {
+      const gid = g.id || g.nombre;
+      const rondas = fixture[gid];
+      const list = [];
+      if (Array.isArray(rondas)){
+        rondas.forEach(r => ((r?.matches || r?.partidos || r || [])).forEach(m => {
+          if (m && (m.jugadorA != null || m.jugadorB != null)) list.push(m);
+        }));
+      }
+      out.push({ group: g, matches: list });
+    });
+    return out;
+  }
+
+  function computeChampion(t){
+    const ms = collectKOMatches(t?.cuadro, []);
+    if (!ms.length) return null;
+    const finalM = ms.find(m => m.isFinal || m.final || m.ronda === "final" || m.round === "final") || ms[ms.length-1];
+    if (!finalM) return null;
+    const res = finalM.resultado;
+    const winner = (res === "A") ? finalM.jugadorA : (res === "B" ? finalM.jugadorB : null);
+    if (!winner) return null;
+    return { winner, score: finalM.score || "" };
+  }
+
+  function buildA4TorneoSheet(torneo, showBracket){
+    const label = makeLabelFn(torneo);
+    const sheet = document.createElement("div");
+    sheet.style.cssText = [
+      "width:1123px","min-height:794px","background:#fff","color:#0f172a",
+      "padding:40px 48px","box-sizing:border-box","border-radius:12px",
+      "box-shadow:0 0 0 1px rgba(0,0,0,.04)","font-family:ui-sans-serif,system-ui"
+    ].join(";");
+
+    const header = document.createElement("div");
+    header.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:16px";
+
+    const brand = document.createElement("div");
+    brand.style.cssText = "display:inline-flex;align-items:center;justify-content:center;gap:10px;font-weight:800;font-size:22px;margin:0 auto;line-height:1";
+    (function useLogo(){
+      const trySel = ['img[alt*=\"Coachex\"]','img[alt*=\"logo\"]','.topbar img','link[rel=\"icon\"]'];
+      let src = null;
+      for (const s of trySel){
+        const el = document.querySelector(s);
+        if (!el) continue;
+        src = (el.tagName === "LINK") ? el.href : el.src;
+        if (src) break;
+      }
+      if (src){
+        const img = document.createElement("img");
+        img.src = src; img.alt = "Coachex-Pro";
+        img.style.cssText = "width:28px;height:28px;border-radius:9999px;object-fit:cover;display:inline-block;transform:translateY(2px)";
+        brand.appendChild(img);
+      }
+    })();
+    const btxt = document.createElement("div"); btxt.textContent = "Coachex-Pro";
+    brand.appendChild(btxt);
+
+    const title = document.createElement("div");
+    title.textContent = torneo?.nombre || "Torneo";
+    title.style.cssText = "font-size:26px;line-height:1.2;font-weight:800;text-align:center;margin-top:4px";
+
+    const sub = document.createElement("div");
+    const modo = torneo?.formato === "eliminacion" ? "Eliminación" : (torneo?.formato === "grupos_y_eliminacion" ? "Grupos + Eliminación" : "Grupos");
+    const count = (torneo?.modalidad === "dobles" ? (torneo?.teams || []).length + " parejas" : (torneo?.participantes || []).length + " jugadores");
+    const created = torneo?.createdAt ? new Date(torneo.createdAt).toLocaleDateString() : "";
+    const topk = (torneo?.topK != null ? `Top-K: ${torneo.topK}` : "");
+    const idaVuelta = torneo?.idaVuelta ? "Ida y vuelta: Sí" : "Ida y vuelta: No";
+    sub.textContent = [modo, count, (created ? "Creado: " + created : ""), topk, idaVuelta].filter(Boolean).join(" · ");
+    sub.style.cssText = "font-size:12px;line-height:1.5;color:#64748b;text-align:center";
+
+    header.appendChild(brand); header.appendChild(title); header.appendChild(sub);
+    sheet.appendChild(header);
+
+    const section = document.createElement("div");
+    section.style.cssText = "display:flex;flex-direction:column;gap:12px";
+
+    const champion = computeChampion(torneo);
+    if (champion){
+      const card = document.createElement("div"); card.style.cssText = "border:1px solid #e2e8f0;border-radius:10px;padding:12px";
+      const h = document.createElement("div"); h.textContent = "Resultado final"; h.style.cssText = "font-weight:700;margin-bottom:6px";
+      const line = document.createElement("div"); line.style.cssText = "font-size:13px";
+      line.textContent = `Campeón: ${label(champion.winner, torneo)}${champion.score ? " · " + champion.score : ""}`;
+      card.appendChild(h); card.appendChild(line);
+      section.appendChild(card);
+    }
+
+    if (showBracket && torneo?.cuadro){
+      const ko = document.createElement("div"); ko.style.cssText = "border:1px solid #e2e8f0;border-radius:10px;padding:12px";
+      const h = document.createElement("div"); h.textContent = "Fase Final (resumen)"; h.style.cssText = "font-weight:700;margin-bottom:6px";
+      ko.appendChild(h);
+      const list = document.createElement("div"); list.style.cssText = "display:grid;grid-template-columns:1fr;gap:6px";
+      const matches = collectKOMatches(torneo.cuadro, []);
+      if (!matches.length){
+        const item = document.createElement("div"); item.style.cssText = "border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px";
+        item.textContent = "No hay cruces registrados."; list.appendChild(item);
+      } else {
+        matches.forEach(m => {
+          const A = label(m.jugadorA, torneo), B = label(m.jugadorB, torneo);
+          const res = (m.resultado==="A" ? "Ganador A" : (m.resultado==="B" ? "Ganador B" : (m.resultado==="D" ? "Empate" : "")));
+          const item = document.createElement("div"); item.style.cssText = "border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px";
+          item.textContent = `${A || "—"} vs ${B || "—"}${m.score ? " · " + m.score : ""}${res ? " · " + res : ""}`;
+          list.appendChild(item);
+        });
+      }
+      ko.appendChild(list); section.appendChild(ko);
+    }
+
+    if (torneo?.grupos){
+      const gc = document.createElement("div"); gc.style.cssText = "border:1px solid #e2e8f0;border-radius:10px;padding:12px";
+      const h2 = document.createElement("div"); h2.textContent = "Grupos (resumen)"; h2.style.cssText = "font-weight:700;margin-bottom:6px";
+      gc.appendChild(h2);
+      const fx = flattenGroupFixture(torneo);
+      (torneo.grupos || []).forEach((g, idx) => {
+        const gh = document.createElement("div"); gh.textContent = `Grupo ${g.nombre || g.id || ""}`; gh.style.cssText = "color:#64748b;margin:6px 0 4px 0";
+        gc.appendChild(gh);
+        const elist = document.createElement("div"); elist.style.cssText = "display:grid;grid-template-columns:1fr;gap:4px";
+        (g.entradas || []).forEach(e => {
+          const item = document.createElement("div"); item.style.cssText = "border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px";
+          item.textContent = label(e, torneo); elist.appendChild(item);
+        });
+        gc.appendChild(elist);
+        const mx = fx[idx]?.matches || [];
+        if (mx.length){
+          const t = document.createElement("div"); t.textContent = "Partidos:"; t.style.cssText = "color:#64748b;margin:6px 0 2px 0";
+          gc.appendChild(t);
+          const mlist = document.createElement("div"); mlist.style.cssText = "display:grid;grid-template-columns:1fr;gap:4px";
+          mx.forEach(m => {
+            const A = label(m.jugadorA, torneo), B = label(m.jugadorB, torneo);
+            const res = (m.resultado==="A" ? "Ganador A" : (m.resultado==="B" ? "Ganador B" : (m.resultado==="D" ? "Empate" : "")));
+            const item = document.createElement("div"); item.style.cssText = "border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px";
+            item.textContent = `${A || "—"} vs ${B || "—"}${m.score ? " · " + m.score : ""}${res ? " · " + res : ""}`;
+            mlist.appendChild(item);
+          });
+          gc.appendChild(mlist);
+        }
+      });
+      section.appendChild(gc);
+    }
+
+    if (!section.children.length){
+      const empty = document.createElement("div"); empty.style.cssText = "border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px";
+      empty.textContent = "Sin datos para mostrar."; section.appendChild(empty);
+    }
+    sheet.appendChild(section);
+    return sheet;
+  }
+
+  window.__buildA4TorneoSheet = buildA4TorneoSheet;
+})();
+</script>
+
+<script>
+async 
+</script>
+
+<script>
+// ====== TORNEOS: Exportación PDF A4 (clona #bracket-canvas) ======
+
+/**
+ * Construye un contenedor A4 apaisado y clona el bracket visible (id: #bracket-canvas).
+ * Centra logo + "Coachex-Pro" y agrega título/metadatos.
+ */
+function buildA4Root(torneo) {
+  const root = document.createElement('div');
+  Object.assign(root.style, {
+    position: 'fixed',
+    left: '-99999px', top: '0',
+    width: '1123px', minHeight: '794px',   // A4 horizontal aprox a 96 dpi
+    background: '#fff',
+    padding: '16px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '12px',
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial'
+  });
+
+  // Header centrado (logo + Coachex-Pro)
+  const header = document.createElement('div');
+  header.style.display = 'flex';
+  header.style.alignItems = 'center';
+  header.style.justifyContent = 'center';
+  header.style.gap = '10px';
+  header.style.marginBottom = '8px';
+
+  // Usa <link rel="icon"> si existe; si no, fallback a ./img/logo_favicon.png o logo_favicon.png
+  let logoSrc = null;
+  const linkIcon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
+  if (linkIcon && linkIcon.href) logoSrc = linkIcon.href;
+  if (!logoSrc) {
+    const cands = ['./img/logo_favicon.png', './logo_favicon.png', 'img/logo_favicon.png', 'logo_favicon.png'];
+    for (const c of cands) { try { logoSrc = c; break; } catch(_) {} }
+  }
+
+  const logo = new Image();
+  logo.src = logoSrc || 'logo_favicon.png';
+  logo.width = 28; logo.height = 28;
+  logo.style.borderRadius = '9999px';
+  logo.alt = 'Coachex-Pro';
+  header.appendChild(logo);
+
+  const title = document.createElement('div');
+  title.style.fontSize = '20px';
+  title.style.fontWeight = '800';
+  title.textContent = 'Coachex-Pro';
+  header.appendChild(title);
+  root.appendChild(header);
+
+  // Título del torneo + metadatos
+  const name = document.createElement('div');
+  name.style.fontSize = '22px';
+  name.style.fontWeight = '800';
+  name.style.textAlign = 'center';
+  name.style.marginBottom = '2px';
+  name.textContent = torneo?.nombre || 'Torneo';
+  root.appendChild(name);
+
+  const meta = document.createElement('div');
+  meta.style.fontSize = '12px';
+  meta.style.color = '#64748b';
+  meta.style.textAlign = 'center';
+  meta.style.marginBottom = '12px';
+
+  const esDobles = torneo?.modalidad === 'dobles';
+  const parejas  = (torneo?.teams || []).length;
+  const jugadores = esDobles ? parejas*2 : (torneo?.participantes || []).length;
+
+  const formato = (torneo?.formato === 'eliminacion' ? 'Eliminación' :
+                  torneo?.formato === 'grupos_y_eliminacion' ? 'Grupos + Eliminación' : 'Grupos');
+
+  const creado = torneo?.createdAt || torneo?.fechaCreacion || Date.now();
+  const topK = torneo?.topK != null ? ' · Top-K: ' + torneo.topK : '';
+  const idaV = (torneo?.formato !== 'eliminacion') ? (' · Ida y vuelta: ' + (torneo?.idaVuelta ? 'Sí' : 'No')) : '';
+
+  meta.textContent = [
+    formato,
+    esDobles ? (parejas + ' parejas (' + jugadores + ' jugadores)') : (jugadores + ' jugadores'),
+    'Creado: ' + new Date(creado).toLocaleDateString(),
+    topK, idaV
+  ].filter(Boolean).join(' · ');
+  root.appendChild(meta);
+
+  // Clonar el bracket visible
+  const src = document.getElementById('bracket-canvas');
+  if (src) {
+    const clone = src.cloneNode(true);
+    clone.id = 'bracket-canvas-pdf';
+    clone.style.transformOrigin = '0 0';
+    root.appendChild(clone);
+  } else {
+    const warn = document.createElement('div');
+    warn.style.fontSize = '12px';
+    warn.style.color = '#ef4444';
+    warn.textContent = '(No se pudo clonar las llaves. Mostrando sólo encabezado)';
+    root.appendChild(warn);
+  }
+
+  document.body.appendChild(root);
+  return root;
+}
+
+// Espera a que carguen imágenes dentro de un nodo
+async function waitImages(el) {
+  const imgs = Array.from(el.querySelectorAll('img')).filter(i => !i.complete || i.naturalWidth === 0);
+  if (!imgs.length) return;
+  await Promise.all(imgs.map(img => new Promise(res => {
+    img.addEventListener('load', res, { once:true });
+    img.addEventListener('error', res, { once:true });
+  })));
+}
+
+// Exportar A4 a PDF (apaisado), clonando el canvas de brackets
+async function exportPDF_A4(torneo, showBracket, setShowBracket) {
+  try {
+    let revert = false;
+    if (!document.getElementById('bracket-canvas') && typeof setShowBracket === 'function') {
+      setShowBracket(true);
+      revert = true;
+      await new Promise(r => setTimeout(r, 60));
+    }
+
+    const el = buildA4Root(torneo);
+    await waitImages(el);
+
+    if (!window.html2canvas) { alert('html2canvas no está disponible.'); return; }
+    const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 });
+
+    document.body.removeChild(el);
+    if (revert) setShowBracket(false);
+
+    const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    if (!jsPDFCtor) { alert('jsPDF no está disponible.'); return; }
+
+    const pdf = new jsPDFCtor('l','pt','a4');
+    const W = pdf.internal.pageSize.getWidth();
+    const H = pdf.internal.pageSize.getHeight();
+    const ratio = Math.min(W / canvas.width, H / canvas.height);
+    const w = canvas.width * ratio;
+    const h = canvas.height * ratio;
+
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (W - w) / 2, (H - h) / 2, w, h);
+    const fn = (torneo?.nombre ? torneo.nombre.replace(/\s+/g,'_') : 'torneo') + '.pdf';
+    pdf.save(fn);
+  } catch (e) {
+    console.error(e);
+    alert('No se pudo exportar PDF.');
+  }
+}
+</script>
 </body>
 </html>
