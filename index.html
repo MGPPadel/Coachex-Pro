@@ -674,18 +674,18 @@ function AlumnoSearchSelect({ value, onChange, alumnos, excludeIds = [], placeho
     </div>
   );
 }
-    const formatCurrency = (value) => {
-  const number = parseFloat(value);
-  if (isNaN(number)) {
-    return "$ 0"; 
-  }
-  const formatted = new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(number);
-  return formatted;
+    const formatCurrency = (value, { withSymbol = true } = {}) => {
+  const n = Number(
+    typeof value === "number"
+      ? value
+      : String(value ?? "")
+          .replace(/\./g, "")   // quita puntos miles si vinieran
+          .replace(",", ".")    // coma -> punto
+          .replace(/[^0-9.-]/g, "")
+  );
+  const opts = { minimumFractionDigits: 0, maximumFractionDigits: 0 };
+  if (withSymbol) { opts.style = "currency"; opts.currency = "ARS"; }
+  return new Intl.NumberFormat("es-AR", opts).format(isFinite(n) ? n : 0);
 };
 
 // --- Normalizador robusto de horarioLaboral ---
@@ -4274,28 +4274,26 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
       function Grupos({ alumnos, user, perfil, clubActivoId }) {
   // --- Estados del Componente ---
   const [grupos, setGrupos] = React.useState([]);
-  const [nombreGrupo, setNombreGrupo] = React.useState("");
-  const [alumnosSeleccionados, setAlumnosSeleccionados] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [tab, setTab] = React.useState('crear');
 
-  // 🔹 NUEVO: múltiples horarios (crear)
-  const [horarios, setHorarios] = React.useState([{ diaSemana: "", hora: "" }]);
+  const [form, setForm] = React.useState({
+    nombre: "",
+    alumnosSeleccionados: [],
+    horarios: [{ diaSemana: "", hora: "" }]
+  });
 
   // === Estado para EDITAR ===
   const [editOpen, setEditOpen] = React.useState(false);
   const [editGrupoId, setEditGrupoId] = React.useState(null);
-  const [editNombre, setEditNombre] = React.useState("");
-  const [editSeleccionados, setEditSeleccionados] = React.useState([]);
-  // 🔹 NUEVO: múltiples horarios (editar)
-  const [editHorarios, setEditHorarios] = React.useState([{ diaSemana: "", hora: "" }]);
+  const [editForm, setEditForm] = React.useState({});
 
   // ===== Helpers locales =====
-  // Próxima fecha sugerida para un día 1..7 (1=Lun, 7=Dom)
   const nextDateForDiaSemana = (n) => {
     if (!n) return "";
     const today = new Date();
-    const todayIdx = today.getDay();           // 0=Dom..6=Sab
-    const targetIdx = (n === 7) ? 0 : n;       // 7->0 (domingo)
+    const todayIdx = today.getDay();
+    const targetIdx = (n === 7) ? 0 : n;
     let diff = targetIdx - todayIdx;
     if (diff <= 0) diff += 7;
     const d = new Date(today);
@@ -4303,7 +4301,6 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
     return formatDate(d);
   };
 
-  // Precios sugeridos (tu lógica actual)
   const resolveTipoEfectivo = (alumnoIds = []) => {
     const n = (alumnoIds || []).filter(Boolean).length;
     return n >= 4 ? "Escuelita" : "Trio";
@@ -4315,7 +4312,6 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
     return Number.isFinite(+v) ? Number(v) : 0;
   };
 
-  // Etiqueta para mostrar SIEMPRE “Clase para N”
   const labelClasePara = (grupo) => {
     const n = Number(grupo?.alumnoIds?.length || grupo?.cupo || grupo?.capacidad || 0);
     return n > 0 ? `Clase para ${n}` : 'Clase grupal';
@@ -4327,7 +4323,6 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
     return m;
   }, [alumnos]);
 
-  // Preview de precios (usa tipoEfectivo solo para $)
   const computePreview = (alumnoIds = []) => {
     const tipoEfectivo = resolveTipoEfectivo(alumnoIds);
     const precioUnit = getPrecioSugeridoLocal(tipoEfectivo, perfil);
@@ -4368,32 +4363,27 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
     return () => { mounted = false; unsubscribe && unsubscribe(); };
   }, [gruposCollection]);
 
-  // 🔹 util: limpiar horarios vacíos
   const cleanHorarios = (arr) =>
     (arr || [])
-      .map(h => ({ diaSemana: Number(h.diaSemana) || "", hora: (h.hora || "").slice(0,5) }))
+      .map(h => ({ diaSemana: Number(h.diaSemana) || "", hora: (h.hora || "").slice(0, 5) }))
       .filter(h => h.diaSemana && h.hora);
 
-  // ===== Crear =====
   const handleCrearGrupo = async () => {
-    if (!nombreGrupo.trim() || alumnosSeleccionados.length === 0) {
+    if (!form.nombre.trim() || form.alumnosSeleccionados.length === 0) {
       alert("Por favor, ingresa un nombre para el grupo y selecciona al menos un alumno.");
       return;
     }
 
-    const preview = computePreview(alumnosSeleccionados);
-    const horariosLimpios = cleanHorarios(horarios);
+    const preview = computePreview(form.alumnosSeleccionados);
+    const horariosLimpios = cleanHorarios(form.horarios);
     const first = horariosLimpios[0] || {};
 
     const nuevoGrupo = {
-      nombre: nombreGrupo,
-      alumnoIds: alumnosSeleccionados,
-      // precios sugeridos
+      nombre: form.nombre,
+      alumnoIds: form.alumnosSeleccionados,
       tipoEfectivo: preview.tipoEfectivo,
       precioUnit: preview.precioUnit,
-      // 🔹 NUEVO: múltiples horarios
-      horarios: horariosLimpios,                 // ← array [{diaSemana,hora}]
-      // back-compat (por si hay vistas viejas)
+      horarios: horariosLimpios,
       diaSemana: first.diaSemana ?? null,
       hora: first.hora ?? null,
       updatedAt: Date.now(),
@@ -4401,20 +4391,15 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
 
     try {
       await gruposCollection.add(nuevoGrupo);
-
-      // reset
-      setNombreGrupo("");
-      setAlumnosSeleccionados([]);
-      setHorarios([{ diaSemana: "", hora: "" }]);
-
+      setForm({ nombre: "", alumnosSeleccionados: [], horarios: [{ diaSemana: "", hora: "" }] });
       alert("¡Grupo creado con éxito!");
+      setTab('grupos');
     } catch (error) {
       console.error("Error al crear el grupo: ", error);
       alert("Hubo un error al crear el grupo.");
     }
   };
 
-  // ===== Eliminar =====
   const handleEliminarGrupo = (id) => {
     if (window.confirm("¿Estás seguro de que quieres eliminar este grupo?")) {
       gruposCollection.doc(id).delete().catch(error => {
@@ -4424,47 +4409,42 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
     }
   };
 
-  // ===== EDITAR =====
   const abrirEditar = (grupo) => {
     setEditGrupoId(grupo.id);
-    setEditNombre(grupo.nombre || "");
-    setEditSeleccionados(grupo.alumnoIds || []);
-    // si hay array, usarlo; si no, derivar del legacy
     const arr = Array.isArray(grupo.horarios) && grupo.horarios.length
       ? grupo.horarios.map(h => ({ diaSemana: String(h.diaSemana || ""), hora: h.hora || "" }))
       : [{ diaSemana: grupo.diaSemana ? String(grupo.diaSemana) : "", hora: grupo.hora || "" }];
-    setEditHorarios(arr);
+    setEditForm({
+      nombre: grupo.nombre || "",
+      alumnosSeleccionados: grupo.alumnoIds || [],
+      horarios: arr
+    });
     setEditOpen(true);
   };
 
   const cerrarEditar = () => {
     setEditOpen(false);
     setEditGrupoId(null);
-    setEditNombre("");
-    setEditSeleccionados([]);
-    setEditHorarios([{ diaSemana: "", hora: "" }]);
+    setEditForm({});
   };
 
-  const guardarEdicion = async (e) => {
-    e?.preventDefault?.();
-    if (!editGrupoId || !editNombre.trim() || editSeleccionados.length === 0) {
+  const guardarEdicion = async () => {
+    if (!editGrupoId || !editForm.nombre.trim() || editForm.alumnosSeleccionados.length === 0) {
       alert("Completá nombre y al menos un alumno.");
       return;
     }
 
-    const preview = computePreview(editSeleccionados);
-    const horariosLimpios = cleanHorarios(editHorarios);
+    const preview = computePreview(editForm.alumnosSeleccionados);
+    const horariosLimpios = cleanHorarios(editForm.horarios);
     const first = horariosLimpios[0] || {};
 
     try {
       await gruposCollection.doc(editGrupoId).update({
-        nombre: editNombre,
-        alumnoIds: editSeleccionados,
+        nombre: editForm.nombre,
+        alumnoIds: editForm.alumnosSeleccionados,
         tipoEfectivo: preview.tipoEfectivo,
         precioUnit: preview.precioUnit,
-        // 🔹 NUEVO
         horarios: horariosLimpios,
-        // back-compat
         diaSemana: first.diaSemana ?? null,
         hora: first.hora ?? null,
         updatedAt: Date.now(),
@@ -4476,7 +4456,6 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
     }
   };
 
-  // ===== Render =====
   const PeriodoHorarioRow = ({ value, onChange, onRemove, disableRemove }) => (
     <div className="grid md:grid-cols-12 gap-3 items-end">
       <div className="md:col-span-6">
@@ -4519,31 +4498,44 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
   );
 
   return (
-    <div className="grid md:grid-cols-2 gap-6">
-      {/* Crear nuevo */}
-      <div className="flex flex-col gap-6">
+    <div className="space-y-4">
+      <div className="flex gap-2 border-b-2 border-slate-200">
+        <button
+          onClick={() => setTab('crear')}
+          className={`px-4 py-2 text-sm font-medium ${tab === 'crear' ? 'border-b-2 border-[#34745B] text-[#34745B]' : 'text-slate-500'}`}
+        >
+          Crear Grupo
+        </button>
+        <button
+          onClick={() => setTab('grupos')}
+          className={`px-4 py-2 text-sm font-medium ${tab === 'grupos' ? 'border-b-2 border-[#34745B] text-[#34745B]' : 'text-slate-500'}`}
+        >
+          Grupos Existentes
+        </button>
+      </div>
+
+      {tab === 'crear' && (
         <Card title={<span className="text-[#34745B]">Nuevo Grupo</span>}>
           <div className="grid gap-4">
             <div>
               <label className="text-sm text-slate-600">Nombre del Grupo</label>
               <input
                 type="text"
-                value={nombreGrupo}
-                onChange={(e) => setNombreGrupo(e.target.value)}
+                value={form.nombre}
+                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
                 placeholder="Ej: Martes/Jueves 18hs"
                 className="w-full mt-1 border rounded-lg px-3 py-2"
               />
             </div>
-
             <div>
               <label className="text-sm text-slate-600">Selecciona los Alumnos</label>
               <p className="text-xs text-slate-500 mb-1">Ctrl/Cmd para seleccionar varios.</p>
               <select
                 multiple
-                value={alumnosSeleccionados}
+                value={form.alumnosSeleccionados}
                 onChange={(e) => {
                   const opciones = Array.from(e.target.selectedOptions, o => o.value);
-                  setAlumnosSeleccionados(opciones);
+                  setForm({ ...form, alumnosSeleccionados: opciones });
                 }}
                 className="w-full border rounded-lg p-2 h-48"
               >
@@ -4554,45 +4546,40 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
                 ))}
               </select>
             </div>
-
-            {/* 🔹 NUEVO: Múltiples horarios */}
             <div className="grid gap-3">
               <label className="text-sm text-slate-600">Días y horarios del grupo</label>
-              {horarios.map((h, i) => (
+              {form.horarios.map((h, i) => (
                 <PeriodoHorarioRow
                   key={i}
                   value={h}
-                  onChange={(nv) => setHorarios(arr => arr.map((x, idx) => idx === i ? nv : x))}
-                  onRemove={() => setHorarios(arr => arr.filter((_, idx) => idx !== i))}
-                  disableRemove={horarios.length === 1}
+                  onChange={(nv) => setForm(f => ({ ...f, horarios: f.horarios.map((x, idx) => idx === i ? nv : x) }))}
+                  onRemove={() => setForm(f => ({ ...f, horarios: f.horarios.filter((_, idx) => idx !== i) }))}
+                  disableRemove={form.horarios.length === 1}
                 />
               ))}
               <div>
                 <button
                   type="button"
-                  onClick={() => setHorarios(arr => [...arr, { diaSemana: "", hora: "" }])}
+                  onClick={() => setForm(f => ({ ...f, horarios: [...f.horarios, { diaSemana: "", hora: "" }] }))}
                   className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50"
                 >
                   + Añadir día/horario
                 </button>
               </div>
-              {/* Tips rápidos */}
               <div className="text-xs text-slate-500">
-                {cleanHorarios(horarios).map((h, i) => (
+                {cleanHorarios(form.horarios).map((h, i) => (
                   <span key={i} className="inline-block mr-2 mb-1 px-2 py-0.5 rounded bg-slate-100 border">
                     {DIAS_ABBR[h.diaSemana]} {h.hora} • próxima: {nextDateForDiaSemana(Number(h.diaSemana))}
                   </span>
                 ))}
               </div>
             </div>
-
-            {/* Preview en vivo */}
-            {alumnosSeleccionados.length > 0 && (() => {
-              const p = computePreview(alumnosSeleccionados);
-              const etiqueta = labelClasePara({ alumnoIds: alumnosSeleccionados });
+            {form.alumnosSeleccionados.length > 0 && (() => {
+              const p = computePreview(form.alumnosSeleccionados);
+              const etiqueta = labelClasePara({ alumnoIds: form.alumnosSeleccionados });
               return (
                 <div className="rounded-xl border bg-slate-50 p-3 text-sm">
-                  <div>Tipo: <b>{etiqueta}</b> {p.tipoEfectivo === 'Escuelita' && alumnosSeleccionados.length >= 4 && (
+                  <div>Tipo: <b>{etiqueta}</b> {p.tipoEfectivo === 'Escuelita' && form.alumnosSeleccionados.length >= 4 && (
                     <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Auto 4+</span>
                   )}</div>
                   <div>Precio unitario sugerido: <b>${p.precioUnit}</b> <span className="text-xs text-slate-500">(según {p.tipoEfectivo})</span></div>
@@ -4601,7 +4588,6 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
                 </div>
               );
             })()}
-
             <button
               onClick={handleCrearGrupo}
               className="px-4 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white font-semibold"
@@ -4610,28 +4596,23 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
             </button>
           </div>
         </Card>
-      </div>
+      )}
 
-      {/* Lista de existentes */}
-      <div>
+      {tab === 'grupos' && (
         <Card title={<span className="text-[#34745B]">Grupos Existentes</span>}>
           {loading && <p>Cargando grupos...</p>}
           {!loading && grupos.length === 0 && <p className="text-sm text-slate-500">Aún no has creado ningún grupo.</p>}
-
           <ul className="space-y-3">
             {grupos.map((grupo) => {
               const nombresAlumnos = (grupo.alumnoIds || []).map(id => {
                 const alumno = alumnos.find(a => a.id === id);
                 return alumno ? getNombreCompleto(alumno) : 'Alumno no encontrado';
               }).join(', ');
-
               const { tipoEfectivo, precioUnit, noMensuales, total } = computePreview(grupo.alumnoIds || []);
               const cant = (grupo.alumnoIds || []).length;
-
               const horariosShow = Array.isArray(grupo.horarios) && grupo.horarios.length
                 ? grupo.horarios
                 : (grupo.diaSemana && grupo.hora ? [{ diaSemana: grupo.diaSemana, hora: grupo.hora }] : []);
-
               return (
                 <li key={grupo.id} className="p-3 border rounded-lg bg-slate-50">
                   <div className="flex justify-between items-start gap-3">
@@ -4642,30 +4623,26 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
                           <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Auto 4+</span>
                         )}
                       </h4>
-
                       <p className="text-xs text-slate-600 mt-1">
                         <strong>Integrantes ({cant}):</strong> {nombresAlumnos}
                       </p>
-
                       {horariosShow.length > 0 && (
                         <p className="text-xs text-slate-600 mt-1">
-                          <strong>Horarios:</strong>{" "}
+                          <strong>Horarios:</strong>
                           {horariosShow.map((h, i) => (
                             <span key={i} className="inline-block mr-2 mb-1 px-2 py-0.5 rounded bg-slate-100 border">
-                              {DIAS_ABBR[h.diaSemana]} {String(h.hora).slice(0,5)}
+                              {DIAS_ABBR[h.diaSemana]} {String(h.hora).slice(0, 5)}
                             </span>
                           ))}
                         </p>
                       )}
-
                       <p className="text-xs text-slate-600 mt-1">
-                        <strong>Tipo:</strong> {labelClasePara(grupo)} •{" "}
-                        <strong>Precio unitario:</strong> ${precioUnit} •{" "}
-                        <strong>No mensuales:</strong> {noMensuales} •{" "}
-                        <strong>Total:</strong> ${total}
+                        <strong>Tipo:</strong> {labelClasePara(grupo)} •
+                        <strong>Precio unitario:</strong> {formatCurrency(precioUnit)} •
+                        <strong>No mensuales:</strong> {noMensuales} •
+                        <strong>Total:</strong> {formatCurrency(total)}
                       </p>
                     </div>
-
                     <div className="flex gap-2">
                       <button
                         onClick={() => abrirEditar(grupo)}
@@ -4686,7 +4663,7 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
             })}
           </ul>
         </Card>
-      </div>
+      )}
 
       {/* Modal de edición */}
       <Modal
@@ -4700,18 +4677,17 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
             <label className="text-sm text-slate-600">Nombre</label>
             <input
               type="text"
-              value={editNombre}
-              onChange={(e) => setEditNombre(e.target.value)}
+              value={editForm.nombre}
+              onChange={(e) => setEditForm({ ...editForm, nombre: e.target.value })}
               className="w-full mt-1 border rounded-lg px-3 py-2"
             />
           </div>
-
           <div>
             <label className="text-sm text-slate-600">Alumnos</label>
             <select
               multiple
-              value={editSeleccionados}
-              onChange={(e) => setEditSeleccionados(Array.from(e.target.selectedOptions, o => o.value))}
+              value={editForm.alumnosSeleccionados}
+              onChange={(e) => setEditForm({ ...editForm, alumnosSeleccionados: Array.from(e.target.selectedOptions, o => o.value) })}
               className="w-full border rounded-lg p-2 h-40"
             >
               {alumnos.map(a => (
@@ -4721,23 +4697,21 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
               ))}
             </select>
           </div>
-
-          {/* 🔹 NUEVO: Múltiples horarios (editar) */}
           <div className="grid gap-3">
             <label className="text-sm text-slate-600">Días y horarios</label>
-            {editHorarios.map((h, i) => (
+            {editForm.horarios?.map((h, i) => (
               <PeriodoHorarioRow
                 key={i}
                 value={h}
-                onChange={(nv) => setEditHorarios(arr => arr.map((x, idx) => idx === i ? nv : x))}
-                onRemove={() => setEditHorarios(arr => arr.filter((_, idx) => idx !== i))}
-                disableRemove={editHorarios.length === 1}
+                onChange={(nv) => setEditForm(f => ({ ...f, horarios: f.horarios.map((x, idx) => idx === i ? nv : x) }))}
+                onRemove={() => setEditForm(f => ({ ...f, horarios: f.horarios.filter((_, idx) => idx !== i) }))}
+                disableRemove={editForm.horarios.length === 1}
               />
             ))}
             <div>
               <button
                 type="button"
-                onClick={() => setEditHorarios(arr => [...arr, { diaSemana: "", hora: "" }])}
+                onClick={() => setEditForm(f => ({ ...f, horarios: [...f.horarios, { diaSemana: "", hora: "" }] }))}
                 className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50"
               >
                 + Añadir día/horario
@@ -4751,8 +4725,9 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
 }
 
 function Rankings({ alumnos = [], user, clubActivoId }) {
-  // === Tabs de vista ===
+  // === Tabs de vista principal ===
   const [view, setView] = React.useState('interno'); // 'interno' | 'torneos'
+  const [tab, setTab] = React.useState('config');
 
   // === Listado de rankings y selección ===
   const [rankings, setRankings] = React.useState([]);
@@ -4764,39 +4739,46 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
   const [newNotas, setNewNotas] = React.useState("");
 
   // === Detalle del ranking seleccionado ===
-  const [participantes, setParticipantes] = React.useState([]); // array de alumnoIds
+  const [participantes, setParticipantes] = React.useState([]);
   const [puntosCfg, setPuntosCfg] = React.useState({ win: 3, draw: 1, loss: 0 });
 
   // Ajustes separados por vista
-  const [ajustesManual, setAjustesManual]   = React.useState({}); // Ranking Interno
-  const [ajustesTorneos, setAjustesTorneos] = React.useState({}); // Ranking Torneos
+  const [ajustesManual, setAjustesManual] = React.useState({});
+  const [ajustesTorneos, setAjustesTorneos] = React.useState({});
 
-  // === Exclusiones (editar tabla) ===
+  // === Excluidos (editar tabla) ===
   const [excluidosInterno, setExcluidosInterno] = React.useState([]);
   const [excluidosTorneos, setExcluidosTorneos] = React.useState([]);
-  const [editRowsInterno, setEditRowsInterno]   = React.useState(false);
-  const [editRowsTorneos, setEditRowsTorneos]   = React.useState(false);
+  const [editRowsInterno, setEditRowsInterno] = React.useState(false);
+  const [editRowsTorneos, setEditRowsTorneos] = React.useState(false);
 
   // === Partidos (Ranking Interno) ===
   const [matches, setMatches] = React.useState([]);
 
   // === Torneos aplicados (Ranking Torneos) ===
-  const [awardsTotals, setAwardsTotals] = React.useState({}); // { alumnoId: {PJ,G,E,P} }
-  const [awardsList, setAwardsList]     = React.useState([]); // [{id, torneoNombre, resumen:{alumnoId:{PJ,G,E,P,PTS}} }]
+  const [awardsTotals, setAwardsTotals] = React.useState({});
+  const [awardsList, setAwardsList] = React.useState([]);
 
   // === PIN / Finalizado (Torneos) ===
-  const [perfilPin, setPerfilPin]       = React.useState(null);  // '123' string o null
-  const [pinInput, setPinInput]         = React.useState('');
+  const [perfilPin, setPerfilPin] = React.useState(null);
+  const [pinInput, setPinInput] = React.useState('');
   const [pinVerificado, setPinVerificado] = React.useState(false);
 
   // === Pestañas locales en vista Torneos ===
-  const [rtTab, setRtTab] = React.useState("tabla"); // "tabla" | "ajustes"
+  const [rtTab, setRtTab] = React.useState("tabla");
 
+  // === ESTADOS ADICIONALES PARA PARTIDOS DE DOBLES ===
+  const [modalidadPartido, setModalidadPartido] = React.useState("singles");
+  const [teams, setTeams] = React.useState([]);
+  const [sel1, setSel1] = React.useState('');
+  const [sel2, setSel2] = React.useState('');
   const [matchForm, setMatchForm] = React.useState({
     fecha: formatDate(new Date()),
     jugadorA: "",
     jugadorB: "",
-    resultado: "A", // "A" | "B" | "D"
+    equipoA: "",
+    equipoB: "",
+    resultado: "A",
     score: ""
   });
 
@@ -4804,6 +4786,12 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
     () => new Map(alumnos.map(a => [a.id, a])),
     [alumnos]
   );
+
+  const teamsMap = React.useMemo(() => {
+    const m = new Map();
+    (teams || []).forEach(t => m.set(t.id, t));
+    return m;
+  }, [teams]);
 
   // === Col de rankings ===
   const rankingsCol = React.useMemo(() => {
@@ -4814,10 +4802,39 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
       .collection('rankings');
   }, [user, clubActivoId]);
 
+  // === Funciones para manejar equipos/parejas ===
+  const addTeam = () => {
+    if (!sel1 || !sel2 || sel1 === sel2) {
+      alert("Debes seleccionar dos jugadores diferentes.");
+      return;
+    }
+    const newTeam = { id: `team_${Date.now()}`, members: [sel1, sel2] };
+    setTeams([...teams, newTeam]);
+    setSel1('');
+    setSel2('');
+  };
+
+  const removeTeam = (teamId) => {
+    setTeams(teams.filter(t => t.id !== teamId));
+    setMatchForm(prev => ({
+      ...prev,
+      equipoA: prev.equipoA === teamId ? "" : prev.equipoA,
+      equipoB: prev.equipoB === teamId ? "" : prev.equipoB,
+    }));
+  };
+
+  const getTeamLabel = (teamId) => {
+    const team = teamsMap.get(teamId);
+    if (!team) return "Equipo no encontrado";
+    const [p1, p2] = team.members;
+    const name1 = getNombreCompleto(alumnosMap.get(p1));
+    const name2 = getNombreCompleto(alumnosMap.get(p2));
+    return `${name1} / ${name2}`;
+  };
+
   // === Cargar PIN desde perfil ===
   React.useEffect(() => {
     if (!user) return;
-
     const unsubProfile = db.collection('users').doc(user.uid).collection('profile').doc('main')
       .onSnapshot(doc => {
         const d = doc.data() || {};
@@ -4830,13 +4847,11 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
         } catch (e) {}
         if (p != null && p !== undefined) setPerfilPin(String(p).padStart(3, '0'));
       }, err => console.warn('perfil/main pin onSnapshot error', err));
-
     const unsubRoot = db.collection('users').doc(user.uid).onSnapshot(doc => {
       const d = doc.data() || {};
       const p = d?.pin ?? d?.perfil?.pin ?? d?.pinSeguridad ?? null;
       if (p != null && p !== undefined) setPerfilPin(String(p).padStart(3, '0'));
     }, err => console.warn('root pin onSnapshot error', err));
-
     return () => { try { unsubProfile(); } catch (e) {}; try { unsubRoot(); } catch (e) {}; };
   }, [user, clubActivoId]);
 
@@ -4851,8 +4866,6 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
         const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setRankings(items);
         setLoading(false);
-
-        // Migración: setear tipo 'interno' donde no exista (solo 1 vez)
         if (!migratedRef.current) {
           const sinTipo = items.filter(r => typeof r.tipo === 'undefined' || r.tipo === null);
           if (sinTipo.length > 0) {
@@ -4866,8 +4879,6 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
           }
           migratedRef.current = true;
         }
-
-        // Autoseleccionar si no hay seleccionado
         if (!selectedId) {
           const firstOfView = items.find(r => ((r.tipo || 'interno') === view));
           if (firstOfView) setSelectedId(firstOfView.id);
@@ -4883,7 +4894,6 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
     [rankings, selectedId]
   );
 
-  // Al cambiar de pestaña o ranking, reseteo PIN y tab local
   React.useEffect(() => {
     const cur = rankings.find(r => r.id === selectedId);
     const curTipo = cur ? (cur.tipo || 'interno') : null;
@@ -4893,7 +4903,7 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
     }
     setPinVerificado(false);
     setPinInput('');
-    setRtTab("tabla");
+    setTab("config");
   }, [view, rankings, selectedId]);
 
   // === Subcolecciones del ranking seleccionado ===
@@ -4912,6 +4922,7 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
   React.useEffect(() => {
     if (!selectedRanking) {
       setParticipantes([]);
+      setTeams([]);
       setPuntosCfg({ win: 3, draw: 1, loss: 0 });
       setAjustesManual({});
       setAjustesTorneos({});
@@ -4923,8 +4934,9 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
       return;
     }
     setParticipantes(Array.isArray(selectedRanking.participantes) ? selectedRanking.participantes : []);
+    setTeams(Array.isArray(selectedRanking.teams) ? selectedRanking.teams : []);
     setPuntosCfg(selectedRanking.puntosCfg || { win: 3, draw: 1, loss: 0 });
-    setAjustesManual(selectedRanking.ajustesManual || selectedRanking.ajustes || {}); // back-compat
+    setAjustesManual(selectedRanking.ajustesManual || selectedRanking.ajustes || {});
     setAjustesTorneos(selectedRanking.ajustesTorneos || {});
     setExcluidosInterno(selectedRanking.excluidosInterno || []);
     setExcluidosTorneos(selectedRanking.excluidosTorneos || []);
@@ -4952,8 +4964,8 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
         for (const doc of docs) {
           const res = doc.resumen || {};
           for (const [id, v] of Object.entries(res)) {
-            const t = tot[id] || { PJ:0, G:0, E:0, P:0 };
-            t.PJ += (v.PJ||0); t.G += (v.G||0); t.E += (v.E||0); t.P += (v.P||0);
+            const t = tot[id] || { PJ: 0, G: 0, E: 0, P: 0 };
+            t.PJ += (v.PJ || 0); t.G += (v.G || 0); t.E += (v.E || 0); t.P += (v.P || 0);
             tot[id] = t;
           }
         }
@@ -4972,6 +4984,7 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
       nombre: newNombre.trim(),
       notas: newNotas.trim(),
       participantes: [],
+      teams: [],
       puntosCfg: { win: 3, draw: 1, loss: 0 },
       ajustesManual: {},
       ajustesTorneos: {},
@@ -4989,6 +5002,7 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
     if (!rankingsCol || !selectedRanking) return;
     const payload = {
       participantes,
+      teams,
       puntosCfg,
       ajustesManual,
       ajustesTorneos,
@@ -5021,32 +5035,48 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
     if (selectedId === id) setSelectedId(null);
   };
 
-  // === Partidos (alta) ===
   const submitMatch = async (e) => {
     e.preventDefault();
     if (!matchesCol) return;
-    const { jugadorA, jugadorB, resultado } = matchForm;
-    if (!jugadorA || !jugadorB || jugadorA === jugadorB) {
-      return alert("Elegí dos alumnos distintos.");
-    }
-    if (!participantes.includes(jugadorA) || !participantes.includes(jugadorB)) {
-      return alert("Ambos jugadores deben estar en el ranking.");
-    }
 
+    const { fecha, resultado, score } = matchForm;
     const cfg = puntosCfg || { win: 3, draw: 1, loss: 0 };
+
     let puntosA = 0, puntosB = 0, ganador = null;
     if (resultado === "A") { puntosA = cfg.win; puntosB = cfg.loss; ganador = "A"; }
     else if (resultado === "B") { puntosA = cfg.loss; puntosB = cfg.win; ganador = "B"; }
     else { puntosA = cfg.draw; puntosB = cfg.draw; ganador = "D"; }
 
-    await matchesCol.add({
-      fecha: matchForm.fecha || formatDate(new Date()),
-      jugadorA, jugadorB,
+    const matchPayload = {
+      fecha: fecha || formatDate(new Date()),
       resultado: ganador,
-      score: matchForm.score || "",
-      puntosA, puntosB,
+      score: score || "",
+      puntosA,
+      puntosB,
+      modalidad: modalidadPartido,
       createdAt: Date.now()
-    });
+    };
+
+    if (modalidadPartido === "singles") {
+      const { jugadorA, jugadorB } = matchForm;
+      if (!jugadorA || !jugadorB || jugadorA === jugadorB) {
+        return alert("Elegí dos alumnos distintos.");
+      }
+      if (!participantes.includes(jugadorA) || !participantes.includes(jugadorB)) {
+        return alert("Ambos jugadores deben estar en el ranking.");
+      }
+      matchPayload.jugadorA = jugadorA;
+      matchPayload.jugadorB = jugadorB;
+    } else {
+      const { equipoA, equipoB } = matchForm;
+      if (!equipoA || !equipoB || equipoA === equipoB) {
+        return alert("Elegí dos equipos distintos.");
+      }
+      matchPayload.equipoA = equipoA;
+      matchPayload.equipoB = equipoB;
+    }
+
+    await matchesCol.add(matchPayload);
     setMatchForm(f => ({ ...f, score: "" }));
   };
 
@@ -5055,23 +5085,53 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
     await matchesCol.doc(id).delete();
   };
 
-  // === Standings: Interno (aplica exclusiones) ===
   const standingsInterno = React.useMemo(() => {
     const ids = participantes || [];
     const base = new Map(ids.map(id => [id, { alumnoId: id, PJ: 0, G: 0, E: 0, P: 0, PTS: 0 }]));
 
-    // asegurar filas si hay ajustes aunque no estén en participantes
     Object.keys(ajustesManual || {}).forEach(id => {
       if (!base.has(id)) base.set(id, { alumnoId: id, PJ: 0, G: 0, E: 0, P: 0, PTS: 0 });
     });
 
+    const teamsInRanking = teams || [];
+    teamsInRanking.forEach(team => {
+      team.members.forEach(id => {
+        if (!base.has(id)) base.set(id, { alumnoId: id, PJ: 0, G: 0, E: 0, P: 0, PTS: 0 });
+      });
+    });
+
     for (const m of matches) {
-      const A = base.get(m.jugadorA); const B = base.get(m.jugadorB);
-      if (!A || !B) continue;
-      A.PJ += 1; B.PJ += 1;
-      if (m.resultado === "A") { A.G += 1; B.P += 1; A.PTS += (m.puntosA || 0); B.PTS += (m.puntosB || 0); }
-      else if (m.resultado === "B") { B.G += 1; A.P += 1; A.PTS += (m.puntosA || 0); B.PTS += (m.puntosB || 0); }
-      else { A.E += 1; B.E += 1; A.PTS += (m.puntosA || 0); B.PTS += (m.puntosB || 0); }
+      if (m.modalidad === 'singles') {
+        const A = base.get(m.jugadorA); const B = base.get(m.jugadorB);
+        if (!A || !B) continue;
+        A.PJ += 1; B.PJ += 1;
+        if (m.resultado === "A") { A.G += 1; B.P += 1; A.PTS += (m.puntosA || 0); B.PTS += (m.puntosB || 0); }
+        else if (m.resultado === "B") { B.G += 1; A.P += 1; A.PTS += (m.puntosA || 0); B.PTS += (m.puntosB || 0); }
+        else { A.E += 1; B.E += 1; A.PTS += (m.puntosA || 0); B.PTS += (m.puntosB || 0); }
+      } else {
+        const teamA = teamsMap.get(m.equipoA);
+        const teamB = teamsMap.get(m.equipoB);
+        if (!teamA || !teamB) continue;
+
+        teamA.members.forEach(id => {
+          const p = base.get(id);
+          if (p) {
+            p.PJ += 1;
+            if (m.resultado === "A") { p.G += 1; p.PTS += (m.puntosA || 0); }
+            else if (m.resultado === "B") { p.P += 1; p.PTS += (m.puntosB || 0); }
+            else { p.E += 1; p.PTS += (m.puntosA || 0); }
+          }
+        });
+        teamB.members.forEach(id => {
+          const p = base.get(id);
+          if (p) {
+            p.PJ += 1;
+            if (m.resultado === "B") { p.G += 1; p.PTS += (m.puntosB || 0); }
+            else if (m.resultado === "A") { p.P += 1; p.PTS += (m.puntosA || 0); }
+            else { p.E += 1; p.PTS += (m.puntosB || 0); }
+          }
+        });
+      }
     }
 
     for (const [id, extra] of Object.entries(ajustesManual || {})) {
@@ -5090,182 +5150,139 @@ function Rankings({ alumnos = [], user, clubActivoId }) {
 
     const excl = new Set(excluidosInterno || []);
     return arr.filter(r => !excl.has(r.alumnoId));
-  }, [participantes, matches, ajustesManual, puntosCfg, alumnosMap, excluidosInterno]);
+  }, [participantes, teams, matches, ajustesManual, puntosCfg, alumnosMap, excluidosInterno, teamsMap]);
 
-// ===== Helpers (una sola vez, arriba del useMemo) =====
-const num = (x, d = 0) => {
-  const n = Number(x);
-  return Number.isFinite(n) ? n : d;
-};
-const pickNum = (obj, keys, d = 0) => {
-  for (const k of keys) if (obj && obj[k] != null) return num(obj[k], d);
-  return d;
-};
-
-/**
- * v = resumen por alumno en un award (PJ,G,E,P, pos, stage, ligaPos, participacion, PTS, ...)
- * meta = configuración con la que se aplicó ese award al ranking
- * Intenta leer claves planas y/o anidadas (meta.ko, meta.liga), y si no hay meta, cae a v.PTS.
- *
- * NOTA: si v es un número (resumen = { alumnoId: PTS }), devolvemos ese número SIN multiplicador.
- */
-function computePtsFromAward(v = {}, metaIn = {}) {
-  if (typeof v === "number") return num(v, 0); // ← resumén numérico = PTS final
-
-  const meta = metaIn || {};
-  const koCfg   = meta.ko   || meta.KO   || meta; // acepta meta.ko.campeon, etc. o plano
-  const ligaCfg = meta.liga || meta.league || meta;
-
-  const mode = String(meta.modo || meta.mode || meta.modoDePuntaje || "").toLowerCase();
-  const mult = pickNum(meta, ["mult", "multiplier", "multiplicadorCategoria"], 1);
-
-  const koWin = pickNum(meta, ["koPuntosPorVictoria", "koWinPts"], 0);
-
-  const stage  = String(v.stage || v.ronda || v.fase || "").toLowerCase();
-  const pos    = v.pos ?? v.position ?? v.place ?? null;
-  const ligaPos = v.ligaPos ?? v.leaguePos ?? v.posLiga ?? null;
-
-  let pts = 0;
-
-  // 1) Modo "por partidos": KO puntos por victoria * G
-  if (mode.includes("part")) {
-    pts += num(v.G, 0) * koWin;
-  }
-
-  // 2) Instancia KO alcanzada
-  const ko = {
-    champion : pickNum(koCfg, ["campeon","champion","koCampeon"], 0),
-    runnerUp : pickNum(koCfg, ["subcampeon","runnerUp","koSubcampeon"], 0),
-    semi     : pickNum(koCfg, ["semifinal","semi","koSemifinal"], 0),
-    quarter  : pickNum(koCfg, ["cuartos","quarter","koCuartos"], 0),
-    last16   : pickNum(koCfg, ["r16","last16","koR16"], 0),
-    last32   : pickNum(koCfg, ["r32","last32","koR32"], 0),
+  const num = (x, d = 0) => {
+    const n = Number(x);
+    return Number.isFinite(n) ? n : d;
   };
-  if (pos === 1) pts += ko.champion;
-  else if (pos === 2) pts += ko.runnerUp;
-  else if (/semi/.test(stage)) pts += ko.semi;
-  else if (/cuart|quart/.test(stage)) pts += ko.quarter;
-  else if (/r16|octav|last ?16/.test(stage)) pts += ko.last16;
-  else if (/r32|32avos|last ?32/.test(stage)) pts += ko.last32;
-
-  // 3) Liga: posiciones + participación
-  const liga = {
-    p1: pickNum(ligaCfg, ["ligaPos1","pos1","leaguePos1"], 0),
-    p2: pickNum(ligaCfg, ["ligaPos2","pos2","leaguePos2"], 0),
-    p3: pickNum(ligaCfg, ["ligaPos3","pos3","leaguePos3"], 0),
-    p4: pickNum(ligaCfg, ["ligaPos4","pos4","leaguePos4"], 0),
-    p5: pickNum(ligaCfg, ["ligaPos5","pos5","leaguePos5"], 0),
-    part: pickNum(ligaCfg, ["ligaParticipacion","participacion","leagueParticipation"], 0),
+  const pickNum = (obj, keys, d = 0) => {
+    for (const k of keys) if (obj && obj[k] != null) return num(obj[k], d);
+    return d;
   };
-  if (num(ligaPos, 0) === 1) pts += liga.p1;
-  else if (ligaPos === 2) pts += liga.p2;
-  else if (ligaPos === 3) pts += liga.p3;
-  else if (ligaPos === 4) pts += liga.p4;
-  else if (ligaPos === 5) pts += liga.p5;
-  else if (v.participacion || v.participation) pts += liga.part;
 
-  // 4) Fallback si nada matcheó
-  if (!pts) pts = num(v.PTS ?? v.puntos, 0);
+  function computePtsFromAward(v = {}, metaIn = {}) {
+    if (typeof v === "number") return num(v, 0);
 
-  return pts * mult;
-}
+    const meta = metaIn || {};
+    const koCfg = meta.ko || meta.KO || meta;
+    const ligaCfg = meta.liga || meta.league || meta;
 
-// ===== Standings: Torneos (aplica exclusiones) =====
-const standingsTorneos = React.useMemo(() => {
-  // PTS por alumno, calculado award a award
-  const torneoPTS = {};
-  // También junto TODOS los IDs que aparezcan en resumen, por si awardsTotals está vacío
-  const idsFromResumen = new Set();
+    const mode = String(meta.modo || meta.mode || meta.modoDePuntaje || "").toLowerCase();
+    const mult = pickNum(meta, ["mult", "multiplier", "multiplicadorCategoria"], 1);
+    const koWin = pickNum(meta, ["koPuntosPorVictoria", "koWinPts"], 0);
+    const stage = String(v.stage || v.ronda || v.fase || "").toLowerCase();
+    const pos = v.pos ?? v.position ?? v.place ?? null;
+    const ligaPos = v.ligaPos ?? v.leaguePos ?? v.posLiga ?? null;
+    let pts = 0;
 
-  for (const doc of (awardsList || [])) {
-    const meta = doc.meta || doc.config || doc.puntos || doc.puntaje || doc.rankingConfig || {};
-    const res  = doc.resumen || {};
-    for (const [id, v] of Object.entries(res)) {
-      idsFromResumen.add(id);
-
-      // Si v es número, es PTS final; si es objeto, calculamos con meta (y fallback a v.PTS).
-      let pts = 0;
-      if (typeof v === "number") {
-        pts = num(v, 0);
-      } else if (v && typeof v === "object") {
-        pts = computePtsFromAward(v, meta);
-        if (!pts) pts = num(v.PTS ?? v.puntos, 0);
-      }
-
-      torneoPTS[id] = (torneoPTS[id] || 0) + (pts || 0);
+    if (mode.includes("part")) {
+      pts += num(v.G, 0) * koWin;
     }
+
+    const ko = {
+      champion: pickNum(koCfg, ["campeon", "champion", "koCampeon"], 0),
+      runnerUp: pickNum(koCfg, ["subcampeon", "runnerUp", "koSubcampeon"], 0),
+      semi: pickNum(koCfg, ["semifinal", "semi", "koSemifinal"], 0),
+      quarter: pickNum(koCfg, ["cuartos", "quarter", "koCuartos"], 0),
+      last16: pickNum(koCfg, ["r16", "last16", "koR16"], 0),
+      last32: pickNum(koCfg, ["r32", "last32", "koR32"], 0),
+    };
+    if (pos === 1) pts += ko.champion;
+    else if (pos === 2) pts += ko.runnerUp;
+    else if (/semi/.test(stage)) pts += ko.semi;
+    else if (/cuart|quart/.test(stage)) pts += ko.quarter;
+    else if (/r16|octav|last ?16/.test(stage)) pts += ko.last16;
+    else if (/r32|32avos|last ?32/.test(stage)) pts += ko.last32;
+
+    const liga = {
+      p1: pickNum(ligaCfg, ["ligaPos1", "pos1", "leaguePos1"], 0),
+      p2: pickNum(ligaCfg, ["ligaPos2", "pos2", "leaguePos2"], 0),
+      p3: pickNum(ligaCfg, ["ligaPos3", "pos3", "leaguePos3"], 0),
+      p4: pickNum(ligaCfg, ["ligaPos4", "pos4", "leaguePos4"], 0),
+      p5: pickNum(ligaCfg, ["ligaPos5", "pos5", "leaguePos5"], 0),
+      part: pickNum(ligaCfg, ["ligaParticipacion", "participacion", "leagueParticipation"], 0),
+    };
+    if (num(ligaPos, 0) === 1) pts += liga.p1;
+    else if (ligaPos === 2) pts += liga.p2;
+    else if (ligaPos === 3) pts += liga.p3;
+    else if (ligaPos === 4) pts += liga.p4;
+    else if (ligaPos === 5) pts += liga.p5;
+    else if (v.participacion || v.participation) pts += liga.part;
+
+    if (!pts) pts = num(v.PTS ?? v.puntos, 0);
+    return pts * mult;
   }
 
-  // Unión de IDs: awardsTotals + torneoPTS + ajustes + ids detectados en resumen
-  const ids = Array.from(new Set([
-    ...Object.keys(awardsTotals || {}),
-    ...Object.keys(torneoPTS || {}),
-    ...Object.keys(ajustesTorneos || {}),
-    ...Array.from(idsFromResumen),
-  ]));
+  const standingsTorneos = React.useMemo(() => {
+    const torneoPTS = {};
+    const idsFromResumen = new Set();
+    for (const doc of (awardsList || [])) {
+      const meta = doc.meta || doc.config || doc.puntos || doc.puntaje || doc.rankingConfig || {};
+      const res = doc.resumen || {};
+      for (const [id, v] of Object.entries(res)) {
+        idsFromResumen.add(id);
+        let pts = 0;
+        if (typeof v === "number") {
+          pts = num(v, 0);
+        } else if (v && typeof v === "object") {
+          pts = computePtsFromAward(v, meta);
+          if (!pts) pts = num(v.PTS ?? v.puntos, 0);
+        }
+        torneoPTS[id] = (torneoPTS[id] || 0) + (pts || 0);
+      }
+    }
+    const ids = Array.from(new Set([
+      ...Object.keys(awardsTotals || {}),
+      ...Object.keys(torneoPTS || {}),
+      ...Object.keys(ajustesTorneos || {}),
+      ...Array.from(idsFromResumen),
+    ]));
+    if (ids.length === 0) return [];
+    const base = new Map(ids.map(id => [id, { alumnoId: id, PJ: 0, G: 0, E: 0, P: 0, PTS: 0 }]));
+    for (const [id, cnt] of Object.entries(awardsTotals || {})) {
+      const row = base.get(id);
+      if (!row) continue;
+      row.PJ += (cnt.PJ || 0); row.G += (cnt.G || 0); row.E += (cnt.E || 0); row.P += (cnt.P || 0);
+    }
+    for (const [id, pts] of Object.entries(torneoPTS)) {
+      const row = base.get(id);
+      if (row) row.PTS += pts || 0;
+    }
+    for (const [id, extra] of Object.entries(ajustesTorneos || {})) {
+      const row = base.get(id);
+      if (row) row.PTS += Number(extra) || 0;
+    }
+    const arr = Array.from(base.values());
+    arr.sort((a, b) => {
+      if (b.PTS !== a.PTS) return b.PTS - a.PTS;
+      if (b.G !== a.G) return b.G - a.G;
+      const nameA = (getNombreCompleto(alumnosMap.get(a.alumnoId)) || "").toLowerCase();
+      const nameB = (getNombreCompleto(alumnosMap.get(b.alumnoId)) || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+    const excl = new Set(excluidosTorneos || []);
+    return arr.filter(r => !excl.has(r.alumnoId));
+  }, [awardsTotals, awardsList, ajustesTorneos, alumnosMap, excluidosTorneos]);
 
-  // Si sigue vacío, devolvemos [] rápido
-  if (ids.length === 0) return [];
-
-  const base = new Map(ids.map(id => [id, { alumnoId: id, PJ: 0, G: 0, E: 0, P: 0, PTS: 0 }]));
-
-  // Totales PJ/G/E/P (los trae awardsTotals)
-  for (const [id, cnt] of Object.entries(awardsTotals || {})) {
-    const row = base.get(id);
-    if (!row) continue;
-    row.PJ += (cnt.PJ||0); row.G += (cnt.G||0); row.E += (cnt.E||0); row.P += (cnt.P||0);
-  }
-
-  // Puntos de torneos
-  for (const [id, pts] of Object.entries(torneoPTS)) {
-    const row = base.get(id);
-    if (!row) continue;
-    row.PTS += pts || 0;
-  }
-
-  // Ajustes extra
-  for (const [id, extra] of Object.entries(ajustesTorneos || {})) {
-    const row = base.get(id);
-    if (!row) continue;
-    row.PTS += Number(extra) || 0;
-  }
-
-  // Orden
-  const arr = Array.from(base.values());
-  arr.sort((a, b) => {
-    if (b.PTS !== a.PTS) return b.PTS - a.PTS;
-    if (b.G !== a.G) return b.G - a.G;
-    const nameA = (getNombreCompleto(alumnosMap.get(a.alumnoId)) || "").toLowerCase();
-    const nameB = (getNombreCompleto(alumnosMap.get(b.alumnoId)) || "").toLowerCase();
-    return nameA.localeCompare(nameB);
-  });
-
-  // Exclusiones
-  const excl = new Set(excluidosTorneos || []);
-  return arr.filter(r => !excl.has(r.alumnoId));
-}, [awardsTotals, awardsList, ajustesTorneos, alumnosMap, excluidosTorneos]);
-
-
-  // === Excluir/Restaurar filas ===
   const excluirInterno = (id) => {
     if (!id) return;
-    if (!confirm("Quitar este alumno de la tabla?")) return;
+    if (!confirm("¿Quitar este alumno de la tabla?")) return;
     setExcluidosInterno(prev => prev.includes(id) ? prev : [...prev, id]);
-    setParticipantes(prev => prev.filter(x => x !== id)); // opcional, limpiamos participantes
+    setParticipantes(prev => prev.filter(x => x !== id));
   };
   const restaurarInterno = (id) => setExcluidosInterno(prev => prev.filter(x => x !== id));
 
   const excluirTorneos = (id) => {
     if (!id) return;
-    if (!confirm("Quitar este alumno de la tabla de torneos?")) return;
+    if (!confirm("¿Quitar este alumno de la tabla de torneos?")) return;
     setExcluidosTorneos(prev => prev.includes(id) ? prev : [...prev, id]);
   };
   const restaurarTorneos = (id) => setExcluidosTorneos(prev => prev.filter(x => x !== id));
 
-  // Helpers para bloqueo/edición en Torneos
-  const torneosFinalizado   = !!selectedRanking?.torneosFinalizado;
-  const puedeEditarTorneos  = !torneosFinalizado || pinVerificado;
-  const ajustesBloqueados   = torneosFinalizado && !pinVerificado; // aviso en pestaña Ajustes
+  const torneosFinalizado = !!selectedRanking?.torneosFinalizado;
+  const puedeEditarTorneos = !torneosFinalizado || pinVerificado;
+  const ajustesBloqueados = torneosFinalizado && !pinVerificado;
 
   const onCheckPin = () => {
     if (!perfilPin) {
@@ -5296,26 +5313,24 @@ const standingsTorneos = React.useMemo(() => {
     if (next === true) { setPinVerificado(false); setPinInput(''); }
   };
 
-  // === UI ===
   const filteredRankings = rankings.filter(r => ((r.tipo || 'interno') === view));
 
   const tabBtn = (t) =>
     `px-3 py-1.5 rounded-lg text-sm transition
-     ${rtTab === t ? "bg-white shadow-sm border border-slate-300"
-                   : "border border-transparent text-slate-600 hover:text-slate-800"}`;
+     ${tab === t ? "bg-white shadow-sm border border-slate-300" : "border border-transparent text-slate-600 hover:text-slate-800"}`;
 
   return (
     <div className="space-y-3">
       {/* TABS de vista */}
       <div className="mb-3 flex gap-2">
         <button
-          className={`px-3 py-1.5 rounded-lg border ${view==='interno' ? 'bg-emerald-50 border-emerald-300' : 'bg-white'}`}
+          className={`px-3 py-1.5 rounded-lg border ${view === 'interno' ? 'bg-emerald-50 border-emerald-300' : 'bg-white'}`}
           onClick={() => setView('interno')}
         >
           Ranking Interno
         </button>
         <button
-          className={`px-3 py-1.5 rounded-lg border ${view==='torneos' ? 'bg-emerald-50 border-emerald-300' : 'bg-white'}`}
+          className={`px-3 py-1.5 rounded-lg border ${view === 'torneos' ? 'bg-emerald-50 border-emerald-300' : 'bg-white'}`}
           onClick={() => setView('torneos')}
         >
           Ranking Torneos
@@ -5328,7 +5343,6 @@ const standingsTorneos = React.useMemo(() => {
         <div className="md:col-span-4">
           <Card title={<span className="text-[#34745B]">Rankings</span>} right={null}>
             {loading && <p className="text-sm text-slate-500">Cargando...</p>}
-
             <ul className="space-y-2">
               {filteredRankings.map(r => (
                 <li
@@ -5340,7 +5354,7 @@ const standingsTorneos = React.useMemo(() => {
                     <div>
                       <p className="font-semibold text-slate-800">{r.nombre}</p>
                       {r.notas && <p className="text-xs text-slate-500 mt-0.5">{r.notas}</p>}
-                      <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wide">Tipo: {(r.tipo||'interno')}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wide">Tipo: {(r.tipo || 'interno')}</p>
                     </div>
                     <button
                       className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
@@ -5356,7 +5370,6 @@ const standingsTorneos = React.useMemo(() => {
                 <li className="text-sm text-slate-500 p-2">No hay rankings de tipo “{view}”.</li>
               )}
             </ul>
-
             <div className="mt-4 border-t pt-4">
               <p className="text-sm font-semibold text-slate-700 mb-1">
                 Nuevo ranking <span className="text-xs text-slate-500">(tipo: {view})</span>
@@ -5393,189 +5406,240 @@ const standingsTorneos = React.useMemo(() => {
                 title={<span className="text-[#34745B]">{selectedRanking.nombre}</span>}
                 right={<button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">Guardar</button>}
               >
-                {/* Participantes */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700 mb-1">Agregar participante</p>
-                    <select
-                      value=""
-                      onChange={e => addParticipante(e.target.value)}
-                      className="w-full border rounded-lg px-3 py-2"
-                    >
-                      <option value="">— Seleccionar alumno —</option>
-                      {alumnos.map(a => (
-                        <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>
-                      ))}
-                    </select>
-                    {participantes.length > 0 && (
-                      <ul className="mt-2 space-y-1 text-sm">
-                        {participantes.map(id => (
-                          <li key={id} className="flex justify-between items-center border rounded-lg px-2 py-1">
-                            <span>{getNombreCompleto(alumnosMap.get(id))}</span>
-                            <button className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50" onClick={() => removeParticipante(id)}>Quitar</button>
-                          </li>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button className={tabBtn("config")} onClick={() => setTab("config")}>Configuración</button>
+                  <button className={tabBtn("registrar")} onClick={() => setTab("registrar")}>Registrar Partido</button>
+                  <button className={tabBtn("tabla")} onClick={() => setTab("tabla")}>Tabla de Posiciones</button>
+                  <button className={tabBtn("historial")} onClick={() => setTab("historial")}>Historial de Partidos</button>
+                </div>
+
+                {tab === 'config' && (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700 mb-1">Agregar participante (Singles)</p>
+                      <select
+                        value=""
+                        onChange={e => addParticipante(e.target.value)}
+                        className="w-full border rounded-lg px-3 py-2"
+                      >
+                        <option value="">— Seleccionar alumno —</option>
+                        {alumnos.map(a => (
+                          <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>
                         ))}
-                      </ul>
+                      </select>
+                      {participantes.length > 0 && (
+                        <ul className="mt-2 space-y-1 text-sm">
+                          {participantes.map(id => (
+                            <li key={id} className="flex justify-between items-center border rounded-lg px-2 py-1">
+                              <span>{getNombreCompleto(alumnosMap.get(id))}</span>
+                              <button className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50" onClick={() => removeParticipante(id)}>Quitar</button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700 mb-1">Crear parejas (Dobles)</p>
+                      <div className="grid md:grid-cols-3 gap-2 items-end">
+                        <select className="w-full border rounded-lg p-2" value={sel1} onChange={e => setSel1(e.target.value)}>
+                          <option value="">Jugador 1</option>
+                          {alumnos.map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
+                        </select>
+                        <select className="w-full border rounded-lg p-2" value={sel2} onChange={e => setSel2(e.target.value)}>
+                          <option value="">Jugador 2</option>
+                          {alumnos.map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}
+                        </select>
+                        <button type="button" onClick={addTeam} className="px-3 py-2 rounded-lg bg-slate-800 text-white disabled:opacity-50" disabled={!sel1 || !sel2}>Crear</button>
+                      </div>
+                      {teams.length > 0 && (
+                        <ul className="mt-2 space-y-1 text-sm">
+                          {teams.map(t => (
+                            <li key={t.id} className="flex justify-between items-center border rounded-lg px-2 py-1">
+                              <span>{getTeamLabel(t.id)}</span>
+                              <button className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50" onClick={() => removeTeam(t.id)}>Quitar</button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <div className="md:col-span-2">
+                      <p className="text-sm font-semibold text-slate-700 mb-1">Puntos</p>
+                      <div className="grid grid-cols-3 gap-2 mb-2">
+                        <div><label className="text-xs">Ganar</label><input type="number" value={puntosCfg.win} onChange={e => setPuntosCfg(cfg => ({ ...cfg, win: Number(e.target.value) || 0 }))} className="w-full border rounded-lg px-2 py-1" /></div>
+                        <div><label className="text-xs">Empatar</label><input type="number" value={puntosCfg.draw} onChange={e => setPuntosCfg(cfg => ({ ...cfg, draw: Number(e.target.value) || 0 }))} className="w-full border rounded-lg px-2 py-1" /></div>
+                        <div><label className="text-xs">Perder</label><input type="number" value={puntosCfg.loss} onChange={e => setPuntosCfg(cfg => ({ ...cfg, loss: Number(e.target.value) || 0 }))} className="w-full border rounded-lg px-2 py-1" /></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {tab === 'registrar' && (
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 mb-2">Registrar partido</p>
+                    <form onSubmit={submitMatch} className="grid md:grid-cols-6 gap-2 items-end">
+                      <div className="md:col-span-2">
+                        <label className="text-xs">Modalidad</label>
+                        <select value={modalidadPartido} onChange={e => setModalidadPartido(e.target.value)} className="w-full border rounded-lg px-2 py-1">
+                          <option value="singles">Singles</option>
+                          <option value="dobles">Dobles</option>
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-xs">Fecha</label>
+                        <input type="date" value={matchForm.fecha} onChange={e => setMatchForm(f => ({ ...f, fecha: e.target.value }))} className="w-full border rounded-lg px-2 py-1" />
+                      </div>
+                      {modalidadPartido === 'singles' ? (
+                        <>
+                          <div className="md:col-span-2">
+                            <label className="text-xs">Jugador A</label>
+                            <select value={matchForm.jugadorA} onChange={e => setMatchForm(f => ({ ...f, jugadorA: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                              <option value="">—</option>
+                              {participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}
+                            </select>
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="text-xs">Jugador B</label>
+                            <select value={matchForm.jugadorB} onChange={e => setMatchForm(f => ({ ...f, jugadorB: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                              <option value="">—</option>
+                              {participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}
+                            </select>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="md:col-span-2">
+                            <label className="text-xs">Equipo A</label>
+                            <select value={matchForm.equipoA} onChange={e => setMatchForm(f => ({ ...f, equipoA: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                              <option value="">—</option>
+                              {teams.map(t => <option key={t.id} value={t.id}>{getTeamLabel(t.id)}</option>)}
+                            </select>
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="text-xs">Equipo B</label>
+                            <select value={matchForm.equipoB} onChange={e => setMatchForm(f => ({ ...f, equipoB: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                              <option value="">—</option>
+                              {teams.map(t => <option key={t.id} value={t.id}>{getTeamLabel(t.id)}</option>)}
+                            </select>
+                          </div>
+                        </>
+                      )}
+                      <div className="md:col-span-2">
+                        <label className="text-xs">Resultado</label>
+                        <select value={matchForm.resultado} onChange={e => setMatchForm(f => ({ ...f, resultado: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
+                          <option value="A">Gana A</option>
+                          <option value="B">Gana B</option>
+                          <option value="D">Empate</option>
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-xs">Score (opcional)</label>
+                        <input type="text" value={matchForm.score} onChange={e => setMatchForm(f => ({ ...f, score: e.target.value }))} className="w-full border rounded-lg px-2 py-1" placeholder="Ej: 6-4 4-6 10-8" />
+                      </div>
+                      <div className="md:col-span-2">
+                        <button type="submit" className="w-full px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">+ Registrar</button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {tab === 'tabla' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-slate-700">Tabla de Posiciones — Ranking Interno</p>
+                      <button className="text-xs px-2 py-1 rounded-lg border hover:bg-slate-50"
+                        onClick={() => setEditRowsInterno(s => !s)}>
+                        {editRowsInterno ? "Listo" : "Editar tabla"}
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto max-h-[60vh] overflow-y-auto rounded-lg border">
+                      <table className="min-w-full text-sm">
+                        <thead className="sticky top-0 z-10 bg-white shadow-sm">
+                          <tr className="text-left text-slate-700">
+                            <th className="p-2">#</th>
+                            <th className="p-2">Alumno</th>
+                            <th className="p-2">PJ</th>
+                            <th className="p-2">G</th>
+                            <th className="p-2">E</th>
+                            <th className="p-2">P</th>
+                            <th className="p-2">PTS</th>
+                            {editRowsInterno && <th className="p-2 w-12"></th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {standingsInterno.length === 0 && (
+                            <tr><td colSpan={editRowsInterno ? 8 : 7} className="text-center py-6 text-slate-400">Sin participantes o partidos</td></tr>
+                          )}
+                          {standingsInterno.map((row, idx) => (
+                            <tr key={row.alumnoId} className="border-t odd:bg-white even:bg-slate-50">
+                              <td className="p-2">{idx + 1}</td>
+                              <td className="p-2">{getNombreCompleto(alumnosMap.get(row.alumnoId))}</td>
+                              <td className="p-2">{row.PJ}</td>
+                              <td className="p-2">{row.G}</td>
+                              <td className="p-2">{row.E}</td>
+                              <td className="p-2">{row.P}</td>
+                              <td className="p-2 font-bold">{row.PTS}</td>
+                              {editRowsInterno && (
+                                <td className="p-2 text-right">
+                                  <button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
+                                    onClick={() => excluirInterno(row.alumnoId)}
+                                    title="Quitar de la tabla">
+                                    🗑️
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {editRowsInterno && excluidosInterno.length > 0 && (
+                      <div className="mt-2 text-xs">
+                        <div className="font-medium mb-1">Excluidos</div>
+                        <ul className="flex flex-wrap gap-2">
+                          {excluidosInterno.map(id => (
+                            <li key={id} className="px-2 py-1 rounded border bg-slate-50">
+                              {getNombreCompleto(alumnosMap.get(id))}
+                              <button className="ml-2 underline" onClick={() => restaurarInterno(id)}>Restaurar</button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
                   </div>
+                )}
 
-                  {/* Config de puntos y ajustes manuales */}
+                {tab === 'historial' && (
                   <div>
-                    <p className="text-sm font-semibold text-slate-700 mb-1">Puntos</p>
-                    <div className="grid grid-cols-3 gap-2 mb-2">
-                      <div><label className="text-xs">Ganar</label><input type="number" value={puntosCfg.win} onChange={e => setPuntosCfg(cfg => ({...cfg, win: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
-                      <div><label className="text-xs">Empatar</label><input type="number" value={puntosCfg.draw} onChange={e => setPuntosCfg(cfg => ({...cfg, draw: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
-                      <div><label className="text-xs">Perder</label><input type="number" value={puntosCfg.loss} onChange={e => setPuntosCfg(cfg => ({...cfg, loss: Number(e.target.value)||0}))} className="w-full border rounded-lg px-2 py-1" /></div>
-                    </div>
-
-                    <p className="text-sm font-semibold text-slate-700 mb-1">Ajustes manuales</p>
-                    <div className="space-y-1">
-                      {participantes.map(id => (
-                        <div key={id} className="flex items-center gap-2">
-                          <span className="text-sm w-44 truncate">{getNombreCompleto(alumnosMap.get(id))}</span>
-                          <input
-                            type="number"
-                            value={Number(ajustesManual?.[id] || 0)}
-                            onChange={e => setAjustesManual(prev => ({ ...prev, [id]: Number(e.target.value) })) }
-                            className="w-24 border rounded-lg px-2 py-1 text-sm"
-                            placeholder="+/-"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Registrar partido */}
-                <div className="mt-6 border-t pt-4">
-                  <p className="text-sm font-semibold text-slate-700 mb-2">Registrar partido</p>
-                  <form onSubmit={submitMatch} className="grid md:grid-cols-6 gap-2 items-end">
-                    <div className="md:col-span-2">
-                      <label className="text-xs">Fecha</label>
-                      <input type="date" value={matchForm.fecha} onChange={e => setMatchForm(f => ({ ...f, fecha: e.target.value }))} className="w-full border rounded-lg px-2 py-1" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs">Jugador A</label>
-                      <select value={matchForm.jugadorA} onChange={e => setMatchForm(f => ({ ...f, jugadorA: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
-                        <option value="">—</option>
-                        {participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs">Jugador B</label>
-                      <select value={matchForm.jugadorB} onChange={e => setMatchForm(f => ({ ...f, jugadorB: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
-                        <option value="">—</option>
-                        {participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs">Resultado</label>
-                      <select value={matchForm.resultado} onChange={e => setMatchForm(f => ({ ...f, resultado: e.target.value }))} className="w-full border rounded-lg px-2 py-1">
-                        <option value="A">Gana A</option>
-                        <option value="B">Gana B</option>
-                        <option value="D">Empate</option>
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs">Score (opcional)</label>
-                      <input type="text" value={matchForm.score} onChange={e => setMatchForm(f => ({ ...f, score: e.target.value }))} className="w-full border rounded-lg px-2 py-1" placeholder="Ej: 6-4 4-6 10-8" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <button type="submit" className="w-full px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">+ Registrar</button>
-                    </div>
-                  </form>
-                </div>
-
-                {/* Tabla: interno (sticky header + zebra + editar) */}
-                <div className="mt-6 border-t pt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-semibold text-slate-700">Tabla de Posiciones — Ranking Interno</p>
-                    <button className="text-xs px-2 py-1 rounded-lg border hover:bg-slate-50"
-                            onClick={() => setEditRowsInterno(s => !s)}>
-                      {editRowsInterno ? "Listo" : "Editar tabla"}
-                    </button>
-                  </div>
-                  <div className="overflow-x-auto max-h-[60vh] overflow-y-auto rounded-lg border">
-                    <table className="min-w-full text-sm">
-                      <thead className="sticky top-0 z-10 bg-white shadow-sm">
-                        <tr className="text-left text-slate-700">
-                          <th className="p-2">#</th>
-                          <th className="p-2">Alumno</th>
-                          <th className="p-2">PJ</th>
-                          <th className="p-2">G</th>
-                          <th className="p-2">E</th>
-                          <th className="p-2">P</th>
-                          <th className="p-2">PTS</th>
-                          {editRowsInterno && <th className="p-2 w-12"></th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {standingsInterno.length === 0 && (
-                          <tr><td colSpan={editRowsInterno?8:7} className="text-center py-6 text-slate-400">Sin participantes o partidos</td></tr>
-                        )}
-                        {standingsInterno.map((row, idx) => (
-                          <tr key={row.alumnoId} className="border-t odd:bg-white even:bg-slate-50">
-                            <td className="p-2">{idx + 1}</td>
-                            <td className="p-2">{getNombreCompleto(alumnosMap.get(row.alumnoId))}</td>
-                            <td className="p-2">{row.PJ}</td>
-                            <td className="p-2">{row.G}</td>
-                            <td className="p-2">{row.E}</td>
-                            <td className="p-2">{row.P}</td>
-                            <td className="p-2 font-bold">{row.PTS}</td>
-                            {editRowsInterno && (
-                              <td className="p-2 text-right">
-                                <button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
-                                        onClick={() => excluirInterno(row.alumnoId)}
-                                        title="Quitar de la tabla">
-                                  🗑️
-                                </button>
-                              </td>
+                    <p className="text-sm font-semibold text-slate-700 mb-2">Historial de Partidos</p>
+                    {matches.length === 0 && <p className="text-sm text-slate-500">Sin partidos registrados.</p>}
+                    <ul className="space-y-2">
+                      {matches.map(m => (
+                        <li key={m.id} className="p-2 border rounded-lg bg-white flex justify-between items-center">
+                          <div className="text-sm">
+                            <span className="text-slate-500 mr-2">{m.fecha}</span>
+                            {m.modalidad === 'singles' ? (
+                              <>
+                                <b>{getNombreCompleto(alumnosMap.get(m.jugadorA))}</b> vs <b>{getNombreCompleto(alumnosMap.get(m.jugadorB))}</b>
+                              </>
+                            ) : (
+                              <>
+                                <b>{getTeamLabel(m.equipoA)}</b> vs <b>{getTeamLabel(m.equipoB)}</b>
+                              </>
                             )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            {m.score ? <> — <span className="text-slate-600">{m.score}</span></> : null}
+                            <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                              {m.resultado === "A" ? "Gana A" : m.resultado === "B" ? "Gana B" : "Empate"}
+                            </span>
+                          </div>
+                          <button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
+                            onClick={() => deleteMatch(m.id)}>
+                            🗑️
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-
-                  {/* Excluidos Interno */}
-                  {editRowsInterno && excluidosInterno.length > 0 && (
-                    <div className="mt-2 text-xs">
-                      <div className="font-medium mb-1">Excluidos</div>
-                      <ul className="flex flex-wrap gap-2">
-                        {excluidosInterno.map(id => (
-                          <li key={id} className="px-2 py-1 rounded border bg-slate-50">
-                            {getNombreCompleto(alumnosMap.get(id))}
-                            <button className="ml-2 underline" onClick={() => restaurarInterno(id)}>Restaurar</button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-
-                {/* Historial de partidos */}
-                <div className="mt-6 border-t pt-4">
-                  <p className="text-sm font-semibold text-slate-700 mb-2">Partidos</p>
-                  {matches.length === 0 && <p className="text-sm text-slate-500">Sin partidos registrados.</p>}
-                  <ul className="space-y-2">
-                    {matches.map(m => (
-                      <li key={m.id} className="p-2 border rounded-lg bg-white flex justify-between items-center">
-                        <div className="text-sm">
-                          <span className="text-slate-500 mr-2">{m.fecha}</span>
-                          <b>{getNombreCompleto(alumnosMap.get(m.jugadorA))}</b> vs <b>{getNombreCompleto(alumnosMap.get(m.jugadorB))}</b>
-                          {m.score ? <> — <span className="text-slate-600">{m.score}</span></> : null}
-                          <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                            {m.resultado === "A" ? "Gana A" : m.resultado === "B" ? "Gana B" : "Empate"}
-                          </span>
-                        </div>
-                        <button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
-                                onClick={() => deleteMatch(m.id)}>
-                          🗑️
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                )}
               </Card>
             ) : (
               // ====== VISTA TORNEOS ======
@@ -5605,7 +5669,7 @@ const standingsTorneos = React.useMemo(() => {
                         inputMode="numeric"
                         maxLength={3}
                         value={pinInput}
-                        onChange={e => setPinInput(e.target.value.replace(/\D/g,''))}
+                        onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))}
                         className="w-24 border rounded-lg px-2 py-1 text-sm tracking-widest text-center"
                         placeholder="•••"
                       />
@@ -5615,23 +5679,20 @@ const standingsTorneos = React.useMemo(() => {
                   </div>
                 )}
 
-                {/* ---- Tabs locales: primero TABLA, luego AJUSTES ---- */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5">
-                    <button className={tabBtn("tabla")}   onClick={() => setRtTab("tabla")}>Tabla</button>
+                    <button className={tabBtn("tabla")} onClick={() => setRtTab("tabla")}>Tabla</button>
                     <button className={tabBtn("ajustes")} onClick={() => setRtTab("ajustes")}>Ajustes</button>
                   </div>
 
-                  {/* Toggle editar tabla en TABLA */}
                   {rtTab === "tabla" && (
                     <button className="text-xs px-2 py-1 rounded-lg border hover:bg-slate-50"
-                            onClick={() => setEditRowsTorneos(s => !s)}>
+                      onClick={() => setEditRowsTorneos(s => !s)}>
                       {editRowsTorneos ? "Listo" : "Editar tabla"}
                     </button>
                   )}
                 </div>
 
-                {/* TABLA (por defecto) */}
                 {rtTab === "tabla" && (
                   <section>
                     <div className="overflow-x-auto max-h-[60vh] overflow-y-auto rounded-lg border">
@@ -5650,7 +5711,7 @@ const standingsTorneos = React.useMemo(() => {
                         </thead>
                         <tbody>
                           {standingsTorneos.length === 0 && (
-                            <tr><td colSpan={editRowsTorneos?8:7} className="text-center py-6 text-slate-400">Sin torneos aplicados</td></tr>
+                            <tr><td colSpan={editRowsTorneos ? 8 : 7} className="text-center py-6 text-slate-400">Sin torneos aplicados</td></tr>
                           )}
                           {standingsTorneos.map((row, idx) => (
                             <tr key={row.alumnoId} className="border-t odd:bg-white even:bg-slate-50">
@@ -5664,8 +5725,8 @@ const standingsTorneos = React.useMemo(() => {
                               {editRowsTorneos && (
                                 <td className="p-2 text-right">
                                   <button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50"
-                                          onClick={() => excluirTorneos(row.alumnoId)}
-                                          title="Quitar de la tabla">
+                                    onClick={() => excluirTorneos(row.alumnoId)}
+                                    title="Quitar de la tabla">
                                     🗑️
                                   </button>
                                 </td>
@@ -5675,8 +5736,6 @@ const standingsTorneos = React.useMemo(() => {
                         </tbody>
                       </table>
                     </div>
-
-                    {/* Excluidos Torneos */}
                     {editRowsTorneos && excluidosTorneos.length > 0 && (
                       <div className="mt-2 text-xs">
                         <div className="font-medium mb-1">Excluidos</div>
@@ -5693,24 +5752,20 @@ const standingsTorneos = React.useMemo(() => {
                   </section>
                 )}
 
-                {/* AJUSTES (oculto hasta abrir la pestaña) */}
                 {rtTab === "ajustes" && (
                   <section className="mt-2">
                     <div className="font-semibold mb-2">Ajustes de puntos (torneos)</div>
-
-                    {/* Aviso si está bloqueado */}
                     {ajustesBloqueados && (
                       <div className="mb-2 text-xs text-rose-600">
                         Edición bloqueada. Desbloqueá con tu PIN para modificar ajustes.
                       </div>
                     )}
-
                     <div className="space-y-1 max-w-[520px]">
                       {Object.keys({
                         ...awardsTotals,
-                        ...awardsList.reduce((acc, d) => ({...acc, ...(d.resumen || {})}), {})
+                        ...awardsList.reduce((acc, d) => ({ ...acc, ...(d.resumen || {}) }), {})
                       })
-                        .filter(id => !excluidosTorneos.includes(id)) // NO listar excluidos
+                        .filter(id => !excluidosTorneos.includes(id))
                         .map(id => (
                           <div key={id} className="flex items-center gap-2">
                             <span className="text-sm w-56 truncate">{getNombreCompleto(alumnosMap.get(id))}</span>
@@ -5727,7 +5782,7 @@ const standingsTorneos = React.useMemo(() => {
                         ))}
                       {Object.keys({
                         ...awardsTotals,
-                        ...awardsList.reduce((acc, d) => ({...acc, ...(d.resumen || {})}), {})
+                        ...awardsList.reduce((acc, d) => ({ ...acc, ...(d.resumen || {}) }), {})
                       }).filter(id => !excluidosTorneos.includes(id)).length === 0 && (
                         <p className="text-xs text-slate-500">No hay torneos aplicados todavía.</p>
                       )}
@@ -5746,9 +5801,6 @@ const standingsTorneos = React.useMemo(() => {
     </div>
   );
 }
-
-
-
 
 // =========================
 // RulesEditor (usa props)
@@ -6613,7 +6665,7 @@ function ReglasTab({ reglas, setReglas, modalidad, disabled = false }) {
     <div className="grid gap-6">
       <div className="grid md:grid-cols-2 gap-4">
         <div className="border rounded-xl p-3">
-          <div className="font-semibold text-slate-800 mb-2">Puntuación en grupos</div>
+          <div className="font-semibold text-slate-800 mb-2">Puntuación</div>
           <div className="flex items-center gap-3">
             <NumberField label="Win"  value={r.grupos.puntos.win}  onChange={v => set(['grupos','puntos','win'],  v)} disabled={disabled}/>
             <NumberField label="Draw" value={r.grupos.puntos.draw} onChange={v => set(['grupos','puntos','draw'], v)} disabled={disabled}/>
@@ -9819,10 +9871,19 @@ function HistorialPagos({
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-4 mb-4">
-                  <div className="bg-green-50 border border-green-200 p-4 rounded-xl"><p className="text-sm text-green-800">Total Ingresado</p><p className="text-2xl font-bold text-[#34745B]">${totales.total.toFixed(2)}</p></div>
-                  <div className="bg-slate-100 border border-slate-200 p-4 rounded-xl"><p className="text-sm text-slate-600">Total en Efectivo</p><p className="text-2xl font-bold text-slate-800">${totales.efectivo.toFixed(2)}</p></div>
-                  <div className="bg-slate-100 border border-slate-200 p-4 rounded-xl"><p className="text-sm text-slate-600">Total por Transferencia</p><p className="text-2xl font-bold text-slate-800">${totales.transferencia.toFixed(2)}</p></div>
-                </div>
+  <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
+    <p className="text-sm text-green-800">Total Ingresado</p>
+    <p className="text-2xl font-bold text-[#34745B]">{formatCurrency(totales.total)}</p>
+  </div>
+  <div className="bg-slate-100 border border-slate-200 p-4 rounded-xl">
+    <p className="text-sm text-slate-600">Total en Efectivo</p>
+    <p className="text-2xl font-bold text-slate-800">{formatCurrency(totales.efectivo)}</p>
+  </div>
+  <div className="bg-slate-100 border border-slate-200 p-4 rounded-xl">
+    <p className="text-sm text-slate-600">Total por Transferencia</p>
+    <p className="text-2xl font-bold text-slate-800">{formatCurrency(totales.transferencia)}</p>
+  </div>
+</div>
                 
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
@@ -9840,12 +9901,13 @@ function HistorialPagos({
                       {paginatedPagos.length === 0 && (<tr><td colSpan={6} className="text-center py-6 text-slate-400">No hay pagos que coincidan con los filtros</td></tr>)}
                       {paginatedPagos.map(p => (
                         <tr key={p.id} className="border-t">
-                            <td className="p-2">{p.fecha}</td>
-                            <td className="p-2 font-semibold">{p.nombreAlumno}</td>
-                            <td className="p-2">{p.concepto}</td>
-                            <td className="p-2">${parseFloat(p.monto || 0).toFixed(2)}</td>
-                            <td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${p.metodo === 'Pendiente' ? 'bg-orange-100 text-orange-800' : p.metodo === 'Mixto' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>{p.metodo}</span></td>
-                            <td className="p-2 text-right">
+  <td className="p-2">{p.fecha}</td>
+  <td className="p-2 font-semibold">{p.nombreAlumno}</td>
+  <td className="p-2">{p.concepto}</td>
+  <td className="p-2">{formatCurrency(p.monto)}</td>
+  <td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${p.metodo === 'Pendiente' ? 'bg-orange-100 text-orange-800' : p.metodo === 'Mixto' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>{p.metodo}</span></td>
+  <td className="p-2 text-right">
+
   <div className="inline-flex gap-2 items-center">
     {/* Editar */}
     <button
@@ -10038,8 +10100,8 @@ function HistorialPagos({
                         <tr key={a.id} className="border-t">
                             <td className="p-2">{`${a.apellido || ''} ${a.nombre || ''}`.trim()}</td>
                             <td className="p-2">{FRECUENCIAS_MENSUALES.find(f => f.value === a.frecuencia)?.label}</td>
-                            <td className="p-2">${a.cuota.toFixed(2)}</td>
-                            <td className="p-2">${a.totalPagado.toFixed(2)}</td>
+                            <td className="p-2">{formatCurrency(a.cuota)}</td>
+                            <td className="p-2">{formatCurrency(a.totalPagado)}</td>
                             <td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(a.estado)}`}>{a.estado}</span></td>
                             <td className="p-2 text-right">
                                 {a.estado !== 'Pagado' && <button onClick={() => onPay(a, selectedMonth)} className="px-2 py-1 text-xs rounded-lg border bg-emerald-500 text-white">Registrar Pago</button>}
@@ -10122,11 +10184,11 @@ function HistorialPagos({
                             <td className="p-2">
                                 <ul className="list-disc list-inside">
                                 {deuda.detalles.map((d, i) => (
-                                    <li key={i}>{d.tipo}: <span className="font-medium">${d.monto.toFixed(2)}</span></li>
+                                    <li key={i}>{d.tipo}: <span className="font-medium">{formatCurrency(d.monto)}</span></li>
                                 ))}
                                 </ul>
                             </td>
-                            <td className="p-2 font-semibold text-red-600 text-right">${deuda.total.toFixed(2)}</td>
+                            <td className="p-2 font-semibold text-red-600 text-right">{formatCurrency(deuda.total)}</td>
                         </tr>
                     ))}
                 </tbody></table></div>
@@ -10141,6 +10203,10 @@ function HistorialPorAlumno({ pagos = [], alumnos = [] }) {
   const [metodo, setMetodo] = React.useState("Todos");
   const [q, setQ] = React.useState("");
   const [expandedId, setExpandedId] = React.useState(null);
+
+  // === Nuevos estados para paginación ===
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const ITEMS_PER_PAGE = 10; // Puedes ajustar este valor si lo deseas
 
   const alumnoMap = React.useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
 
@@ -10166,39 +10232,49 @@ function HistorialPorAlumno({ pagos = [], alumnos = [] }) {
     });
   }, [pagos, fechaDesde, fechaHasta, metodo, q, alumnoMap]);
 
-const filas = React.useMemo(() => {
-  const acc = new Map();
-  for (const p of pagosFiltrados) {
-    const id = p.alumnoId || "_sin_";
-    const alumno = alumnoMap.get(p.alumnoId);
-    const nombre = alumno ? getName(alumno) : (p.nombreAlumno || "—");
-    const cur = acc.get(id) || { alumnoId: id, nombre, efectivo: 0, transferencia: 0, mensual: 0, pendiente: 0, total: 0, items: [] };
+  const filas = React.useMemo(() => {
+    const acc = new Map();
+    for (const p of pagosFiltrados) {
+      const id = p.alumnoId || "_sin_";
+      const alumno = alumnoMap.get(p.alumnoId);
+      const nombre = alumno ? getName(alumno) : (p.nombreAlumno || "—");
+      const cur = acc.get(id) || { alumnoId: id, nombre, efectivo: 0, transferencia: 0, mensual: 0, pendiente: 0, total: 0, items: [] };
 
-    const m = String(p.metodo || "");
-    const monto = normNum(p.monto);
+      const m = String(p.metodo || "");
+      const monto = normNum(p.monto);
 
-    if (m === "Efectivo") {
-      cur.efectivo += monto;
-    } else if (m === "Transferencia") {
-      cur.transferencia += monto;
-    } else if (m === "Mensual") {
-      cur.mensual += monto;
-    } else if (m === "Mixto" && p.detalleMixto) {
-      // 🆕 compat con docs viejos: repartir en el resumen
-      cur.efectivo      += normNum(p.detalleMixto.efectivo);
-      cur.transferencia += normNum(p.detalleMixto.transferencia);
-    } else if (m === "Pendiente") {
-      cur.pendiente += monto; // no suma al total cobrado
-    } else {
-      cur.total += monto;     // fallback (compat)
+      if (m === "Efectivo") {
+        cur.efectivo += monto;
+      } else if (m === "Transferencia") {
+        cur.transferencia += monto;
+      } else if (m === "Mensual") {
+        cur.mensual += monto;
+      } else if (m === "Mixto" && p.detalleMixto) {
+        cur.efectivo += normNum(p.detalleMixto.efectivo);
+        cur.transferencia += normNum(p.detalleMixto.transferencia);
+      } else if (m === "Pendiente") {
+        cur.pendiente += monto;
+      } else {
+        cur.total += monto;
+      }
+
+      cur.total = cur.efectivo + cur.transferencia + cur.mensual;
+      cur.items.push(p);
+      acc.set(id, cur);
     }
+    return Array.from(acc.values()).sort((a, b) => b.total - a.total);
+  }, [pagosFiltrados, alumnoMap]);
 
-    cur.total = cur.efectivo + cur.transferencia + cur.mensual;
-    cur.items.push(p);
-    acc.set(id, cur);
-  }
-  return Array.from(acc.values()).sort((a, b) => b.total - a.total);
-}, [pagosFiltrados, alumnoMap]);
+  // === Lógica de paginación ===
+  const totalPages = Math.ceil(filas.length / ITEMS_PER_PAGE);
+  const paginatedFilas = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filas.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filas, currentPage]);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [q, fechaDesde, fechaHasta, metodo]);
 
   return (
     <div className="space-y-3">
@@ -10240,9 +10316,9 @@ const filas = React.useMemo(() => {
             </tr>
           </thead>
           <tbody>
-            {filas.length === 0 ? (
+            {paginatedFilas.length === 0 ? (
               <tr><td className="p-3 text-slate-400" colSpan={6}>Sin movimientos en el período.</td></tr>
-            ) : filas.map(row => (
+            ) : paginatedFilas.map(row => (
               <React.Fragment key={row.alumnoId}>
                 <tr className="border-t">
                   <td className="p-2">{row.nombre}</td>
@@ -10270,7 +10346,7 @@ const filas = React.useMemo(() => {
                             </tr>
                           </thead>
                           <tbody>
-                            {row.items.slice().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))).map((p,i)=>(
+                            {row.items.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => (
                               <tr key={i} className="border-t">
                                 <td className="p-2">{p.fecha}</td>
                                 <td className="p-2">{p.concepto || "Pago Clase"}</td>
@@ -10289,6 +10365,28 @@ const filas = React.useMemo(() => {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex justify-center items-center gap-2">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <span className="text-sm text-slate-600">
+            Página {currentPage} de {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -10456,7 +10554,7 @@ function Gastos({ gastos, onCreate, onUpdate, onDelete }) {
 
         <div className="bg-slate-100 border border-slate-200 p-4 rounded-xl mb-4">
           <p className="text-sm text-slate-600">Total de Gastos</p>
-          <p className="text-2xl font-bold text-slate-800">${totalGastos.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalGastos)}</p>
         </div>
 
         <div className="overflow-x-auto">
@@ -10529,8 +10627,12 @@ function Gastos({ gastos, onCreate, onUpdate, onDelete }) {
         <div className="bg-slate-50 rounded-xl p-4 h-64 flex justify-around items-end gap-4">
           {data.map(item => (
             <div key={item.label} className="flex-1 flex flex-col items-center gap-2">
-              <div className="text-sm font-semibold text-slate-700">${item.value.toFixed(2)}</div>
-              <div className={`w-full rounded-t-lg ${item.color}`} style={{ height: `${(item.value / maxValue) * 80}%` }} title={`${item.label}: $${item.value.toFixed(2)}`}></div>
+              <div className="text-sm font-semibold text-slate-700">{formatCurrency(item.value)}</div>
+              <div 
+  className={`w-full rounded-t-lg ${item.color}`} 
+  style={{ height: `${(item.value / maxValue) * 80}%` }} 
+  title={`${item.label}: ${formatCurrency(item.value)}`}
+></div>
               <div className="text-xs font-medium text-slate-600">{item.label}</div>
             </div>
           ))}
@@ -10659,7 +10761,7 @@ const resumenClasesMes = useMemo(() => {
     finalY += 8;
     doc.setFontSize(11);
     doc.text(`Total de Clases: ${resumenClasesMes.totalClases}`, 14, finalY);
-    doc.text(`Valor Bruto Generado: $${resumenClasesMes.valorTotalGeneral.toFixed(2)}`, 100, finalY);
+    doc.text(`Valor Bruto Generado: ${formatCurrency(resumenClasesMes.valorTotalGeneral)}`, 100, finalY);
     finalY += 6;
     const tableHead = [['Tipo de Clase', 'Cantidad', 'Valor Generado']];
     
@@ -10669,7 +10771,7 @@ const resumenClasesMes = useMemo(() => {
     .map(([tipo, data]) => [
         TIPOS_CLASE_NOMBRES[tipo] || tipo,
         data.cantidad,
-        `$${data.valorTotal.toFixed(2)}`
+        `${formatCurrency(data.valorTotal)}`
     ]);
 
     doc.autoTable({ head: tableHead, body: tableBody, startY: finalY, theme: 'grid' });
@@ -10680,9 +10782,9 @@ const resumenClasesMes = useMemo(() => {
     doc.setFontSize(11);
     doc.text(`(Reparto: ${distribucionIngresos.repartoTexto})`, 14, finalY);
     finalY += 8;
-    doc.text(`Ganancia Neta Profesor: $${distribucionIngresos.gananciaProfesor.toFixed(2)}`, 14, finalY);
+    doc.text(`Ganancia Neta Profesor: ${formatCurrency(distribucionIngresos.gananciaProfesor)}`, 14, finalY);
     finalY += 8;
-    doc.text(`Ganancia Club: $${distribucionIngresos.gananciaClub.toFixed(2)}`, 14, finalY);
+    doc.text(`Ganancia Club: ${formatCurrency(distribucionIngresos.gananciaClub)}`, 14, finalY);
     doc.save(`Reporte_${nombreLugar.replace(/ /g, '_')}_${periodo === 'customDay' ? fechaSeleccionada : mesSeleccionado}.pdf`);
 };
       
@@ -11387,7 +11489,7 @@ function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave, focusAlumno
       const initialState = {};
       alumnosDeClase.forEach(alumno => {
         initialState[alumno.id] = {
-          monto: alumno.plan === 'mensual' ? '0' : precioPorAlumno.toFixed(2),
+          monto: alumno.plan === 'mensual' ? '0' : formatCurrency(precioPorAlumno),
           metodo: alumno.plan === 'mensual' ? "Mensual" : 'Efectivo',
           mixtoEfectivo: "",
           mixtoTransferencia: ""
@@ -11406,7 +11508,15 @@ function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave, focusAlumno
   const handleMixtoChange = (alumnoId, efectivo, transferencia) => {
       const ef = parseFloat(efectivo) || 0;
       const tx = parseFloat(transferencia) || 0;
-      setPagos(prev => ({...prev, [alumnoId]: {...prev[alumnoId], mixtoEfectivo: efectivo, mixtoTransferencia: transferencia, monto: (ef + tx).toFixed(2)}}));
+      setPagos(prev => ({
+  ...prev,
+  [alumnoId]: {
+    ...prev[alumnoId],
+    mixtoEfectivo: efectivo,
+    mixtoTransferencia: transferencia,
+    monto: formatCurrency(ef + tx), // Aplica la función formatCurrency
+  }
+}));
   }
 
   const handleSave = () => {
@@ -11415,7 +11525,7 @@ function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave, focusAlumno
       if (visibles.some(a => a.id === alumnoId)) {
         const registro = { alumnoId, ...data };
         if (data.metodo === "Mixto") {
-          registro.monto = (parseFloat(data.mixtoEfectivo || 0) + parseFloat(data.mixtoTransferencia || 0)).toFixed(2);
+          registro.monto = formatCurrency(parseFloat(data.mixtoEfectivo || 0) + parseFloat(data.mixtoTransferencia || 0));
         }
         return registro;
       }
@@ -11549,7 +11659,7 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
       useEffect(() => {
         if (alumno) {
           const restante = alumno.cuota - alumno.totalPagado;
-          setForm({ monto: restante > 0 ? restante.toFixed(2) : "", metodo: "Efectivo" });
+          setForm({ monto: restante > 0 ? formatCurrency(restante) : "", metodo: "Efectivo" });
         }
       }, [alumno]);
       if (!isOpen || !alumno) return null;
@@ -11557,7 +11667,7 @@ function RegistroPagoMensualModal({ isOpen, alumno, perfil, onCancel, onSave }) 
       return (
         <Modal isOpen={isOpen} title={`Pago Cuota: ${alumno.nombre}`} onCancel={onCancel} onConfirm={handleSave} confirmText="Guardar Pago">
           <div className="grid gap-4">
-            <p>Cuota de {MESES_NOMBRES[mes]} por ${alumno.cuota.toFixed(2)}. Pagado: ${alumno.totalPagado.toFixed(2)}.</p>
+            <p>Cuota de {MESES_NOMBRES[mes]} por {formatCurrency(alumno.cuota)}. Pagado: {formatCurrency(alumno.totalPagado)}.</p>
             <div><label className="text-sm text-slate-600">Monto a Pagar</label><input type="number" value={form.monto} onChange={(e) => setForm({...form, monto: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="0.00" /></div>
             <div><label className="text-sm text-slate-600">Método de Pago</label><select value={form.metodo} onChange={(e) => setForm({...form, metodo: e.target.value})} className="w-full border rounded-lg px-3 py-2">{METODOS_PAGO.filter(m => m !== 'Pendiente').map(m => <option key={m}>{m}</option>)}</select></div>
           </div>
@@ -11589,7 +11699,12 @@ function EditarPagoModal({ isOpen, pago, onCancel, onSave }) {
   const handleMixtoChange = (efectivo, transferencia) => {
       const ef = parseFloat(efectivo) || 0;
       const tx = parseFloat(transferencia) || 0;
-      setForm(prev => ({...prev, mixtoEfectivo: efectivo, mixtoTransferencia: transferencia, monto: (ef + tx).toFixed(2)}));
+      setForm(prev => ({
+  ...prev,
+  mixtoEfectivo: efectivo,
+  mixtoTransferencia: transferencia,
+  monto: formatCurrency(ef + tx, { withSymbol: false }),
+}));
   }
 
   return (
@@ -14051,15 +14166,19 @@ ReactDOM.render(<ErrorBoundary><AppGPadel /></ErrorBoundary>, document.getElemen
 // This block adds ranking configuration + award application without altering existing logic.
 // It relies on existing globals: React, db (Firestore), bracketFinalInfo, computeTablaGrupo (if present).
 
+// ====== RANKING INTEGRATION (non-invasive) ======
+// This block adds ranking configuration + award application without altering existing logic.
+// It relies on existing globals: React, db (Firestore), bracketFinalInfo, computeTablaGrupo (if present).
+
 (function(){
   // ---- Safe helpers ----
   function defaultRankingCfg() {
     return {
       destinoId: null,
-      modo: 'mixto',                   // 'partidos' | 'posiciones' | 'mixto'
+      modo: 'posiciones',                   // Simplificado a solo 'posiciones'
       multiplicador: 1,
       liga: { top: [100,60,40,20,10], participacion: 5 },
-      ko:   { winPerMatch: 10, champion:120, runnerUp:80, semi:50, quarter:25, roundOf16:10 },
+      ko:   { champion:120, runnerUp:80, semi:50, quarter:25, roundOf16:10 },
       dobles: { dividir: false }
     };
   }
@@ -14120,44 +14239,13 @@ ReactDOM.render(<ErrorBoundary><AppGPadel /></ErrorBoundary>, document.getElemen
     return hasAny;
   }
 
-  // --- Puntos por partidos en grupos ---
-  function collectGroupMatchPoints(torneo) {
-    const out = new Map();
-    const reglas = withRankingDefaults(torneo.reglas);
-    const P = (reglas.grupos && reglas.grupos.puntos) ? reglas.grupos.puntos : { win:3, draw:1, loss:0 };
-    const fx = torneo.fixture || {};
-    Object.values(fx).forEach(rondas => (rondas || []).forEach(rs => (rs || []).forEach(m => {
-      if (!m?.done || !m?.result) return;
-      const winner = m.result.winner;
-      const aIds = expandEntryToAlumnoIds(m.a, torneo);
-      const bIds = expandEntryToAlumnoIds(m.b, torneo);
-      let aPts = 0, bPts = 0;
-      if (winner === 'a') { aPts = P.win; bPts = P.loss; }
-      else if (winner === 'b') { aPts = P.loss; bPts = P.win; }
-      else { aPts = P.draw; bPts = P.draw; }
-      aIds.forEach(id => out.set(id, (out.get(id)||0) + aPts));
-      bIds.forEach(id => out.set(id, (out.get(id)||0) + bPts));
-    })));
-    return out;
-  }
-
-  // --- Puntos por KO (victorias + bonos por posición) ---
+  // --- Puntos por KO (bonos por posición) ---
   function collectKOPoints(torneo) {
     const out = new Map();
     const reglas = withRankingDefaults(torneo.reglas);
     const K = reglas.ko || {};
     const cuadro = torneo.cuadro || {};
-
-    // 1) por victoria
-    Object.values(cuadro).forEach(rondas => (rondas || []).forEach(m => {
-      if (!m?.done || !m?.result?.winner) return;
-      const winnerEntry = (m.result.winner === 'a') ? m.a : m.b;
-      expandEntryToAlumnoIds(winnerEntry, torneo).forEach(id => {
-        out.set(id, (out.get(id)||0) + (K.winPerMatch || 0));
-      });
-    }));
-
-    // 2) bonos por posición (si tenemos helpers del KO)
+    
     try {
       const fin = (typeof bracketFinalInfo === 'function') ? bracketFinalInfo(cuadro) : null;
       if (fin?.done) {
@@ -14238,16 +14326,11 @@ ReactDOM.render(<ErrorBoundary><AppGPadel /></ErrorBoundary>, document.getElemen
     if (!cfg.destinoId) { alert('Elegí un Ranking destino en Reglas → Ranking.'); return null; }
 
     const parts = [];
-    if (cfg.modo === 'partidos' || cfg.modo === 'mixto') {
-      // Liga
-      parts.push(collectGroupMatchPoints(torneo));
-      // KO
-      if (torneo.cuadro) parts.push(collectKOPoints(torneo));
-    }
-    if (cfg.modo === 'posiciones' || cfg.modo === 'mixto') {
-      if (torneo.formato !== 'eliminacion') parts.push(collectLeaguePlacementPoints(torneo));
-    }
-
+    
+    // Solo usamos el puntaje por posiciones
+    if (torneo.formato !== 'eliminacion') parts.push(collectLeaguePlacementPoints(torneo));
+    if (torneo.cuadro) parts.push(collectKOPoints(torneo));
+    
     const tot = mergePoints(parts);
     const mult = cfg.multiplicador || 1;
     const awards = {};
@@ -14345,7 +14428,7 @@ await ref.set({ ajustesTorneos, participantes, updatedAt: Date.now() }, { merge:
   // Exponer helpers mínimos por si querés llamarlos desde consola
   window.__rankingHelpers = {
     withRankingDefaults, groupsAllMatchesDone,
-    collectGroupMatchPoints, collectKOPoints, collectLeaguePlacementPoints,
+    collectLeaguePlacementPoints,
     applyAwardsToRanking
   };
 
@@ -14366,7 +14449,7 @@ await ref.set({ ajustesTorneos, participantes, updatedAt: Date.now() }, { merge:
     }, [user, clubId]);
 
     const patch = (p) => setReglas({ ranking: { ...r, ...p } });
-
+    
     // Elegibilidad para aplicar
     let readyReason = null;
     let ready = false;
@@ -14382,11 +14465,15 @@ await ref.set({ ajustesTorneos, participantes, updatedAt: Date.now() }, { merge:
       }
       await applyAwardsToRanking({ user, clubId, torneo, force: !ready });
     };
+    
+    // Nueva lógica para el título dinámico
+    const isElim = torneo?.formato === 'eliminacion';
+    const tituloPuntos = isElim ? 'Puntuación en KO' : 'Puntuación en grupos';
 
     return (
       <div className="border rounded-2xl p-4 space-y-3 bg-white dark:bg-slate-900">
         <div className="font-semibold text-slate-700 dark:text-slate-200">Ranking (puntos del torneo)</div>
-        <div className="grid md:grid-cols-3 gap-3">
+        <div className="grid md:grid-cols-2 gap-3">
           <label className="text-sm">
             <div className="text-slate-500 mb-1">Ranking destino</div>
             <select className="w-full border rounded-xl p-2"
@@ -14395,17 +14482,6 @@ await ref.set({ ajustesTorneos, participantes, updatedAt: Date.now() }, { merge:
                     disabled={disabled}>
               <option value="">— Elegí un ranking —</option>
               {rankings.map(x => <option key={x.id} value={x.id}>{x.nombre || x.id}</option>)}
-            </select>
-          </label>
-          <label className="text-sm">
-            <div className="text-slate-500 mb-1">Modo de puntaje</div>
-            <select className="w-full border rounded-xl p-2"
-                    value={r.modo}
-                    onChange={e=>patch({ modo: e.target.value })}
-                    disabled={disabled}>
-              <option value="partidos">Por partidos</option>
-              <option value="posiciones">Por posiciones</option>
-              <option value="mixto">Mixto</option>
             </select>
           </label>
           <label className="text-sm">
@@ -14453,13 +14529,6 @@ await ref.set({ ajustesTorneos, participantes, updatedAt: Date.now() }, { merge:
                     disabled={disabled}/>
             </label>
           ))}
-          <label className="text-sm">
-            <div className="text-slate-500 mb-1">KO: puntos por victoria</div>
-            <input className="w-full border rounded-xl p-2" type="number"
-                  value={r.ko.winPerMatch||0}
-                  onChange={e=>patch({ ko:{...r.ko, winPerMatch: parseInt(e.target.value||'0',10)} })}
-                  disabled={disabled}/>
-          </label>
         </div>
 
         <label className="text-sm">
@@ -14490,6 +14559,7 @@ await ref.set({ ajustesTorneos, participantes, updatedAt: Date.now() }, { merge:
   // Exponer el componente para que el código existente pueda usarlo (inserción automática abajo)
   window.RankingConfigPanel = RankingConfigPanel;
 })();
+
 </script>
 
 <script>
@@ -15091,5 +15161,795 @@ async function exportPDF_A4(torneo, showBracket, setShowBracket) {
   }
 }
 </script>
+
+<script>
+// === COMPROBANTE MENSUAL (standalone) ===
+// No toca nada del resto de la app. Usa jsPDF (y autoTable si está) + formatCurrency existente.
+window.generarComprobanteMensual = async function generarComprobanteMensual({
+  alumno = {},            // { id, nombre, apellido, dni? }
+  mensualidad = {},       // { id?, periodo?, periodoYMD?, fecha?, inicio?, fin?, plan?, monto, metodo?, reciboNro?, notas? }
+  perfil = {},            // datos del profesor/club si querés mostrar
+  club = {},              // opcional: { nombre?, direccion? }
+  periodoLabel,           // si lo pasás, se usa tal cual (ej: "septiembre 2025")
+  filename                // opcional, nombre del archivo PDF
+} = {}) {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert("jsPDF no está cargado");
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  // Helpers
+  const MESES_LARGO = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  const parseYMDLocal = (ymd) => {
+    if (!ymd || typeof ymd !== "string") return null;
+    const [y,m,d] = ymd.split("-").map(Number);
+    if (!y || !m) return null;
+    return new Date(y, (m||1)-1, d||1, 0, 0, 0, 0);
+  };
+  const todayDMY = () => {
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2,"0");
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    return `${dd}/${mm}/${d.getFullYear()}`;
+  };
+  const safe = (s) =>
+  String(s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w.-]+/g, "_")
+    .replace(/_{2,}/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  // Periodo
+  let periodoSrc = mensualidad.periodo || mensualidad.periodoYMD || mensualidad.fecha || mensualidad.inicio || mensualidad.mes;
+  let periodoTxt = periodoLabel || "";
+  if (!periodoTxt) {
+    if (typeof periodoSrc === "string") {
+      // Formatos aceptados: "YYYY-MM", "YYYY-MM-DD"
+      let d = null;
+      if (/^\d{4}-\d{2}$/.test(periodoSrc)) d = parseYMDLocal(periodoSrc + "-01");
+      else d = parseYMDLocal(periodoSrc);
+      if (d) periodoTxt = `${MESES_LARGO[d.getMonth()]} ${d.getFullYear()}`;
+    }
+    if (!periodoTxt) {
+      const d = new Date();
+      periodoTxt = `${MESES_LARGO[d.getMonth()]} ${d.getFullYear()}`;
+    }
+  }
+
+  const alumnoNombre = [alumno.apellido, alumno.nombre].filter(Boolean).join(", ") || alumno.nombre || alumno.id || "—";
+  const dni = alumno.dni ? String(alumno.dni) : "";
+  const plan = mensualidad.plan || mensualidad.tipo || mensualidad.abono || mensualidad.frecuencia || "Mensualidad";
+  const metodo = mensualidad.metodo || mensualidad.metodoPago || mensualidad.forma || "—";
+  const notas = mensualidad.notas || "";
+  const numero = mensualidad.reciboNro || mensualidad.id || ("M-" + Math.random().toString(36).slice(2,8).toUpperCase());
+  const monto = (typeof formatCurrency === "function")
+    ? formatCurrency(mensualidad.monto)
+    : (new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', minimumFractionDigits:0, maximumFractionDigits:0 }).format(Number(mensualidad.monto||0)));
+
+  // Encabezado con logo (si existe ./logo_favicon.png)
+  let y = 16;
+  try {
+    const resp = await fetch("./logo_favicon.png");
+    if (resp.ok) {
+      const blob = await resp.blob();
+      const dataUrl = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+      try { doc.addImage(dataUrl, "PNG", 12, 10, 18, 18); } catch(_) {}
+    }
+  } catch(_) {}
+  doc.setFontSize(15); doc.text("Comprobante de Mensualidad", 40, y); y += 6;
+  doc.setFontSize(10); doc.text(`Período: ${periodoTxt}`, 40, y); y += 5;
+  const profe = `${perfil?.nombre || ""} ${perfil?.apellido || ""}`.trim() || (perfil?.nombreCompleto || "");
+  if (profe) { doc.text(`Profesor/a: ${profe}`, 40, y); y += 5; }
+  if (club?.nombre) { doc.text(`Club: ${club.nombre}`, 40, y); y += 5; }
+
+  // Datos de alumno + comprobante
+  y += 3;
+  doc.setFontSize(11);
+  doc.text(`N°: ${numero}`, 420, 16); // esquina sup derecha
+  doc.text(`Fecha de emisión: ${todayDMY()}`, 420, 22);
+
+  // Cuerpo (con autoTable si está)
+  const rows = [
+    ["Alumno/a", alumnoNombre + (dni ? ` (DNI ${dni})` : "")],
+    ["Plan", plan],
+    ["Método de pago", metodo],
+    ["Monto", monto],
+  ];
+  if (notas) rows.push(["Notas", String(notas)]);
+
+  if (doc.autoTable) {
+    doc.autoTable({
+      startY: y + 4,
+      head: [["Campo", "Valor"]],
+      body: rows,
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [63,63,65], textColor: 255, fontStyle: "bold" },
+      theme: "grid",
+      columnStyles: { 0: { cellWidth: 120 } },
+      margin: { left: 12, right: 12 }
+    });
+    y = doc.lastAutoTable.finalY + 10;
+  } else {
+    doc.setFontSize(10);
+    let x1 = 14, x2 = 140;
+    rows.forEach(([k,v]) => {
+      doc.text(`${k}:`, x1, y);
+      doc.text(String(v), x2, y);
+      y += 6;
+    });
+    y += 6;
+  }
+
+  // Pie
+  const pageH = doc.internal.pageSize.height;
+  doc.setFontSize(8);
+  doc.text("Generado por Coachex-Pro", 12, pageH - 10);
+
+  // Guardar
+  const name = filename || `Comprobante_Mensual_${safe(alumnoNombre)}_${safe(periodoTxt)}.pdf`;
+  doc.save(name);
+};
+</script>
+
+
+
+<script>
+/* =================== HELPERS (definidos UNA sola vez) =================== */
+if (!window.collectPhoneStrings) window.collectPhoneStrings = function collectPhoneStrings(obj, max = 30) {
+  const out = [], stack = [obj], seen = new Set();
+  while (stack.length && out.length < max) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+    seen.add(cur);
+    for (const k in cur) {
+      const v = cur[k];
+      if (typeof v === "string" && /\d{7,}/.test(v)) out.push(v);
+      else if (v && typeof v === "object") stack.push(v);
+    }
+  }
+  return out;
+};
+
+if (!window.toWaMsisdn) window.toWaMsisdn = function toWaMsisdn(raw, country = "AR") {
+  let s = String(raw || "").trim();
+  if (s.startsWith("+") || s.startsWith("00")) {
+    s = s.replace(/^00/, "+").replace(/[^\d+]/g, "");
+  } else {
+    s = s.replace(/[^\d]/g, "");
+  }
+  if (country === "AR") {
+    const only = s.replace(/\D/g, "");
+    if (s.startsWith("+54")) {
+      let rest = only.slice(2);
+      rest = rest.replace(/^0+/, "");
+      rest = rest.replace(/(^\d{2,4})15/, "$1");
+      if (!/^9/.test(rest)) rest = "9" + rest;
+      return "54" + rest;
+    }
+    let loc = only.replace(/^0+/, "");
+    loc = loc.replace(/(^\d{2,4})15/, "$1");
+    return "549" + loc;
+  }
+  if (s.startsWith("+")) return s.slice(1).replace(/\D/g, "");
+  return s.replace(/\D/g, "");
+};
+
+if (!window.findAlumnoPhone) window.findAlumnoPhone = function findAlumnoPhone(alumnoNombre) {
+  const row = [...document.querySelectorAll("table tbody tr")]
+    .find(r => (r.querySelector("td:nth-child(2)")?.textContent || "").trim() === alumnoNombre);
+  const id = row?.dataset?.alumnoId || null;
+  let alumno = null;
+
+  if (id && window.__alumnosById) alumno = window.__alumnosById[id];
+
+  if (!alumno && Array.isArray(window.__alumnos)) {
+    alumno = window.__alumnos.find(a => {
+      const etiqueta = `${a?.apellido ? a.apellido + ", " : ""}${a?.nombre || a?.name || ""}`.trim();
+      const etiqueta2 = `${a?.nombre || ""} ${a?.apellido || ""}`.trim();
+      return etiqueta === alumnoNombre || etiqueta2 === alumnoNombre;
+    });
+  }
+  if (!alumno) return null;
+
+  const candidates = Array.from(new Set([
+    alumno?.whatsapp, alumno?.WhatsApp, alumno?.wasap, alumno?.wpp, alumno?.wapp,
+    alumno?.telefono, alumno?.tel, alumno?.cel, alumno?.celular,
+    alumno?.movil, alumno?.phone, alumno?.mobile,
+    alumno?.["teléfono"], alumno?.["móvil"],
+    alumno?.contactoPadre, alumno?.contactoMadre,
+    alumno?.contacto?.telefono, alumno?.contacto?.whatsapp,
+    ...window.collectPhoneStrings(alumno)
+  ].filter(Boolean)));
+
+  const raw = candidates.find(s => /\d{7,}/.test(String(s)));
+  return raw ? window.toWaMsisdn(raw, "AR") : null;
+};
+</script>
+
+<script>
+/* ========== HISTORIAL DE PAGOS: botón “Comprobante ▾” para ABONO MENSUAL (ES5-safe) ========== */
+(function(){
+  var MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+
+  function toNumber(v){
+    var s = String(v == null ? "" : v)
+      .replace(/\./g,"")
+      .replace(",",".")
+      .replace(/[^0-9.-]/g,"");
+    var n = Number(s);
+    return isFinite(n) ? n : 0;
+  }
+
+  function periodoFrom(concepto, fechaYMD){
+    var m = String(concepto||"").match(/abono\s+mensual\s*-\s*(.+)$/i);
+    if (m && m[1]) return m[1].trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fechaYMD||"")) {
+      var d = new Date(fechaYMD + "T00:00:00");
+      return MESES[d.getMonth()] + " " + d.getFullYear();
+    }
+    return "";
+  }
+
+  function buildWaText(d){
+    var montoTxt = (typeof window.formatCurrency === "function")
+      ? window.formatCurrency(d.monto)
+      : new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', minimumFractionDigits:0, maximumFractionDigits:0 }).format(d.monto || 0);
+    return [
+      "Hola " + d.alumnoNombre + "! Te envío el comprobante de abono mensual.",
+      "",
+      "Período: " + d.periodo,
+      "Fecha de pago: " + d.fecha,
+      "Método: " + d.metodo,
+      "Monto: " + montoTxt,
+      "",
+      "Generado por Coachex-Pro"
+    ].join("\n");
+  }
+
+  function cellText(tds, i){
+    var el = tds[i];
+    return ((el && el.textContent) || "").trim();
+  }
+
+  function extractRowInfo(row){
+    var tds = row.querySelectorAll("td");
+    var fecha = cellText(tds,0);
+    var alumnoNombre = cellText(tds,1);
+    var concepto = cellText(tds,2);
+    var montoTxt = cellText(tds,3);
+    var metodo = cellText(tds,4);
+    var monto = toNumber(montoTxt);
+    var periodo = periodoFrom(concepto, fecha);
+    return { fecha:fecha, alumnoNombre:alumnoNombre, concepto:concepto, monto:monto, metodo:metodo, periodo:periodo };
+  }
+
+  function addDropdown(row){
+    var tds = row.querySelectorAll("td");
+    var accionesTd = tds[5];
+    if (!accionesTd) return;
+    if (accionesTd.querySelector(".btn-comprobante-mensual")) return;
+
+    var wrap = document.createElement("div");
+    wrap.className = "relative inline-block ml-1";
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-comprobante-mensual px-3 py-1.5 text-sm border rounded-xl bg-white hover:bg-slate-50 flex items-center";
+    btn.textContent = "Comprobante ▾"; // el icono se aplica abajo
+
+    var menu = document.createElement("div");
+    menu.className = "absolute z-50 mt-1 w-44 bg-white border rounded-xl shadow hidden";
+    menu.innerHTML = [
+      '<button type="button" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50" data-act="pdf">Descargar PDF</button>',
+      '<button type="button" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50" data-act="wa">Enviar por WhatsApp</button>'
+    ].join("");
+
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      menu.classList.toggle("hidden");
+    });
+    document.addEventListener("click", function(){ menu.classList.add("hidden"); });
+
+    menu.addEventListener("click", function(ev){
+      var target = ev.target || ev.srcElement;
+      var act = target ? target.getAttribute("data-act") : null;
+      if (!act) return;
+      var d = extractRowInfo(row);
+      if (act === "pdf") {
+        if (typeof window.generarComprobanteMensual === "function") {
+          window.generarComprobanteMensual({
+            alumno: { nombre: d.alumnoNombre },
+            mensualidad: { monto: d.monto, metodo: d.metodo, fecha: d.fecha },
+            periodoLabel: d.periodo,
+            perfil: window.__perfil || {},
+            club: window.__clubActivo || {}
+          });
+        } else {
+          alert("Falta window.generarComprobanteMensual");
+        }
+      } else if (act === "wa") {
+        var text = buildWaText(d);
+        var msisdn = (window.findAlumnoPhone ? window.findAlumnoPhone(d.alumnoNombre) : null);
+        var base = msisdn ? ("https://wa.me/" + msisdn) : "https://wa.me/";
+        window.open(base + "?text=" + encodeURIComponent(text), "_blank");
+      }
+      menu.classList.add("hidden");
+    });
+
+    wrap.appendChild(btn);
+    wrap.appendChild(menu);
+    accionesTd.appendChild(wrap);
+  }
+
+  function isMensualRow(row){
+    var tds = row.querySelectorAll("td");
+    var concepto = ( (tds[2] && tds[2].textContent) || "" ).toLowerCase();
+    var metodo   = ( (tds[4] && tds[4].textContent) || "" ).toLowerCase();
+    return /abono\s+mensual/.test(concepto) || /mensual/.test(metodo);
+  }
+
+  function scan(){
+    var rows = document.querySelectorAll("table tbody tr");
+    for (var i=0;i<rows.length;i++){
+      try { if (isMensualRow(rows[i])) addDropdown(rows[i]); } catch(e){}
+    }
+  }
+
+  var obs = new MutationObserver(function(){ scan(); });
+  obs.observe(document.body, { subtree: true, childList: true });
+
+  window.addEventListener("load", scan);
+  setTimeout(scan, 1000);
+})();
+</script>
+
+<script>
+/* ========== AGENDA · CONTACTOS: WhatsApp por CADA CONTACTO (fila) (ES5-safe) ========== */
+(function waPerContactRow(){
+
+  function findTelHeaderIndex(table){
+    var ths = table.querySelectorAll("thead th");
+    for (var i=0;i<ths.length;i++){
+      if (/\btel[eé]fono\b/i.test((ths[i].textContent||""))) return i;
+    }
+    return -1;
+  }
+
+  function ensureAccionHeader(table){
+    var theadRow = table.querySelector("thead tr");
+    if (!theadRow) return;
+    var hasAccion = false;
+    for (var i=0;i<theadRow.children.length;i++){
+      if (/acci[oó]n/i.test(theadRow.children[i].textContent||"")) { hasAccion = true; break; }
+    }
+    if (!hasAccion) {
+      var th = document.createElement("th");
+      th.textContent = "Acción";
+      theadRow.appendChild(th);
+    }
+  }
+
+  function ensureRowButton(row, getMsg){
+    if (row.querySelector(".btn-wa-contacto")) return;
+
+    var table = row.closest ? row.closest("table") : row.parentNode;
+    var telIdx = findTelHeaderIndex(table);
+    var telCell = null;
+    if (telIdx >= 0) telCell = row.children[telIdx];
+    else telCell = row.querySelector("td:nth-child(2)");
+
+    var telRaw = telCell ? (telCell.textContent || "").trim() : "";
+    var msisdn = telRaw ? (window.toWaMsisdn ? window.toWaMsisdn(telRaw, "AR") : null) : null;
+
+    var accionCell = row.querySelector("td.td-accion-wa");
+    if (!accionCell) {
+      accionCell = document.createElement("td");
+      accionCell.className = "td-accion-wa";
+      row.appendChild(accionCell);
+    } else {
+      if (accionCell.querySelector(".btn-wa-contacto")) return;
+      accionCell.textContent = "";
+    }
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-wa-contacto px-3 py-1.5 text-sm border rounded-xl bg-white hover:bg-slate-50";
+    btn.textContent = "WhatsApp";
+    btn.addEventListener("click", function(){
+      var base = msisdn ? ("https://wa.me/" + msisdn) : "https://wa.me/";
+      var text = getMsg();
+      window.open(base + "?text=" + encodeURIComponent(text), "_blank");
+    });
+
+    accionCell.appendChild(btn);
+  }
+
+  function processCard(card){
+    var textarea = card.querySelector("textarea");
+    var table = card.querySelector("table");
+    if (!textarea || !table) return;
+
+    ensureAccionHeader(table);
+
+    var getMsg = function(){ return textarea.value || ""; };
+    var trs = table.querySelectorAll("tbody tr");
+    for (var i=0;i<trs.length;i++) ensureRowButton(trs[i], getMsg);
+  }
+
+  function scan(){
+    var cards = document.querySelectorAll("div");
+    for (var i=0;i<cards.length;i++){
+      var card = cards[i];
+      var hasTextarea = !!card.querySelector("textarea");
+      var hasTable = !!card.querySelector("table");
+      var looksLikeContacts = /tel[eé]fono/i.test(card.textContent || "");
+      if (hasTextarea && hasTable && looksLikeContacts) processCard(card);
+    }
+  }
+
+  var obs = new MutationObserver(scan);
+  obs.observe(document.body, { childList: true, subtree: true });
+
+  window.addEventListener("load", scan);
+  setTimeout(scan, 600);
+})();
+</script>
+
+<script>
+/* === Igualar ícono/estilo con el "Comprobante" de pago por clase (SVG o emoji 📄) (ES5-safe) === */
+(function syncMensualComprobanteIcon(){
+  function getAttrNum(el, name){
+    if (!el || !el.getAttribute) return NaN;
+    var v = el.getAttribute(name);
+    var n = v != null ? parseFloat(v) : NaN;
+    return isFinite(n) ? n : NaN;
+  }
+
+  function findReference() {
+    var refBtn = null;
+    var all = document.querySelectorAll("button,a");
+    for (var i=0;i<all.length;i++){
+      var el = all[i];
+      var t = (el.textContent || "").trim().toLowerCase();
+      if (/comprobante\b/.test(t) && !el.classList.contains("btn-comprobante-mensual")) { refBtn = el; break; }
+    }
+    if (!refBtn) return { kind: null };
+
+    // a) Nodo gráfico
+    var node = refBtn.querySelector("svg, img, i, [data-icon], .icon, .bi, .fa");
+    if (node) {
+      var csI = getComputedStyle(node);
+      var size = {
+        w: parseFloat(csI.width)  || getAttrNum(node,"width")  || 16,
+        h: parseFloat(csI.height) || getAttrNum(node,"height") || 16,
+        mr: csI.marginRight || "4px",
+        va: csI.verticalAlign || "-2px"
+      };
+      var color = getComputedStyle(refBtn).color;
+      return { kind: "node", node: node, size: size, color: color };
+    }
+
+    // b) Emoji 📄
+    var txt = (refBtn.textContent || "").trim();
+    if (txt.indexOf("📄") === 0) {
+      var color2 = getComputedStyle(refBtn).color;
+      return { kind: "emoji", emoji: "📄", color: color2, mr: "6px", va: "-1px", scale: 0.9 };
+    }
+
+    return { kind: null };
+  }
+
+  function apply(){
+    try{
+      var ref = findReference();
+      if (!ref.kind) return;
+      var list = document.querySelectorAll(".btn-comprobante-mensual");
+      for (var i=0;i<list.length;i++){
+        var btn = list[i];
+        if (ref.color) btn.style.color = ref.color;
+
+        var olds = btn.querySelectorAll("svg, img, i, [data-icon], .icon, .bi, .fa, .ico-doc-emoji");
+        for (var j=0;j<olds.length;j++){ var n = olds[j]; if (n && n.parentNode) n.parentNode.removeChild(n); }
+
+        if (ref.kind === "node") {
+          var clone = ref.node.cloneNode(true);
+          if (clone.tagName && clone.tagName.toLowerCase() === "svg") {
+            clone.setAttribute("width",  Math.round(ref.size.w));
+            clone.setAttribute("height", Math.round(ref.size.h));
+          } else {
+            clone.style.width  = Math.round(ref.size.w) + "px";
+            clone.style.height = Math.round(ref.size.h) + "px";
+          }
+          clone.style.marginRight   = ref.size.mr;
+          clone.style.verticalAlign = ref.size.va;
+          clone.style.color         = "inherit";
+          btn.insertBefore(clone, btn.firstChild);
+        } else if (ref.kind === "emoji") {
+          var span = document.createElement("span");
+          span.className = "ico-doc-emoji";
+          span.textContent = ref.emoji;
+          span.style.marginRight   = ref.mr;
+          span.style.verticalAlign = ref.va;
+          span.style.fontSize      = (ref.scale) + "em";
+          span.style.lineHeight    = "1";
+          btn.insertBefore(span, btn.firstChild);
+        }
+
+        if (!/comprobante/i.test(btn.textContent)) btn.append(" Comprobante ▾");
+      }
+    } catch(e){ /* evitar que un error bloquee la página */ }
+  }
+
+  var mo = new MutationObserver(apply);
+  mo.observe(document.body, { childList: true, subtree: true });
+  window.addEventListener("load", apply);
+  setTimeout(apply, 300);
+})();
+</script>
+<style>
+/* —— Mesas más lindas —— */
+.pretty-table thead th{
+  position: sticky; top: 0; z-index: 2;
+  background: #fff; /* para que no transparente al hacer scroll */
+}
+.pretty-table tbody tr:nth-child(even){ background: rgba(0,0,0,.02); }
+.pretty-table tbody tr:hover{ background: rgba(0,0,0,.04); }
+
+/* —— Botones suaves —— */
+.btn-soft{
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+  will-change: transform;
+}
+.btn-soft:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0,0,0,.08);
+}
+
+/* —— Toast minimal —— */
+.toast-host{ position:fixed; right:16px; bottom:16px; z-index:99999; }
+.toast{
+  background:#111; color:#fff; padding:10px 12px; border-radius:12px;
+  margin-top:8px; box-shadow:0 8px 30px rgba(0,0,0,.2);
+  opacity:0; transform: translateY(10px); transition: opacity .25s, transform .25s;
+  font-size: 14px;
+}
+.toast.show{ opacity:1; transform: translateY(0); }
+</style>
+
+<script>
+/* ===== Micro-polish ES5-safe ===== */
+(function(){
+  /* 1) Mejoras visuales de tablas (sticky + zebra + hover) */
+  function prettifyTables(){
+    var tables = document.querySelectorAll("table");
+    for (var i=0;i<tables.length;i++){
+      var t = tables[i];
+      if ((t.className||"").indexOf("pretty-table") === -1) {
+        t.className += (t.className?" ":"") + "pretty-table";
+      }
+    }
+  }
+
+  /* 2) Botones suaves (Comprobante mensual + WhatsApp) */
+  function softenButtons(){
+    var sels = [".btn-comprobante-mensual", ".btn-wa-contacto"];
+    for (var s=0; s<sels.length; s++){
+      var btns = document.querySelectorAll(sels[s]);
+      for (var i=0;i<btns.length;i++){
+        var b = btns[i];
+        if ((b.className||"").indexOf("btn-soft") === -1) {
+          b.className += " btn-soft";
+        }
+      }
+    }
+  }
+
+  /* 3) Toast minimal */
+  var _toastHost = null;
+  function toast(msg, ms){
+    if (!_toastHost){
+      _toastHost = document.createElement("div");
+      _toastHost.className = "toast-host";
+      document.body.appendChild(_toastHost);
+    }
+    var el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = msg;
+    _toastHost.appendChild(el);
+    setTimeout(function(){ el.className += " show"; }, 10);
+    setTimeout(function(){
+      el.style.opacity = "0"; el.style.transform = "translateY(10px)";
+      setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 250);
+    }, ms || 1500);
+  }
+  window._toast = toast; // por si querés usarlo desde otros scripts
+
+  /* 4) Click para copiar teléfonos (columna “Teléfono”) */
+  function findTelHeaderIndex(table){
+    var ths = table.querySelectorAll("thead th");
+    for (var i=0;i<ths.length;i++){
+      if (/\btel[eé]fono\b/i.test((ths[i].textContent||""))) return i;
+    }
+    return -1;
+  }
+  function fallbackCopy(text){
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position="fixed"; ta.style.top="-1000px"; ta.style.left="-1000px";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); toast("Teléfono copiado"); }catch(e){}
+    if (ta.parentNode) ta.parentNode.removeChild(ta);
+  }
+  function enableCopyPhones(){
+    var tables = document.querySelectorAll("table");
+    for (var i=0;i<tables.length;i++){
+      var table = tables[i];
+      var telIdx = findTelHeaderIndex(table);
+      if (telIdx < 0) continue;
+      var rows = table.querySelectorAll("tbody tr");
+      for (var r=0;r<rows.length;r++){
+        var row = rows[r];
+        var cell = row.children[telIdx];
+        if (!cell) continue;
+        if (cell.getAttribute("data-copy-phone-init") === "1") continue;
+        cell.setAttribute("data-copy-phone-init", "1");
+        cell.style.cursor = "copy";
+        cell.title = "Copiar al portapapeles";
+        (function(cell){
+          cell.addEventListener("click", function(){
+            var txt = (cell.textContent || "").replace(/\s+/g," ").trim();
+            if (!txt) return;
+            if (navigator.clipboard && navigator.clipboard.writeText){
+              navigator.clipboard.writeText(txt).then(function(){ toast("Teléfono copiado"); }, function(){ fallbackCopy(txt); });
+            } else {
+              fallbackCopy(txt);
+            }
+          });
+        })(cell);
+      }
+    }
+  }
+
+  /* Escucha cambios de DOM para re-aplicar */
+  function scan(){ prettifyTables(); softenButtons(); enableCopyPhones(); }
+  var mo = new MutationObserver(scan);
+  mo.observe(document.body, { childList:true, subtree:true });
+  window.addEventListener("load", scan);
+  setTimeout(scan, 400);
+})();
+</script>
+
+<style>
+.simple-score-card{
+  border:1px solid #e5e7eb; border-radius:14px; padding:14px; background:#fff; margin-bottom:16px;
+}
+.simple-score-card h3{ font-size:16px; font-weight:700; margin:0 0 8px 0; }
+.simple-score-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+.simple-score-grid label{ display:block; font-size:12px; color:#475569; margin-bottom:6px; }
+.simple-score-grid input{
+  width:100%; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; font-size:14px;
+}
+</style>
+
+<script>
+/* ===== PUNTUACIÓN SIMPLE (Ganador / Perdedor) — ES5-safe ===== */
+(function(){
+  var LS_KEY = "coachex.simpleScoring"; // persistimos entre cargas
+
+  function loadCfg(){
+    try{
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return { win: 3, loss: 0 };
+      var cfg = JSON.parse(raw);
+      if (typeof cfg.win !== "number") cfg.win = 3;
+      if (typeof cfg.loss !== "number") cfg.loss = 0;
+      return cfg;
+    }catch(e){ return { win: 3, loss: 0 }; }
+  }
+  function saveCfg(cfg){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(cfg)); }catch(e){}
+  }
+
+  // UI: insertamos ARRIBA de la sección de Ranking si la encontramos
+  function insertUI(){
+    // Buscamos el título "Ranking (puntos del torneo)" para enganchar la tarjeta encima
+    var anchor = null;
+    var allH = document.querySelectorAll("h2, h3, h4");
+    for (var i=0;i<allH.length;i++){
+      var txt = (allH[i].textContent || "").toLowerCase();
+      if (txt.indexOf("ranking (puntos del torneo)") !== -1) { anchor = allH[i]; break; }
+    }
+    // si no lo encontramos, ponemos la tarjeta al principio del contenedor principal
+    var host = (anchor && anchor.parentNode) ? anchor.parentNode : document.body;
+
+    var card = document.createElement("div");
+    card.className = "simple-score-card";
+    card.innerHTML =
+      '<h3>Puntuación simple por partido</h3>' +
+      '<div class="simple-score-grid">' +
+        '<div><label>Ganador</label><input id="ss-win" type="number" min="0" step="1" value="3"></div>' +
+        '<div><label>Perdedor</label><input id="ss-loss" type="number" min="0" step="1" value="0"></div>' +
+      '</div>' +
+      '<div style="margin-top:10px; font-size:12px; color:#64748b;">Sin empates (tenis/pádel). Se aplican estos puntos por partido.</div>';
+
+    if (anchor) host.insertBefore(card, anchor);
+    else host.insertBefore(card, host.firstChild);
+
+    // valores guardados
+    var cfg = loadCfg();
+    var winEl = card.querySelector("#ss-win");
+    var lossEl = card.querySelector("#ss-loss");
+    winEl.value = cfg.win;
+    lossEl.value = cfg.loss;
+
+    var onChange = function(){
+      var cfg2 = {
+        win: parseInt(winEl.value,10) || 0,
+        loss: parseInt(lossEl.value,10) || 0
+      };
+      saveCfg(cfg2);
+      // exponemos la config viva
+      window.__simpleScoring = cfg2;
+    };
+    winEl.addEventListener("input", onChange);
+    lossEl.addEventListener("input", onChange);
+
+    window.__simpleScoring = cfg; // disponible global
+  }
+
+  // Función ÚNICA que usa tu app para puntuar un partido
+  // result: { setsA:Number, setsB:Number, woA?:bool, woB?:bool, retiroA?:bool, retiroB?:bool }
+  // devuelve: { A:Number, B:Number }
+  function computeSimpleScoring(result){
+    var cfg = window.__simpleScoring || (typeof loadCfg === "function" ? loadCfg() : { win: 3, loss: 0 });
+    // Sanidad: en tenis/pádel siempre hay ganador; si viniera 0-0, no asignamos nada
+    if (!result || typeof result.setsA !== "number" || typeof result.setsB !== "number") {
+      return { A:0, B:0 };
+    }
+    // Walkover / retiro: sigue habiendo ganador
+    var winA = result.setsA > result.setsB || result.woB || result.retiroB;
+    var winB = result.setsB > result.setsA || result.woA || result.retiroA;
+
+    if (winA && !winB) return { A: cfg.win, B: cfg.loss };
+    if (winB && !winA) return { A: cfg.loss, B: cfg.win };
+    // Si por algún motivo vienen iguales, no sumamos (no debería ocurrir)
+    return { A: 0, B: 0 };
+  }
+
+  // Public API
+  window.computeSimpleScoring = computeSimpleScoring;
+
+  // valores por defecto si no hay UI que cargue __simpleScoring
+if (!window.__simpleScoring) window.__simpleScoring = { win: 3, loss: 0 };
+
+// Back-compat: todo lo que ya llame a calcularPuntosPartido pasa a usar el modo simple
+if (!window.calcularPuntosPartido || typeof window.calcularPuntosPartido !== "function") {
+  window.calcularPuntosPartido = function(r){ return window.computeSimpleScoring(r); };
+}
+// Si tu código usa otro alias, también lo apuntamos
+if (typeof window.computeMatchPoints === "function") {
+  window.computeMatchPoints = window.calcularPuntosPartido;
+}
+
+  // Si existiera un selector viejo de “tipo de puntuación”, lo ocultamos para simplificar
+  function hideOldScoringPicker(){
+    var picker = document.querySelector('[name="tipoPuntuacion"], #tipoPuntuacion, .puntuacion-tipo');
+    if (picker){
+      var box = picker.closest ? picker.closest(".form-group, .row, .col, div") : picker.parentNode;
+      if (box) box.style.display = "none";
+    }
+  }
+
+  // Boot
+
+  hideOldScoringPicker();
+})();
+</script>
+
+
+
+
 </body>
 </html>
