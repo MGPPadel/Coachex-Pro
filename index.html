@@ -1164,13 +1164,16 @@ function SideNav({
               return (
                 <button
                   key={t.id}
-                  onClick={() => setCurrent && setCurrent(t.id)}
-                  title={t.label}
-                  className={
-                    "relative w-full mx-2 my-1 flex items-center gap-3 px-3 py-2 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 " +
-                    (active ? "bg-white/15" : "hover:bg-white/10")
-                  }
-                >
+                  onClick={() => {
+          setCurrent && setCurrent(t.id);
+          onExpandChange && onExpandChange(false);
+        }}
+        title={t.label}
+        className={
+          "relative w-full mx-2 my-1 flex items-center gap-3 px-3 py-2 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 " +
+          (active ? "bg-white/15" : "hover:bg-white/10")
+        }
+      >
                   {/* Indicador activo */}
                   <span
                     aria-hidden
@@ -2221,7 +2224,7 @@ return (
           )}
         </Card>
 
-        <Card title={<span className="text-[#34745B]">Agenda de Mañana · Contactos</span>}>
+<Card title={<span className="text-[#34745B]">Agenda de Mañana · Contactos</span>}>
   {clasesManana.length === 0 ? (
     <p className="text-sm text-slate-500">No hay clases programadas para mañana.</p>
   ) : (
@@ -2234,7 +2237,7 @@ return (
 
         return (
           <li key={c.id} className="p-2 border rounded-lg">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
               <div>
                 <p className="font-semibold text-slate-700 break-words">{c.hora} - {nombres}</p>
                 <p className="text-xs text-slate-500">
@@ -2242,7 +2245,7 @@ return (
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 mt-2 sm:mt-0">
                 <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-800">
                   {c.estado}
                 </span>
@@ -2261,17 +2264,17 @@ return (
               </div>
             </div>
 
-                  {contactosExpandId === c.id && (
-                    <div className="mt-3 p-3 bg-slate-50 rounded-lg border">
-                      <div className="mb-3">
-                        <label className="text-xs text-slate-500 block mb-1">Mensaje (editable)</label>
-                        <textarea
-                          value={contactosMsg}
-                          onChange={(e)=>setContactosMsg(e.target.value)}
-                          className="w-full border rounded-lg px-2 py-1 text-sm"
-                          rows="2"
-                        />
-                      </div>
+            {contactosExpandId === c.id && (
+              <div className="mt-3 p-3 bg-slate-50 rounded-lg border">
+                <div className="mb-3">
+                  <label className="text-xs text-slate-500 block mb-1">Mensaje (editable)</label>
+                  <textarea
+                    value={contactosMsg}
+                    onChange={(e)=>setContactosMsg(e.target.value)}
+                    className="w-full border rounded-lg px-2 py-1 text-sm"
+                    rows="2"
+                  />
+                </div>
 
                       <table className="w-full text-sm">
                         <thead>
@@ -3812,10 +3815,9 @@ async function submit(e) {
   }
 
   // 7) Modal de cobro por clase (solo si la clase quedó Realizada/Ausente)
-  if (shouldOpenPayModal) {
-    // Preferimos pasar la clase con id si la tenemos
-    onPay(clasePersistida || finalForm);
-  }
+  if (shouldOpenPayModal && clasePersistida?.id) {
+  onPay(clasePersistida);
+}
 
   // 8) Cerrar/limpiar UI
   setShowForm(false);
@@ -4130,42 +4132,46 @@ function SemanaCalendario({ clasesFiltradas, perfil, grupos, alumnoMap, openEdit
     const estadoPago = totalPagado >= precioClase ? 'Pagada' : 'Pendiente';
 
     const estadoClaseBg =
-      clase.estado === 'Realizada' ? 'bg-green-100 text-green-800' :
-      clase.estado === 'Ausente'   ? 'bg-orange-100 text-orange-800' :
-      clase.estado === 'Cancelada' ? 'bg-red-100 text-red-800' : '';
+  clase.estado === 'Realizada' ? 'bg-green-100 text-green-800' :
+  clase.estado === 'Ausente'   ? 'bg-orange-100 text-orange-800' :
+  clase.estado === 'Cancelada' ? 'bg-red-100 text-red-800' :
+  'bg-slate-100 text-slate-700';
 
     const estadoPagoBg = estadoPago === 'Pagada'
       ? 'bg-green-100 text-green-800'
       : 'bg-red-100 text-red-800';
 
-    return (
-      <div
-        onClick={() => openEdit(clase)}
-        className="p-3 bg-white rounded-lg shadow-sm border border-slate-200 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
-      >
-        <div className="flex justify-between items-center">
-          <p className="font-semibold text-slate-800">
-            {clase.hora} - {nombreGrupoDeClase ? <>CLASE GRUPAL — {nombreGrupoDeClase}</> : nombresAlumnos}
-          </p>
-          <div className="flex gap-2">
-            {clase.estado !== 'Programada' && (
-              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoClaseBg}`}>
-                {clase.estado}
-              </span>
-            )}
-            {clase.estado === 'Realizada' && (
-              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoPagoBg}`}>
-                {estadoPago}
-              </span>
-            )}
-          </div>
-        </div>
-        <p className="text-xs text-slate-500 mt-1">
-          {(clase.origenGrupoId ? labelClasePara((clase.alumnoIds || []).length) : (clase.tipo || 'Clase'))}
-          {clase.cancha ? ` en ${clase.cancha}` : ''}
-        </p>
+return (
+  <div
+    onClick={() => openEdit(clase)}
+    className="p-3 bg-white rounded-lg shadow-sm border border-slate-200 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
+  >
+    <div className="flex justify-between items-center">
+      <p className="font-semibold text-slate-800">
+        {clase.hora} - {nombreGrupoDeClase ? <>CLASE GRUPAL — {nombreGrupoDeClase}</> : nombresAlumnos}
+      </p>
+
+      <div className="flex gap-2">
+        {/* Estado de la clase: mostrar SIEMPRE (Programada, Realizada, etc.) */}
+        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoClaseBg}`}>
+          {clase.estado || 'Programada'}
+        </span>
+
+        {/* Pago solo si la clase fue Realizada */}
+        {clase.estado === 'Realizada' && (
+          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoPagoBg}`}>
+            {estadoPago}
+          </span>
+        )}
       </div>
-    );
+    </div>
+
+    <p className="text-xs text-slate-500 mt-1">
+      {(clase.origenGrupoId ? labelClasePara((clase.alumnoIds || []).length) : (clase.tipo || 'Clase'))}
+      {clase.cancha ? ` en ${clase.cancha}` : ''}
+    </p>
+  </div>
+);
   };
 
   const GrupoItem = ({ grupo }) => (
@@ -9885,28 +9891,36 @@ function HistorialPagos({
   </div>
 </div>
                 
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                        <tr className="text-left text-slate-600">
-                            <th className="p-2">Fecha</th>
-                            <th className="p-2">Alumno</th>
-                            <th className="p-2">Concepto</th>
-                            <th className="p-2">Monto</th>
-                            <th className="p-2">Método</th>
-                            <th className="p-2 text-right">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedPagos.length === 0 && (<tr><td colSpan={6} className="text-center py-6 text-slate-400">No hay pagos que coincidan con los filtros</td></tr>)}
-                      {paginatedPagos.map(p => (
-                        <tr key={p.id} className="border-t">
-  <td className="p-2">{p.fecha}</td>
-  <td className="p-2 font-semibold">{p.nombreAlumno}</td>
-  <td className="p-2">{p.concepto}</td>
-  <td className="p-2">{formatCurrency(p.monto)}</td>
-  <td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs ${p.metodo === 'Pendiente' ? 'bg-orange-100 text-orange-800' : p.metodo === 'Mixto' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>{p.metodo}</span></td>
-  <td className="p-2 text-right">
+<div className="overflow-x-auto">
+  <table className="w-full table-fixed text-sm">
+    <thead>
+      <tr className="text-left text-slate-600">
+        <th className="p-2 w-1/12">Fecha</th>
+        <th className="p-2 w-2/12">Alumno</th>
+        <th className="p-2 w-4/12">Concepto</th>
+        <th className="p-2 w-1/12">Monto</th>
+        <th className="p-2 w-1/12">Método</th>
+        <th className="p-2 w-3/12 text-right">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {paginatedPagos.length === 0 && (
+        <tr>
+          <td colSpan={6} className="text-center py-6 text-slate-400">No hay pagos que coincidan con los filtros</td>
+        </tr>
+      )}
+      {paginatedPagos.map(p => (
+        <tr key={p.id} className="border-t">
+          <td className="p-2">{p.fecha}</td>
+          <td className="p-2 font-semibold">{p.nombreAlumno}</td>
+          <td className="p-2">{p.concepto}</td>
+          <td className="p-2">{formatCurrency(p.monto)}</td>
+          <td className="p-2">
+            <span className={`px-2 py-0.5 rounded-full text-xs ${p.metodo === 'Pendiente' ? 'bg-orange-100 text-orange-800' : p.metodo === 'Mixto' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>
+              {p.metodo}
+            </span>
+          </td>
+          <td className="p-2 text-right">
 
   <div className="inline-flex gap-2 items-center">
     {/* Editar */}
@@ -11489,7 +11503,7 @@ function PagoGrupalModal({ isOpen, clase, alumnos, onCancel, onSave, focusAlumno
       const initialState = {};
       alumnosDeClase.forEach(alumno => {
         initialState[alumno.id] = {
-          monto: alumno.plan === 'mensual' ? '0' : formatCurrency(precioPorAlumno),
+          monto: alumno.plan === 'mensual' ? '0' : formatCurrency(precioPorAlumno, { withSymbol: false }), // LÍNEA MODIFICADA
           metodo: alumno.plan === 'mensual' ? "Mensual" : 'Efectivo',
           mixtoEfectivo: "",
           mixtoTransferencia: ""
@@ -13554,7 +13568,7 @@ const pagoCrud = {
           claseId: payingClase.id,
           alumnoId: p.alumnoId,
           fecha: payingClase.fecha,
-          concepto: `Pago de Clase ${payingClase.tipo} (${payingClase.fecha})`,
+          concepto: `Pago de clase de ${labelSinClase(payingClase.tipo)} (${payingClase.fecha})`,
           metodo: p.metodo,
           monto: Number(p.monto || 0),
         });
@@ -15821,131 +15835,6 @@ if (!window.findAlumnoPhone) window.findAlumnoPhone = function findAlumnoPhone(a
 })();
 </script>
 
-<style>
-.simple-score-card{
-  border:1px solid #e5e7eb; border-radius:14px; padding:14px; background:#fff; margin-bottom:16px;
-}
-.simple-score-card h3{ font-size:16px; font-weight:700; margin:0 0 8px 0; }
-.simple-score-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-.simple-score-grid label{ display:block; font-size:12px; color:#475569; margin-bottom:6px; }
-.simple-score-grid input{
-  width:100%; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; font-size:14px;
-}
-</style>
-
-<script>
-/* ===== PUNTUACIÓN SIMPLE (Ganador / Perdedor) — ES5-safe ===== */
-(function(){
-  var LS_KEY = "coachex.simpleScoring"; // persistimos entre cargas
-
-  function loadCfg(){
-    try{
-      var raw = localStorage.getItem(LS_KEY);
-      if (!raw) return { win: 3, loss: 0 };
-      var cfg = JSON.parse(raw);
-      if (typeof cfg.win !== "number") cfg.win = 3;
-      if (typeof cfg.loss !== "number") cfg.loss = 0;
-      return cfg;
-    }catch(e){ return { win: 3, loss: 0 }; }
-  }
-  function saveCfg(cfg){
-    try{ localStorage.setItem(LS_KEY, JSON.stringify(cfg)); }catch(e){}
-  }
-
-  // UI: insertamos ARRIBA de la sección de Ranking si la encontramos
-  function insertUI(){
-    // Buscamos el título "Ranking (puntos del torneo)" para enganchar la tarjeta encima
-    var anchor = null;
-    var allH = document.querySelectorAll("h2, h3, h4");
-    for (var i=0;i<allH.length;i++){
-      var txt = (allH[i].textContent || "").toLowerCase();
-      if (txt.indexOf("ranking (puntos del torneo)") !== -1) { anchor = allH[i]; break; }
-    }
-    // si no lo encontramos, ponemos la tarjeta al principio del contenedor principal
-    var host = (anchor && anchor.parentNode) ? anchor.parentNode : document.body;
-
-    var card = document.createElement("div");
-    card.className = "simple-score-card";
-    card.innerHTML =
-      '<h3>Puntuación simple por partido</h3>' +
-      '<div class="simple-score-grid">' +
-        '<div><label>Ganador</label><input id="ss-win" type="number" min="0" step="1" value="3"></div>' +
-        '<div><label>Perdedor</label><input id="ss-loss" type="number" min="0" step="1" value="0"></div>' +
-      '</div>' +
-      '<div style="margin-top:10px; font-size:12px; color:#64748b;">Sin empates (tenis/pádel). Se aplican estos puntos por partido.</div>';
-
-    if (anchor) host.insertBefore(card, anchor);
-    else host.insertBefore(card, host.firstChild);
-
-    // valores guardados
-    var cfg = loadCfg();
-    var winEl = card.querySelector("#ss-win");
-    var lossEl = card.querySelector("#ss-loss");
-    winEl.value = cfg.win;
-    lossEl.value = cfg.loss;
-
-    var onChange = function(){
-      var cfg2 = {
-        win: parseInt(winEl.value,10) || 0,
-        loss: parseInt(lossEl.value,10) || 0
-      };
-      saveCfg(cfg2);
-      // exponemos la config viva
-      window.__simpleScoring = cfg2;
-    };
-    winEl.addEventListener("input", onChange);
-    lossEl.addEventListener("input", onChange);
-
-    window.__simpleScoring = cfg; // disponible global
-  }
-
-  // Función ÚNICA que usa tu app para puntuar un partido
-  // result: { setsA:Number, setsB:Number, woA?:bool, woB?:bool, retiroA?:bool, retiroB?:bool }
-  // devuelve: { A:Number, B:Number }
-  function computeSimpleScoring(result){
-    var cfg = window.__simpleScoring || (typeof loadCfg === "function" ? loadCfg() : { win: 3, loss: 0 });
-    // Sanidad: en tenis/pádel siempre hay ganador; si viniera 0-0, no asignamos nada
-    if (!result || typeof result.setsA !== "number" || typeof result.setsB !== "number") {
-      return { A:0, B:0 };
-    }
-    // Walkover / retiro: sigue habiendo ganador
-    var winA = result.setsA > result.setsB || result.woB || result.retiroB;
-    var winB = result.setsB > result.setsA || result.woA || result.retiroA;
-
-    if (winA && !winB) return { A: cfg.win, B: cfg.loss };
-    if (winB && !winA) return { A: cfg.loss, B: cfg.win };
-    // Si por algún motivo vienen iguales, no sumamos (no debería ocurrir)
-    return { A: 0, B: 0 };
-  }
-
-  // Public API
-  window.computeSimpleScoring = computeSimpleScoring;
-
-  // valores por defecto si no hay UI que cargue __simpleScoring
-if (!window.__simpleScoring) window.__simpleScoring = { win: 3, loss: 0 };
-
-// Back-compat: todo lo que ya llame a calcularPuntosPartido pasa a usar el modo simple
-if (!window.calcularPuntosPartido || typeof window.calcularPuntosPartido !== "function") {
-  window.calcularPuntosPartido = function(r){ return window.computeSimpleScoring(r); };
-}
-// Si tu código usa otro alias, también lo apuntamos
-if (typeof window.computeMatchPoints === "function") {
-  window.computeMatchPoints = window.calcularPuntosPartido;
-}
-
-  // Si existiera un selector viejo de “tipo de puntuación”, lo ocultamos para simplificar
-  function hideOldScoringPicker(){
-    var picker = document.querySelector('[name="tipoPuntuacion"], #tipoPuntuacion, .puntuacion-tipo');
-    if (picker){
-      var box = picker.closest ? picker.closest(".form-group, .row, .col, div") : picker.parentNode;
-      if (box) box.style.display = "none";
-    }
-  }
-
-  // Boot
-
-  hideOldScoringPicker();
-})();
 </script>
 
 
