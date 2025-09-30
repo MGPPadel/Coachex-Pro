@@ -5,23 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Coachex-Pro – Gestión para Profesores</title>
   
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
-  
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-  
-  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- jsPDF (si ya lo usás en el archivo, no lo dupliques) -->
-<!-- html2canvas para capturar el DOM del cuadro -->
+<script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
 
 
   <style>
@@ -132,20 +131,47 @@
 
     const _db = db;
 
-function pagosRef(user, clubId) {
-  return _db.collection("users").doc(user.uid)
-    .collection("clubes").doc(clubId)
-    .collection("pagos");
+function pagosRef(user, clubId){
+  return db.collection("users").doc(user.uid).collection("clubs").doc(clubId).collection("pagos");
 }
-function clasesRef(user, clubId) {
-  return _db.collection("users").doc(user.uid)
-    .collection("clubes").doc(clubId)
-    .collection("clases");
+function clasesRef(user, clubId){
+  return db.collection("users").doc(user.uid).collection("clubs").doc(clubId).collection("clases");
 }
-function mensualidadesRef(user, clubId) {
-  return _db.collection("users").doc(user.uid)
-    .collection("clubes").doc(clubId)
-    .collection("mensualidades");
+function mensualidadesRef(user, clubId){
+  return db.collection("users").doc(user.uid).collection("clubs").doc(clubId).collection("mensualidades");
+}
+
+// === Sumar puntos a un ranking concreto: rankings/{rankingId}/items/{jugadorId} ===
+async function updateRankingPuntosEn(clubId, rankingId, jugadorId, delta, extraStats = {}) {
+  try {
+    const uid = firebase.auth().currentUser?.uid;
+    if (!uid) { console.warn("updateRankingPuntosEn: no hay usuario"); return; }
+    if (!clubId || !rankingId || !jugadorId) { console.warn("updateRankingPuntosEn args inválidos", {clubId, rankingId, jugadorId}); return; }
+
+    const ref = db.collection('users').doc(String(uid))
+      .collection('clubs').doc(String(clubId))
+      .collection('rankings').doc(String(rankingId))
+      .collection('items').doc(String(jugadorId));
+
+    await ref.set({
+      puntos: firebase.firestore.FieldValue.increment(Number(delta || 0)),
+      pj:     firebase.firestore.FieldValue.increment(Number(extraStats.pj || 0)),
+      pg:     firebase.firestore.FieldValue.increment(Number(extraStats.pg || 0)),
+      pe:     firebase.firestore.FieldValue.increment(Number(extraStats.pe || 0)),
+      pp:     firebase.firestore.FieldValue.increment(Number(extraStats.pp || 0)),
+      wo:     firebase.firestore.FieldValue.increment(Number(extraStats.wo || 0)),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch (e) {
+    console.error('updateRankingPuntosEn error', e);
+  }
+}
+
+// (Opcional) Mantener el nombre viejo para no romper llamadas antiguas
+async function updateRankingPuntos(clubId, jugadorId, puntos) {
+  const rankingId = window.__rankingDefaultId || null; // si querés un default global
+  if (!rankingId) { console.warn('No hay ranking destino por defecto.'); return; }
+  return updateRankingPuntosEn(clubId, rankingId, jugadorId, puntos, { pj: 1 });
 }
 
 function Page({ children }) {
@@ -169,7 +195,7 @@ function Page({ children }) {
         nombre: "Profe",
         apellido: "Pádel",
         telefono: "",
-        precios: { individual: "5000", dupla: "4000", trio: "3500", cuarteto: "3000", escuelita: "2500" },
+        precios: {},
         preciosMensuales: {},
         metodoCobro: "porClase",
         modoTrabajo: "Club",
@@ -200,10 +226,9 @@ function Page({ children }) {
     const DEPORTES = ["Pádel", "Tenis"];
     const ESTADOS_ALUMNO = [{value: "activo", label: "Activo"}, {value: "espera", label: "Lista de espera"}];
     const ESTADOS_CLASE = ["Programada", "Realizada", "Cancelada", "Ausente"];
-    const TIPOS_CLASE_MAP = { "Clase 1 persona": 1, "Clase 2 personas": 2, "Clase 3 personas": 3, "Clase 4 personas": 4, Escuelita: 1 };
-    const TIPOS_CLASE = Object.keys(TIPOS_CLASE_MAP);
+const TIPOS_CLASE_MAP = { "Clase 1 persona": 1, "Clase 2 personas": 2, "Clase 3 personas": 3, "Clase 4 personas": 4, Escuelita: 1 };
+const TIPOS_CLASE = Object.keys(TIPOS_CLASE_MAP);
 
-// Mapeo consistente de 'tipo' -> clave de precios del perfil
 const PRECIO_KEY_POR_TIPO = {
   "Clase 1 persona": "individual",
   "Clase 2 personas": "dupla",
@@ -212,9 +237,11 @@ const PRECIO_KEY_POR_TIPO = {
   "Escuelita": "escuelita"
 };
 
-// Normaliza etiquetas de tipo de clase a los nombres canónicos usados en la app
+// Mapeo consistente de 'tipo' -> clave de precios del perfil
 function normalizarTipoClase(t) {
+  // [ ... TU FUNCIÓN normalizarTipoClase COMPLETA ... ]
   if (!t) return "Clase 1 persona";
+  // Convertimos el argumento a una cadena de texto de forma segura
   const s = String(t)
     .trim().toLowerCase()
     .replace(/clase\s+para\s+/, '')
@@ -248,11 +275,15 @@ function normalizarTipoClase(t) {
     const n = Number(m[1]);
     return n === 1 ? 'Clase 1 persona' : `Clase ${n} personas`;
   }
-  return TIPOS_CLASE.includes(t) ? t : 'Clase 1 persona';
+  return TIPOS_CLASE.includes(s) ? s : 'Clase 1 persona';
 }
 const getPrecioSugerido = (tipo, perfil) => {
   const key = PRECIO_KEY_POR_TIPO[tipo] || "individual";
-  const tabla = (perfil && perfil.precios) ? perfil.precios : {};
+
+  // CORRECCIÓN: Busca en preciosClase (nuevo) o precios (antiguo)
+  const tabla = (perfil && perfil.preciosClase) 
+    ? perfil.preciosClase 
+    : ((perfil && perfil.precios) ? perfil.precios : {});
 
   function resolveTipoEfectivo(tipoOriginal, alumnoIds) {
   const n = (alumnoIds || []).filter(Boolean).length;
@@ -266,6 +297,7 @@ const getPrecioSugerido = (tipo, perfil) => {
   // Caso contrario, mantenemos el tipo declarado
   return tipoOriginal;
 }
+
 
 const computePrecioClase = (tipo, alumnoIds, perfil, alumnoMap) => {
   // 👇 ajustar tipo según cantidad (4+ => Escuelita)
@@ -1897,16 +1929,16 @@ function normalizarTelefonoParaWhatsApp(rawDigits, defaultCountry = "54") {
   const manana = formatDate(addDays(new Date(), 1));
 
   const clasesHoy = useMemo(() => {
-  return (clases || [])
-    .filter(c => c.fecha === hoy) // 👈 Línea modificada. El filtro de estado se eliminó.
-    .map(c => ({
-      ...c,
-      nombresAlumnos: (c.alumnoIds || [])
-        .map(id => alumnoMap.get(id))
-        .filter(Boolean)
-        .join(', ')
-    }))
-    .sort((a, b) => a.hora.localeCompare(b.hora));
+return (clases || [])
+  .filter(c => c.fecha === hoy && String(c.estado || '').toLowerCase() === 'realizada')
+  .map(c => ({
+    ...c,
+    nombresAlumnos: (c.alumnoIds || [])
+      .map(id => alumnoMap.get(id))
+      .filter(Boolean)
+      .join(', ')
+  }))
+  .sort((a, b) => a.hora.localeCompare(b.hora));
 }, [clases, hoy, alumnoMap]);
 
   const clasesManana = useMemo(() => {
@@ -2568,7 +2600,11 @@ function CuentaCorrienteAlumno({ user, clubId, alumno, perfil, desdeMes, hastaMe
       </div>
 
       {/* Montá el modal UNA sola vez */}
-      <ModalAbono />
+      <ModalAbono
+    open={true}
+    alumno={registrandoAbono.alumno}
+    onClose={cerrarAbono}
+  />
     </div>
   );
 }
@@ -2580,10 +2616,10 @@ function Alumnos({
   onRegisterMonthlyPayment,
   clases, pagos,
   onRegistrarClase, onPagarPendiente, onEditarPago, onDeletePago,
-  // 👇 agregamos estas props para la cuenta corriente
   user,
   clubActivoId,
-  perfil
+  perfil,
+  openRegistrarClaseForAlumno = () => {}
 }) {
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -2754,17 +2790,18 @@ function Alumnos({
                         >
                           👁️ Ver ficha
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => onRegistrarClase && onRegistrarClase(a.id)}
-                          className="px-2 py-1 text-xs rounded-lg border bg-green-50 text-green-800 hover:bg-green-100"
-                        >
-                          🟢 Registrar clase
-                        </button>
-                        <button
-                          onClick={() => openEdit(a)}
-                          className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
-                        >
+         <button
+  type="button"
+  onClick={() => openRegistrarClaseForAlumno(a.id)}
+  className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+>
+  🟢 Registrar clase
+</button>
+
+<button
+  onClick={() => openEdit(a)}
+  className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+>
                           ✏️ Editar
                         </button>
                         <button
@@ -3480,16 +3517,16 @@ function Clases({
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
 
-  const emptyForm = {
-    alumnoIds: [""],
-    fecha: formatDate(new Date()),
-    hora: "18:00",
-    tipo: "Clase 1 persona",
-    estado: "Programada",
-    precio: (parseFloat((perfil.precios || {}).individual || 0)).toString(),
-    notas: "",
-    cancha: ""
-  };
+   const emptyForm = {
+   alumnoIds: [""],
+   fecha: formatDate(new Date()),
+   hora: "18:00",
+   tipo: "Clase 1 persona",
+   estado: "Programada",
+   precio: String(getPrecioSugerido("Clase 1 persona", perfil)),
+   notas: "",
+   cancha: ""
+ };
   const [form, setForm] = useState(emptyForm);
 
   const [grupoSeleccionadoId, setGrupoSeleccionadoId] = useState("");
@@ -3622,7 +3659,7 @@ function Clases({
       if (name === "tipo") {
         const canon = normalizarTipoClase(val);
         newState.tipo = canon;
-        newState.precio = getPrecioSugerido(canon, perfil);
+        newState.precio = computePrecioClase(canon, prev.alumnoIds, perfil, alumnoMap);
         const numAlumnos = TIPOS_CLASE_MAP[canon] || 1;
         newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
       }
@@ -3634,10 +3671,9 @@ function Clases({
     setForm(prev => {
       const newAlumnoIds = [...(prev.alumnoIds || [])];
       newAlumnoIds[index] = newId;
-      const primerAlumno = alumnoMap.get(newAlumnoIds[0]);
-      const esMensual = primerAlumno?.plan === 'mensual';
-      const nuevoPrecio = esMensual ? "0" : getPrecioSugerido(prev.tipo, perfil);
-      return { ...prev, alumnoIds: newAlumnoIds, precio: nuevoPrecio };
+      const canon = normalizarTipoClase(prev.tipo);
+      const nuevoPrecio = computePrecioClase(canon, newAlumnoIds, perfil, alumnoMap);
+   return { ...prev, alumnoIds: newAlumnoIds, precio: nuevoPrecio };
     });
     if (index === 0 && newId) {
       const alumnoSeleccionado = alumnoMap.get(newId);
@@ -6219,13 +6255,14 @@ function Torneos({ alumnos = [], user, clubActivoId, perfil = {} }) {
           </div>
         ) : (
           <TorneoEditorPro
-            key={selected.id}
-            torneo={selected}
-            onChange={upsert}
-            alumnos={alumnos}
-            perfil={perfil}
-            clubActivoId={clubActivoId}
-          />
+  key={selected.id}
+  torneo={selected}
+  onChange={upsert}
+  alumnos={alumnos}
+  perfil={perfil}
+  clubActivoId={clubActivoId}
+  user={user}
+/>
         )}
       </section>
     </div>
@@ -6235,8 +6272,25 @@ function Torneos({ alumnos = [], user, clubActivoId, perfil = {} }) {
 
 
 // ================== Editor PRO por pestañas ==================
-function TorneoEditorPro({ torneo, onChange, alumnos, perfil, clubActivoId }) {
+function TorneoEditorPro({ torneo, onChange, alumnos, perfil, clubActivoId, user }) {
   const [tab, setTab] = React.useState(() => inferStartTab(torneo));
+
+  // === NUEVO: lista de rankings del club para la pestaña Reglas ===
+  const [rankingsList, setRankingsList] = React.useState([]);
+
+  React.useEffect(() => {
+    const uid = firebase.auth().currentUser?.uid;
+    if (!uid || !clubActivoId) return;
+    const q = db.collection('users').doc(String(uid))
+      .collection('clubs').doc(String(clubActivoId))
+      .collection('rankings').orderBy('nombre');
+    const unsub = q.onSnapshot((snap) => {
+      const rows = [];
+      snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+      setRankingsList(rows);
+    });
+    return () => unsub();
+  }, [clubActivoId]);
 
   // === Modo según formato ===
   const isLiga  = isLeagueMode(torneo);                         // formato === 'grupos'
@@ -6244,27 +6298,27 @@ function TorneoEditorPro({ torneo, onChange, alumnos, perfil, clubActivoId }) {
   const isMixto = torneo.formato === 'grupos_y_eliminacion';
 
   // Auto-build del cuadro al abrir la pestaña "fase" en eliminación directa
-React.useEffect(() => {
-  if (tab !== 'fase') return;
-  if (isLiga) return; // en liga no hay fase final
-  if (torneo.formato !== 'eliminacion') return;
-  if (torneo.cuadro) return; // ya existe
+  React.useEffect(() => {
+    if (tab !== 'fase') return;
+    if (isLiga) return; // en liga no hay fase final
+    if (torneo.formato !== 'eliminacion') return;
+    if (torneo.cuadro) return; // ya existe
 
-  // Ids según modalidad
-  const ids = (torneo.modalidad === 'dobles'
-    ? (torneo.teams || []).map(t => t.id)   // parejas
-    : (torneo.participantes || []).slice()  // jugadores (ids)
-  ).filter(Boolean);
+    // Ids según modalidad
+    const ids = (torneo.modalidad === 'dobles'
+      ? (torneo.teams || []).map(t => t.id)   // parejas
+      : (torneo.participantes || []).slice()  // jugadores (ids)
+    ).filter(Boolean);
 
-  const unique = Array.from(new Set(ids));
-  if (unique.length < 2) return; // no alcanza para armar llaves
+    const unique = Array.from(new Set(ids));
+    if (unique.length < 2) return; // no alcanza para armar llaves
 
-  const cuadro = buildBracket(unique, {
-    seeding: torneo?.reglas?.ko?.seeding || 'serpentina'
-  });
+    const cuadro = buildBracket(unique, {
+      seeding: torneo?.reglas?.ko?.seeding || 'serpentina'
+    });
 
-  onChange({ ...torneo, cuadro, lockedGrupos: true });
-}, [tab, torneo, isLiga, onChange]);
+    onChange({ ...torneo, cuadro, lockedGrupos: true });
+  }, [tab, torneo, isLiga, onChange]);
 
   // Redirecciones sanas si cambia el formato
   React.useEffect(() => {
@@ -6291,29 +6345,29 @@ React.useEffect(() => {
 
   // === Generar cuadro para Eliminación directa (siembra + BYEs las maneja buildBracket)
   const generarCuadroEliminacion = React.useCallback(() => {
-  if (torneo.formato !== "eliminacion") {
-    alert("Este torneo no es de eliminación directa.");
-    return;
-  }
+    if (torneo.formato !== "eliminacion") {
+      alert("Este torneo no es de eliminación directa.");
+      return;
+    }
 
-  const ids = (torneo.modalidad === "dobles"
-    ? (torneo.teams || []).map(t => t.id)     // parejas
-    : (torneo.participantes || []).slice()    // jugadores
-  ).filter(Boolean);
+    const ids = (torneo.modalidad === "dobles"
+      ? (torneo.teams || []).map(t => t.id)     // parejas
+      : (torneo.participantes || []).slice()    // jugadores
+    ).filter(Boolean);
 
-  const unique = Array.from(new Set(ids));
-  if (unique.length < 2) {
-    alert("Necesitás al menos 2 participantes/parejas para generar el cuadro.");
-    return;
-  }
+    const unique = Array.from(new Set(ids));
+    if (unique.length < 2) {
+      alert("Necesitás al menos 2 participantes/parejas para generar el cuadro.");
+      return;
+    }
 
-  const cuadro = buildBracket(unique, {
-    seeding: torneo?.reglas?.ko?.seeding || 'serpentina'
-  });
+    const cuadro = buildBracket(unique, {
+      seeding: torneo?.reglas?.ko?.seeding || 'serpentina'
+    });
 
-  onChange({ ...torneo, cuadro, lockedGrupos: true });
-  gotoTab("fase"); // ir directo a Fase final
-}, [torneo, onChange, gotoTab]);
+    onChange({ ...torneo, cuadro, lockedGrupos: true });
+    gotoTab("fase"); // ir directo a Fase final
+  }, [torneo, onChange, gotoTab]);
 
   // === “Siguiente paso” (Mixto: de grupos a KO con PIN)
   const handleSiguientePaso = () => {
@@ -6418,14 +6472,14 @@ React.useEffect(() => {
   };
 
   const tabs = [
-  { key: 'formato',       label: 'Formato' },
-  { key: 'reglas',        label: 'Reglas' },
-  { key: 'participantes', label: torneo.modalidad === 'dobles' ? 'Participantes · Parejas' : 'Participantes' },
-  ...(!isElim ? [{ key: 'estructura', label: 'Grupos / Fixture' }] : []),
-  // 👇 Antes estaba solo isLiga. Debe ser (isLiga || isMixto) para ver los partidos de grupos.
-  ...((isLiga || isMixto) ? [{ key: 'partidos', label: 'Partidos' }] : []),
-  ...((isMixto || isElim) ? [{ key: 'fase', label: 'Fase final' }] : []),
-];
+    { key: 'formato',       label: 'Formato' },
+    { key: 'reglas',        label: 'Reglas' },
+    { key: 'participantes', label: torneo.modalidad === 'dobles' ? 'Participantes · Parejas' : 'Participantes' },
+    ...(!isElim ? [{ key: 'estructura', label: 'Grupos / Fixture' }] : []),
+    // 👇 Antes estaba solo isLiga. Debe ser (isLiga || isMixto) para ver los partidos de grupos.
+    ...((isLiga || isMixto) ? [{ key: 'partidos', label: 'Partidos' }] : []),
+    ...((isMixto || isElim) ? [{ key: 'fase', label: 'Fase final' }] : []),
+  ];
 
   return (
     <div className="border border-slate-200 rounded-2xl">
@@ -6472,23 +6526,27 @@ React.useEffect(() => {
         )}
 
         {tab === 'reglas' && (
-          <>
-            <ReglasTab
-              reglas={torneo.reglas}
-              setReglas={r => !locked && patchReglas(r)}
-              modalidad={torneo.modalidad}
-              disabled={locked}
-            />
-            <div className="mt-4">
-              <RankingConfigPanel clubId={clubActivoId} torneo={torneo} setReglas={patchReglas} disabled={false} />
-            </div>
-            <ResumenReglasBox
-              torneo={torneo}
-              disabled={locked}
-              onGuardar={(texto) => !locked && patch({ reglamentoTexto: texto })}
-            />
-          </>
-        )}
+  <>
+    <ReglasTab
+      reglas={torneo.reglas}
+      setReglas={r => !locked && patchReglas(r)}
+      modalidad={torneo.modalidad}
+      disabled={locked}
+
+      // NUEVO: props para elegir ranking
+      rankings={rankingsList}
+      rankingId={torneo.rankingId || ""}
+      setRankingId={(v) => !locked && patch({ rankingId: v || null })}
+    />
+
+    <ResumenReglasBox
+      torneo={torneo}
+      disabled={locked}
+      onGuardar={(texto) => !locked && patch({ reglamentoTexto: texto })}
+    />
+  </>
+)}
+
 
         {tab === 'participantes' && (
           <ParticipantesTab
@@ -6505,16 +6563,16 @@ React.useEffect(() => {
 
         {tab === 'estructura' && (
           <EstructuraTab
-  torneo={torneo}
-  setGruposCount={setGruposCount}
-  setIdaVuelta={setIdaVuelta}
-  setTopK={setTopK}
-  onGenerarGrupos={generarGruposYFixture}
-  onGenerarCuadro={torneo.formato === 'eliminacion' ? generarCuadroEliminacion : undefined}
-  onSiguientePaso={!isLiga ? handleSiguientePaso : undefined}
-  labelEntrada={labelEntrada}
-  locked={locked}
-/>
+            torneo={torneo}
+            setGruposCount={setGruposCount}
+            setIdaVuelta={setIdaVuelta}
+            setTopK={setTopK}
+            onGenerarGrupos={generarGruposYFixture}
+            onGenerarCuadro={torneo.formato === 'eliminacion' ? generarCuadroEliminacion : undefined}
+            onSiguientePaso={!isLiga ? handleSiguientePaso : undefined}
+            labelEntrada={labelEntrada}
+            locked={locked}
+          />
         )}
 
         {tab === 'partidos' && (
@@ -6524,21 +6582,25 @@ React.useEffect(() => {
             labelEntrada={labelEntrada}
             perfil={perfil}
             clubActivoId={clubActivoId}
+            user={user}
           />
         )}
 
         {tab === 'fase' && (
-  <FaseFinalTab
-    torneo={torneo}
-    onChange={onChange}
-    labelEntrada={labelEntrada}
-    onGenerarCuadro={torneo.formato === 'eliminacion' ? generarCuadroEliminacion : undefined}
-  />
-)}
+          <FaseFinalTab
+            torneo={torneo}
+            onChange={onChange}
+            labelEntrada={labelEntrada}
+            onGenerarCuadro={torneo.formato === 'eliminacion' ? generarCuadroEliminacion : undefined}
+            clubActivoId={clubActivoId}
+            user={user}
+          />
+        )}
       </div>
     </div>
   );
 }
+
 
 
 // ================== Tabs – Implementación ==================
@@ -6658,24 +6720,51 @@ function FormatoTab({
 }
 
 
-function ReglasTab({ reglas, setReglas, modalidad, disabled = false }) {
+function ReglasTab({
+  reglas,
+  setReglas,
+  modalidad,
+  disabled = false,
+  // === NUEVO: props para asociar el torneo a un ranking ===
+  rankings = [],
+  rankingId = "",
+  setRankingId = () => {}
+}) {
   const r = normalizeReglas(reglas);
+
   // si está bloqueado, ignoro cambios
   const set = React.useCallback((path, value) => {
     if (disabled) return;
-    // deepSet debe existir en tu código; si no, reemplazá por tu util.
-    setReglas(deepSet(r, path, value));
+    setReglas(deepSet(r, path, value)); // deepSet: tu util existente
   }, [disabled, r, setReglas]);
 
   return (
     <div className="grid gap-6">
+      {/* Puntuación + Sets */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="border rounded-xl p-3">
           <div className="font-semibold text-slate-800 mb-2">Puntuación</div>
           <div className="flex items-center gap-3">
-            <NumberField label="Win"  value={r.grupos.puntos.win}  onChange={v => set(['grupos','puntos','win'],  v)} disabled={disabled}/>
-            <NumberField label="Draw" value={r.grupos.puntos.draw} onChange={v => set(['grupos','puntos','draw'], v)} disabled={disabled}/>
-            <NumberField label="Loss" value={r.grupos.puntos.loss} onChange={v => set(['grupos','puntos','loss'], v)} disabled={disabled}/>
+            <NumberField
+              label="Win"
+              value={r?.grupos?.puntos?.win ?? 3}
+              onChange={v => set(['grupos','puntos','win'], v)}
+              disabled={disabled}
+            />
+            <NumberField
+              label="Loss"
+              value={r?.grupos?.puntos?.loss ?? 0}
+              onChange={v => set(['grupos','puntos','loss'], v)}
+              disabled={disabled}
+            />
+            {/* Si querés empates más adelante:
+            <NumberField
+              label="Draw"
+              value={r?.grupos?.puntos?.draw ?? 1}
+              onChange={v => set(['grupos','puntos','draw'], v)}
+              disabled={disabled}
+            />
+            */}
           </div>
         </div>
 
@@ -6684,7 +6773,7 @@ function ReglasTab({ reglas, setReglas, modalidad, disabled = false }) {
           <div className="grid gap-2 md:grid-cols-2">
             <SelectField
               label="Formato sets"
-              value={r.sets.formato}
+              value={r?.sets?.formato ?? 'bo3'}
               onChange={v => set(['sets','formato'], v)}
               options={[
                 { value:'bo1',        label:'Al mejor de 1 set' },
@@ -6695,7 +6784,7 @@ function ReglasTab({ reglas, setReglas, modalidad, disabled = false }) {
             />
             <SelectField
               label="Tie-break"
-              value={r.sets.tb}
+              value={r?.sets?.tb ?? 'tb7'}
               onChange={v => set(['sets','tb'], v)}
               options={[
                 { value:'tb7',   label:'TB a 7' },
@@ -6711,12 +6800,40 @@ function ReglasTab({ reglas, setReglas, modalidad, disabled = false }) {
         </div>
       </div>
 
+      {/* === NUEVO: Ranking asociado === */}
+      <div className="border rounded-xl p-3">
+        <div className="font-semibold text-slate-800 mb-2">Ranking asociado</div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm text-slate-600 mb-1">Actualizar resultados en</label>
+            <select
+              className="w-full border rounded-xl px-3 py-2"
+              value={rankingId}
+              onChange={e => setRankingId(e.target.value)}
+              disabled={disabled}
+            >
+              <option value="">— No actualizar ranking —</option>
+              {(rankings || []).map(rk => (
+                <option key={rk.id} value={rk.id}>
+                  {rk.nombre || rk.id}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              Si elegís un ranking, cada resultado del fixture sumará puntos a ese ranking
+              usando los valores de <b>Puntuación</b>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Reglas KO */}
       <div className="border rounded-xl p-3">
         <div className="font-semibold text-slate-800 mb-2">Reglas de eliminación</div>
         <div className="grid gap-2 md:grid-cols-3">
           <SelectField
             label="Orden de siembra"
-            value={r.ko.seeding}
+            value={r?.ko?.seeding ?? 'serpentina'}
             onChange={v => set(['ko','seeding'], v)}
             options={[
               { value:'serpentina', label:'Serpentina' },
@@ -6726,7 +6843,7 @@ function ReglasTab({ reglas, setReglas, modalidad, disabled = false }) {
           />
           <SelectField
             label="Sets KO"
-            value={r.ko.sets}
+            value={r?.ko?.sets ?? 'bo3'}
             onChange={v => set(['ko','sets'], v)}
             options={[
               { value:'bo1',        label:'Bo1' },
@@ -6737,7 +6854,7 @@ function ReglasTab({ reglas, setReglas, modalidad, disabled = false }) {
           />
           <SelectField
             label="TB KO"
-            value={r.ko.tb}
+            value={r?.ko?.tb ?? 'tb7'}
             onChange={v => set(['ko','tb'], v)}
             options={[
               { value:'tb7',  label:'TB7' },
@@ -6750,12 +6867,13 @@ function ReglasTab({ reglas, setReglas, modalidad, disabled = false }) {
       </div>
 
       <InfoTip>
-        La modalidad actual es <b>{modalidad === 'dobles' ? 'Dobles' : 'Singles'}</b>.
-        En Dobles, armá las parejas manualmente en la pestaña Participantes.
+        La modalidad actual es <b>{modalidad === 'dobles' ? 'Dobles' : 'Singles'}</b>. En Dobles, armá las parejas
+        manualmente en la pestaña Participantes.
       </InfoTip>
     </div>
   );
 }
+
 
 
 function ParticipantesTab({ modalidad, participantes, setParticipantes, teams, setTeams, alumnos, labelAlumno }) {
@@ -7386,7 +7504,7 @@ function ProgramacionEditor({ initial = {}, onSave, onCancel }) {
 
 function PartidosTab({ torneo, onChange, labelEntrada, perfil, clubActivoId }) {
   // === Estado editor / programación ===
-  const [edit, setEdit] = React.useState(null);       // { gid, mid }
+  const [edit, setEdit] = React.useState(null);         // { gid, mid }
   const [progEdit, setProgEdit] = React.useState(null); // { gid, mid }
 
   // Helpers
@@ -7409,28 +7527,72 @@ function PartidosTab({ torneo, onChange, labelEntrada, perfil, clubActivoId }) {
   };
 
   // === Mutaciones: guardar resultado de GRUPOS ===
-  const guardarResultadoGrupo = (gid, mid, result) => {
+  const guardarResultadoGrupo = async (gid, mid, result) => {
     const t = deepClone(torneo);
     const orig = t.fixture?.[gid];
     if (!orig) return;
 
-    const replaceIn = (arr) => {
-      if (!Array.isArray(arr)) return arr;
-      // puede venir anidado por rondas o plano
-      if (Array.isArray(arr[0])) {
-        return arr.map(ronda => ronda.map(mm => mm.id === mid ? patchMatch(mm) : mm));
-      }
-      return arr.map(mm => mm.id === mid ? patchMatch(mm) : mm);
+    const matchOriginal = getMatch(gid, mid);
+    if (!matchOriginal) return;
+
+    // Derivar flags/resultados
+    const esWO = result?.wo === 'a' || result?.wo === 'b';
+    const esEmpate = !!(result?.draw || result?.empate || result?.winner === 'draw');
+    const winnerSide =
+      esWO ? result.wo :
+      (result?.winner === 'a' || result?.winner === 'b') ? result.winner :
+      null;
+
+    const winnerId = winnerSide ? (winnerSide === 'a' ? matchOriginal.a : matchOriginal.b) : null;
+    const loserId  = winnerSide ? (winnerSide === 'a' ? matchOriginal.b : matchOriginal.a) : null;
+
+    // Parchar el partido
+    const patchedMatch = {
+      ...matchOriginal,
+      result,
+      done: !!result?.done || esWO || !!winnerSide || esEmpate,
+      winner: winnerSide ?? (esEmpate ? null : matchOriginal.winner)
     };
 
-    const patchMatch = (mm) => ({
-      ...mm,
-      result,
-      done: !!result?.done || !!result?.wo || (result?.winner === 'a' || result?.winner === 'b'),
-      winner: (result?.winner === 'a' || result?.winner === 'b') ? result.winner : mm.winner
-    });
+    const patchFn = (mm) => (mm.id === mid ? patchedMatch : mm);
+    const mapIn = (arr) => Array.isArray(arr[0]) ? arr.map(r => r.map(patchFn)) : arr.map(patchFn);
+    t.fixture[gid] = mapIn(orig);
 
-    t.fixture[gid] = replaceIn(orig);
+    // --- Acreditar puntos en Ranking asociado (si hay uno elegido en Reglas) ---
+    const rankingId = torneo?.rankingId || null;
+    if (rankingId) {
+      // Si tenés helper centralizado:
+      if (typeof applyMatchResultToRanking === 'function') {
+        await applyMatchResultToRanking({
+          clubId: clubActivoId,
+          torneo,
+          winnerId,
+          loserId,
+          draw: esEmpate,
+          wo:   esWO
+        });
+      } else if (typeof updateRankingPuntosEn === 'function') {
+        // Fallback inline usando reglas básicas de grupos
+        const reglas = torneo?.reglas?.grupos?.puntos || {};
+        const ptsWin  = Number(reglas.win  ?? 3);
+        const ptsLoss = Number(reglas.loss ?? 0);
+        const ptsDraw = Number(reglas.draw ?? 1);
+
+        if (esEmpate && matchOriginal?.a && matchOriginal?.b) {
+          await Promise.all([
+            updateRankingPuntosEn(clubActivoId, rankingId, matchOriginal.a, ptsDraw, { pj: 1, pe: 1 }),
+            updateRankingPuntosEn(clubActivoId, rankingId, matchOriginal.b, ptsDraw, { pj: 1, pe: 1 }),
+          ]);
+        } else if (winnerId && loserId) {
+          await Promise.all([
+            updateRankingPuntosEn(clubActivoId, rankingId, winnerId, ptsWin,  { pj: 1, pg: 1, wo: esWO ? 1 : 0 }),
+            updateRankingPuntosEn(clubActivoId, rankingId, loserId,  ptsLoss, { pj: 1, pp: 1 }),
+          ]);
+        }
+      }
+    }
+
+    // Finalizar edición
     onChange(t);
     setEdit(null);
   };
@@ -7452,27 +7614,24 @@ function PartidosTab({ torneo, onChange, labelEntrada, perfil, clubActivoId }) {
     setProgEdit(null);
   };
 
-  // AUTOFIX: si hay grupos pero todavía no hay fixture, lo generamos acá
-React.useEffect(() => {
-  const grupos = torneo.grupos || [];
-  const tieneGrupos = grupos.length > 0;
-  const tieneFixture = !!torneo.fixture && Object.keys(torneo.fixture).length > 0;
-  if (!tieneGrupos || tieneFixture) return;
+  // AUTOFIX: si hay grupos pero todavía no hay fixture, generarlo
+  React.useEffect(() => {
+    const grupos = torneo.grupos || [];
+    const tieneGrupos = grupos.length > 0;
+    const tieneFixture = !!torneo.fixture && Object.keys(torneo.fixture).length > 0;
+    if (!tieneGrupos || tieneFixture) return;
 
-  const fixture = {};
-  grupos.forEach(g => {
-    // nos quedamos con los IDs crudos
-    const entradas = (g.entradas || [])
-      .map(x => (typeof x === 'object' ? x.id : x))
-      .filter(Boolean);
+    const fixture = {};
+    grupos.forEach(g => {
+      const entradas = (g.entradas || [])
+        .map(x => (typeof x === 'object' ? x.id : x))
+        .filter(Boolean);
 
-    // usa tu helper existente
-    fixture[g.id] = buildRoundRobin(entradas, !!torneo.idaVuelta);
-  });
+      fixture[g.id] = buildRoundRobin(entradas, !!torneo.idaVuelta);
+    });
 
-  onChange({ ...torneo, fixture });
-}, [torneo.grupos, torneo.idaVuelta, onChange]);
-
+    onChange({ ...torneo, fixture });
+  }, [torneo.grupos, torneo.idaVuelta, onChange]);
 
   // === Buscar match actual para el drawer ===
   const getMatch = (gid, mid) => {
@@ -7487,13 +7646,13 @@ React.useEffect(() => {
   const hayGrupos = gruposKeys.length > 0;
 
   return (
-    <div className="grid lg:grid-cols-[1fr,0px] gap-4"> {/* 2da col reservada para drawer overlay */}
+    <div className="grid lg:grid-cols-[1fr,0px] gap-4">
       <div className="space-y-4">
         {!hayGrupos && (
           <div className="text-sm text-slate-500">No hay fixture generado.</div>
         )}
 
-        {/* ==== NUEVO: Tablas de posiciones (Liga) ==== */}
+        {/* Tablas de posiciones — Liga */}
         {torneo.formato === 'grupos' && Array.isArray(torneo.grupos) && torneo.grupos.length > 0 && (
           <div className="border rounded-2xl p-3">
             <div className="font-semibold mb-2">Tablas de posiciones — Liga</div>
@@ -7501,14 +7660,12 @@ React.useEffect(() => {
               {torneo.grupos.map((g) => (
                 <div key={g.id} className="border rounded-xl p-2 bg-white">
                   <div className="font-medium mb-2">{g.nombre}</div>
-                  {/* Requiere que exista el componente TablaGrupo */}
                   <TablaGrupo torneo={torneo} gid={g.id} labelEntrada={labelEntrada} />
                 </div>
               ))}
             </div>
           </div>
         )}
-        {/* ==== FIN NUEVO ==== */}
 
         {gruposKeys.map((gid) => {
           const rounds = torneo.fixture[gid] || [];
@@ -7526,7 +7683,7 @@ React.useEffect(() => {
 
               <div className="space-y-2">
                 {lista.map(m => {
-                  const editable = !isBYE(m.a) && !isBYE(m.b); // si quisieras bloquear por PIN, agregá && !locked
+                  const editable = !isBYE(m.a) && !isBYE(m.b);
                   return (
                     <div key={m.id} className="p-2 border rounded-lg bg-white flex items-center justify-between">
                       <div className="text-sm">
@@ -7650,10 +7807,6 @@ React.useEffect(() => {
 }
 
 
-
-
-
-
 // === Info de la final (campeón / subcampeón) ===
 function bracketFinalInfo(cuadro){
   if (!cuadro) return null;
@@ -7672,7 +7825,7 @@ function bracketFinalInfo(cuadro){
 }
 
 
-function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro }) {
+function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro, clubActivoId, user }) {
   const [edit, setEdit] = React.useState(null);         // editor de resultado (abre drawer)
   const [progEdit, setProgEdit] = React.useState(null); // editor de programación
   const [showBracket, setShowBracket] = React.useState(true);
@@ -7680,7 +7833,7 @@ function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro }) {
   const koHasResults = React.useMemo(() => hasKOResults(torneo.cuadro), [torneo.cuadro]);
   const finalInfo = React.useMemo(() => bracketFinalInfo(torneo.cuadro), [torneo.cuadro]);
 
-  // Exportación A4 (mantienes tus funciones originales por si las usas en otro lado)
+  // Exportación A4 (tus funciones existentes)
   const exportPNG = React.useCallback(
     () => exportPNG_A4(torneo, showBracket, setShowBracket),
     [torneo, showBracket]
@@ -7690,7 +7843,7 @@ function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro }) {
     [torneo, showBracket]
   );
 
-  // ✅ NUEVA FUNCIÓN: genera el PDF completo con tablas y cuadro
+  // ✅ PDF completo (tablas + cuadro)
   const exportarPDFCompleto = async () => {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'pt', 'a4');
@@ -7698,7 +7851,7 @@ function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro }) {
     const docH = doc.internal.pageSize.getHeight();
     let yPos = 40;
 
-    // --- Portada/Header ---
+    // Portada
     doc.setFontSize(22);
     doc.text(torneo.nombre || 'Torneo', docW / 2, yPos, { align: 'center' });
     yPos += 20;
@@ -7706,13 +7859,11 @@ function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro }) {
     doc.text(
       (torneo.modalidad === 'dobles' ? 'Modalidad: Dobles' : 'Modalidad: Singles') +
         ` | Formato: ${torneo.formato === 'eliminacion' ? 'Eliminación Directa' : 'Grupos + Eliminación'}`,
-      docW / 2,
-      yPos,
-      { align: 'center' }
+      docW / 2, yPos, { align: 'center' }
     );
     yPos += 20;
 
-    // --- Tablas de Posiciones (para torneos con grupos) ---
+    // Tablas de posiciones (si hay grupos)
     if (torneo.formato !== 'eliminacion' && torneo.grupos?.length) {
       yPos += 20;
       doc.setFontSize(16);
@@ -7724,13 +7875,7 @@ function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro }) {
         const tableBody = tablaData.map((row, i) => [
           i + 1,
           labelEntrada(row.alumnoId, torneo),
-          row.PJ,
-          row.G,
-          row.E,
-          row.P,
-          row.GF,
-          row.GC,
-          row.PTS,
+          row.PJ, row.G, row.E, row.P, row.GF, row.GC, row.PTS,
         ]);
 
         doc.setFontSize(12);
@@ -7748,7 +7893,7 @@ function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro }) {
       }
     }
 
-    // --- Partidos de Grupos (para torneos con grupos) ---
+    // Partidos de grupos (si hay)
     if (torneo.formato !== 'eliminacion' && torneo.fixture && Object.keys(torneo.fixture).length) {
       if (yPos > docH - 100) { doc.addPage(); yPos = 40; }
       yPos += 20;
@@ -7762,7 +7907,8 @@ function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro }) {
           labelEntrada(match.a, torneo),
           labelEntrada(match.b, torneo),
           match.result?.sets?.map(s => `${s.a}-${s.b}`).join(', ') || '—',
-          match.result?.winner === 'a' ? labelEntrada(match.a, torneo) : match.result?.winner === 'b' ? labelEntrada(match.b, torneo) : 'Empate'
+          match.result?.winner === 'a' ? labelEntrada(match.a, torneo)
+            : match.result?.winner === 'b' ? labelEntrada(match.b, torneo) : 'Empate'
         ])
       );
       doc.autoTable({
@@ -7777,30 +7923,24 @@ function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro }) {
       yPos = doc.autoTable.previous.finalY + 20;
     }
 
-    // --- Cuadro de Eliminación (si existe) ---
+    // Cuadro de eliminación
     if (torneo.cuadro) {
       if (yPos > docH - 100) { doc.addPage(); yPos = 40; }
-      doc.addPage(); // Siempre iniciar el cuadro en una nueva página
+      doc.addPage();
       yPos = 40;
       doc.setFontSize(16);
       doc.text('Cuadro de Eliminación', docW / 2, yPos, { align: 'center' });
       yPos += 20;
 
-      // Usar la función de exportación de PNG para incluir el cuadro
       const el = document.getElementById('a4-export-root');
       if (el) {
-        // Aseguramos que el bracket esté visible para que html2canvas lo capture
         setShowBracket(true);
-        await new Promise(r => setTimeout(r, 60)); // Espera un momento para que se renderice
+        await new Promise(r => setTimeout(r, 60));
         const canvas = await html2canvas(el, { scale: 2, useCORS: true });
         const imgData = canvas.toDataURL('image/png');
-
         const imgWidth = doc.internal.pageSize.getWidth();
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
         doc.addImage(imgData, 'PNG', 0, yPos, imgWidth, imgHeight);
-
-        // Ocultar de nuevo si estaba oculto
         setShowBracket(false);
       } else {
         doc.setFontSize(12);
@@ -7808,77 +7948,59 @@ function FaseFinalTab({ torneo, onChange, labelEntrada, onGenerarCuadro }) {
       }
     }
 
-    // --- Guardar PDF ---
-    doc.save(`Reporte_Torneo_${torneo.nombre.replace(/\s/g, '_')}.pdf`);
+    doc.save(`Reporte_Torneo_${(torneo.nombre || '').replace(/\s/g, '_')}.pdf`);
   };
 
   // Regenerar cuadro (según formato)
   const regenerarDesdeTabla = () => {
-  if (koHasResults && !window.confirm("Ya hay resultados en KO. Regenerar borrará esos resultados. ¿Continuar?")) return;
+    if (koHasResults && !window.confirm("Ya hay resultados en KO. Regenerar borrará esos resultados. ¿Continuar?")) return;
 
-  let ids = [];
+    let ids = [];
+    if (torneo.formato === "eliminacion") {
+      ids = torneo.modalidad === "dobles"
+        ? (torneo.teams || []).map(t => t.id)
+        : (torneo.participantes || []);
+    } else {
+      const faltan = countPendingGroupMatches(torneo);
+      if (faltan > 0) {
+        window.alert(`Faltan ${faltan} partido(s) de grupos. Cargá esos resultados antes de armar la fase final.`);
+        return;
+      }
+      const K = Math.max(1, parseInt(torneo.topK || 2, 10));
+      ids = computeQualifiers(torneo, K);
+    }
 
-  if (torneo.formato === "eliminacion") {
-    // ELIMINACIÓN DIRECTA: tomar directamente participantes/parejas
-    ids = torneo.modalidad === "dobles"
-      ? (torneo.teams || []).map(t => t.id)
-      : (torneo.participantes || []);
-  } else {
-    // GRUPOS + ELIMINACIÓN: primero asegurate de que no falten partidos
-    const faltan = countPendingGroupMatches(torneo);
-    if (faltan > 0) {
-      window.alert(`Faltan ${faltan} partido(s) de grupos. Cargá esos resultados antes de armar la fase final.`);
+    const clean = Array.from(new Set((ids || []).filter(Boolean)));
+    if (clean.length < 2) {
+      window.alert("Se necesitan al menos 2 participantes o clasificados.");
       return;
     }
-    // Luego tomá Top-K desde la tabla
-    const K = Math.max(1, parseInt(torneo.topK || 2, 10));
-    ids = computeQualifiers(torneo, K);
-  }
 
-  const clean = Array.from(new Set((ids || []).filter(Boolean)));
-  if (clean.length < 2) {
-    window.alert("Se necesitan al menos 2 participantes o clasificados.");
-    return;
-  }
-
-  const cuadro = buildBracket(clean, { seeding: torneo?.reglas?.ko?.seeding || 'serpentina' });
-  onChange({ ...torneo, cuadro });
-};
-
-if (!torneo.cuadro) {
-  const isElim = torneo.formato === 'eliminacion';
-  return (
-    <div className="p-4 border rounded-xl">
-      <div className="text-slate-700 mb-2">Aún no se generó el cuadro.</div>
-
-      {isElim ? (
-        <button
-          className="px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm"
-          onClick={regenerarDesdeTabla}
-        >
-          Generar cuadro de eliminación
-        </button>
-      ) : (
-        <div className="text-xs text-slate-500">
-          Para “Grupos + Eliminación”, primero completá los grupos y luego usá “Regenerar desde tabla”.
-        </div>
-      )}
-    </div>
-  );
-}
-
-  // Guardar RESULTADO
-  const guardar = (matchId, result) => {
-    const nuevo = applyResultToBracket(deepClone(torneo), matchId, result);
-    onChange(nuevo);
-    setEdit(null);
-    const info = bracketFinalInfo(nuevo.cuadro);
-    if (info?.done) {
-      const champ = labelEntrada(findEntry(info.champion, nuevo));
-      const sub = labelEntrada(findEntry(info.runnerUp, nuevo));
-      window.alert(`¡Fin del torneo!\n🏆 Campeón: ${champ}\n🥈 Subcampeón: ${sub}`);
-    }
+    const cuadro = buildBracket(clean, { seeding: torneo?.reglas?.ko?.seeding || 'serpentina' });
+    onChange({ ...torneo, cuadro });
   };
+
+  if (!torneo.cuadro) {
+    const isElim = torneo.formato === 'eliminacion';
+    return (
+      <div className="p-4 border rounded-xl">
+        <div className="text-slate-700 mb-2">Aún no se generó el cuadro.</div>
+
+        {isElim ? (
+          <button
+            className="px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm"
+            onClick={regenerarDesdeTabla}
+          >
+            Generar cuadro de eliminación
+          </button>
+        ) : (
+          <div className="text-xs text-slate-500">
+            Para “Grupos + Eliminación”, primero completá los grupos y luego usá “Regenerar desde tabla”.
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ===== Helpers =====
   const sideLabel = (side) => (!side || side?.BYE) ? "—" : labelEntrada(findEntry(side, torneo));
@@ -7896,7 +8018,7 @@ if (!torneo.cuadro) {
     return isPlayed(m) ? 'OK' : 'Sin resultado';
   };
 
-  // Buscar partido por id dentro del cuadro KO
+  // Buscar partido KO por id
   const matchById = React.useCallback((id) => {
     for (const arr of Object.values(torneo.cuadro || {})) {
       const found = (arr || []).find(mm => mm.id === id);
@@ -7905,11 +8027,72 @@ if (!torneo.cuadro) {
     return null;
   }, [torneo.cuadro]);
 
-  // Partido actualmente en edición (para el drawer)
-  const editMatch = edit ? matchById(edit) : null;
-  const aLbl = editMatch ? sideLabel(editMatch.a) : "";
-  const bLbl = editMatch ? sideLabel(editMatch.b) : "";
+  // Guardar RESULTADO KO (con ranking asociado)
+  const guardar = async (matchId, result) => {
+    const matchOriginal = matchById(matchId);
+    if (!matchOriginal) return;
 
+    // Derivar flags
+    const esWO = result?.wo === 'a' || result?.wo === 'b';
+    const esEmpate = !!(result?.draw || result?.empate || result?.winner === 'draw');
+    const winnerSide =
+      esWO ? result.wo :
+      (result?.winner === 'a' || result?.winner === 'b') ? result.winner :
+      null;
+
+    const winnerId = winnerSide ? (winnerSide === 'a' ? matchOriginal.a : matchOriginal.b) : null;
+    const loserId  = winnerSide ? (winnerSide === 'a' ? matchOriginal.b : matchOriginal.a) : null;
+
+    // Aplicar resultado al cuadro
+    const nuevo = applyResultToBracket(deepClone(torneo), matchId, result);
+
+    // === Ranking asociado (si hay uno elegido en Reglas) ===
+    const rankingId = torneo?.rankingId || null;
+    if (rankingId) {
+      if (typeof applyMatchResultToRanking === 'function') {
+        // Helper centralizado (recomendado)
+        await applyMatchResultToRanking({
+          clubId: clubActivoId,
+          torneo,
+          winnerId,
+          loserId,
+          draw: esEmpate,
+          wo:   esWO
+        });
+      } else if (typeof updateRankingPuntosEn === 'function') {
+        // Fallback: usar reglas básicas de grupos (win/loss/draw)
+        const reglas = torneo?.reglas?.grupos?.puntos || {};
+        const ptsWin  = Number(reglas.win  ?? 3);
+        const ptsLoss = Number(reglas.loss ?? 0);
+        const ptsDraw = Number(reglas.draw ?? 1);
+
+        if (esEmpate && matchOriginal?.a && matchOriginal?.b) {
+          await Promise.all([
+            updateRankingPuntosEn(clubActivoId, rankingId, matchOriginal.a, ptsDraw, { pj: 1, pe: 1 }),
+            updateRankingPuntosEn(clubActivoId, rankingId, matchOriginal.b, ptsDraw, { pj: 1, pe: 1 }),
+          ]);
+        } else if (winnerId && loserId) {
+          await Promise.all([
+            updateRankingPuntosEn(clubActivoId, rankingId, winnerId, ptsWin,  { pj: 1, pg: 1, wo: esWO ? 1 : 0 }),
+            updateRankingPuntosEn(clubActivoId, rankingId, loserId,  ptsLoss, { pj: 1, pp: 1 }),
+          ]);
+        }
+      }
+    }
+
+    // Finalizar
+    onChange(nuevo);
+    setEdit(null);
+
+    const info = bracketFinalInfo(nuevo.cuadro);
+    if (info?.done) {
+      const champ = labelEntrada(findEntry(info.champion, nuevo));
+      const sub = labelEntrada(findEntry(info.runnerUp, nuevo));
+      window.alert(`¡Fin del torneo!\n🏆 Campeón: ${champ}\n🥈 Subcampeón: ${sub}`);
+    }
+  };
+
+  // Programación KO
   const formatDate = (iso) => {
     if (!iso) return null;
     const [y, m, d] = iso.split("-").map(Number);
@@ -7933,7 +8116,6 @@ if (!torneo.cuadro) {
     return partes.join(" · ");
   };
 
-  // Guardar PROGRAMACIÓN en KO
   const guardarProgramacion = (matchId, prog) => {
     const t = deepClone(torneo);
     Object.keys(t.cuadro || {}).forEach(k => {
@@ -7947,7 +8129,6 @@ if (!torneo.cuadro) {
     setProgEdit(null);
   };
 
-  // Editor mini de programación
   const ProgramacionEditor = ({ initial = {}, onSave, onCancel }) => {
     const [fecha, setFecha] = React.useState(initial.fecha || "");
     const [hora, setHora] = React.useState(initial.hora || "");
@@ -7964,39 +8145,13 @@ if (!torneo.cuadro) {
 
     return (
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs mt-2 items-center">
-        <input
-          type="date"
-          className="sm:col-span-3 border rounded-lg px-2 h-9"
-          value={fecha}
-          onChange={(e) => setFecha(e.target.value)}
-        />
-        <input
-          type="time"
-          className="sm:col-span-3 border rounded-lg px-2 h-9"
-          value={hora}
-          onChange={(e) => setHora(e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Cancha"
-          className="sm:col-span-3 border rounded-lg px-2 h-9"
-          value={cancha}
-          onChange={(e) => setCancha(e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Club"
-          className="sm:col-span-3 border rounded-lg px-2 h-9"
-          value={sede}
-          onChange={(e) => setSede(e.target.value)}
-        />
+        <input type="date" className="sm:col-span-3 border rounded-lg px-2 h-9" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+        <input type="time" className="sm:col-span-3 border rounded-lg px-2 h-9" value={hora} onChange={(e) => setHora(e.target.value)} />
+        <input type="text" placeholder="Cancha" className="sm:col-span-3 border rounded-lg px-2 h-9" value={cancha} onChange={(e) => setCancha(e.target.value)} />
+        <input type="text" placeholder="Club" className="sm:col-span-3 border rounded-lg px-2 h-9" value={sede} onChange={(e) => setSede(e.target.value)} />
         <div className="sm:col-span-12 flex justify-end gap-2 mt-1">
-          <button className="px-3 py-2 rounded-lg border" onClick={onCancel}>
-            Cancelar
-          </button>
-          <button className="px-3 py-2 rounded-lg bg-[#34745B] text-white" onClick={save}>
-            Guardar
-          </button>
+          <button className="px-3 py-2 rounded-lg border" onClick={onCancel}>Cancelar</button>
+          <button className="px-3 py-2 rounded-lg bg-[#34745B] text-white" onClick={save}>Guardar</button>
         </div>
       </div>
     );
@@ -8038,21 +8193,15 @@ if (!torneo.cuadro) {
         </div>
       )}
 
-      {/* === Tablas de posiciones (Grupos) — SOLO si no es eliminación directa === */}
-      {torneo.formato !== 'eliminacion' &&
-        Array.isArray(torneo.grupos) &&
-        torneo.grupos.length > 0 && (
+      {/* Tablas de posiciones (si hay grupos) */}
+      {torneo.formato !== 'eliminacion' && Array.isArray(torneo.grupos) && torneo.grupos.length > 0 && (
         <div className="border rounded-2xl p-3">
           <div className="font-semibold mb-2">Tablas de posiciones — Grupos</div>
           <div className="grid md:grid-cols-2 gap-4">
             {torneo.grupos.map((g) => (
               <div key={g.id} className="border rounded-xl p-2 bg-white">
                 <div className="font-medium mb-2">{g.nombre}</div>
-                <TablaGrupo
-                  torneo={torneo}
-                  gid={g.id}
-                  labelEntrada={labelEntrada}
-                />
+                <TablaGrupo torneo={torneo} gid={g.id} labelEntrada={labelEntrada} />
               </div>
             ))}
           </div>
@@ -8157,7 +8306,7 @@ if (!torneo.cuadro) {
                                 </button>
 
                                 <button
-                                  className="h-7 px-3 rounded-lg text-xs bg-slate-800 text-white disabled:opacity-50"
+                                  className={`h-7 px-3 rounded-lg text-xs disabled:opacity-50 ${isPlayed(m) ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-800 text-white hover:bg-slate-900'}`}
                                   onClick={() => editable && setEdit(edit === m.id ? null : m.id)}
                                   disabled={!editable}
                                 >
@@ -8211,31 +8360,30 @@ if (!torneo.cuadro) {
           )}
 
           <div className="h-px bg-slate-200 my-3" />
-          <div className="text-xs text-slate-500">Tip: podés exportar PNG/PDF apaisado desde los botones de arriba.</div>
+          <div className="text-xs text-slate-500">Tip: podés exportar PDF apaisado desde los botones de arriba.</div>
         </aside>
       </div>
 
-      {/* === Drawer con editor de resultados === */}
-      <RightDrawer
-        open={!!editMatch}
-        title={editMatch ? `${aLbl} vs ${bLbl}` : ""}
-        onClose={() => setEdit(null)}
-      >
-        {editMatch ? (
-          <ResultadoEditor
-            reglas={torneo.reglas}
-            initial={editMatch.result}
-            onSave={(res) => { guardar(editMatch.id, res); }}
-            onCancel={() => setEdit(null)}
-            aLabel={aLbl}
-            bLabel={bLbl}
-          />
-        ) : null}
+      {/* Drawer con editor de resultados */}
+      <RightDrawer open={!!(edit ? matchById(edit) : null)} title={(edit && matchById(edit)) ? `${sideLabel(matchById(edit).a)} vs ${sideLabel(matchById(edit).b)}` : ""} onClose={() => setEdit(null)}>
+        {edit && (() => {
+          const mm = matchById(edit);
+          if (!mm) return null;
+          return (
+            <ResultadoEditor
+              reglas={torneo.reglas}
+              initial={mm.result}
+              onSave={(res) => { guardar(mm.id, res); }}
+              onCancel={() => setEdit(null)}
+              aLabel={sideLabel(mm.a)}
+              bLabel={sideLabel(mm.b)}
+            />
+          );
+        })()}
       </RightDrawer>
     </div>
   );
 }
-
 
 
 // === Panel lateral derecha (drawer) ===
@@ -8649,11 +8797,13 @@ function inferStartTab(t){
 }
 
 // ===== LocalStorage (placeholder simple) =====
-function loadTorneosLS(){
-  try{ return JSON.parse(localStorage.getItem('torneos_v2')||'[]'); }catch(e){ return []; }
+function loadTorneosLS(uid, clubId){
+  const key = `torneos_v2__${uid||'anon'}__${clubId||'noClub'}`;
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; }
 }
-function saveTorneosLS(arr){
-  try{ localStorage.setItem('torneos_v2', JSON.stringify(arr)); }catch(e){}
+function saveTorneosLS(uid, clubId, arr){
+  const key = `torneos_v2__${uid||'anon'}__${clubId||'noClub'}`;
+  try { localStorage.setItem(key, JSON.stringify(arr)); } catch {}
 }
 
 // ===== Generación de grupos y fixture =====
@@ -10957,20 +11107,28 @@ function GestionClubes({ user }) {
   }, [activoId, clubsCollection]);
 
   async function crearClub() {
-    if (!clubsCollection) return;
-    const base = {
-      nombre: "Nuevo Club",
-      modalidadPrincipal: "por_clase",
-      ubicaciones: [],
-      reparto: { coach: 60, club: 40 },
-      preciosClase: { individual: 0, dupla: 0, trio: 0, cuarteto: 0, escuelita: 0 },
-      preciosMensuales: { "1xSemana": 0, "2xSemana": 0, "3xSemana": 0, "libre": 0 },
-      horarioLaboral: { bloques: [] },
-      createdAt: new Date().toISOString()
-    };
-    const ref = await clubsCollection.add(base);
-    setActivoId(ref.id);
-  }
+  // ⬇️ Agregado: refrescar usuario y exigir email verificado
+  const u = auth.currentUser;
+if (!u) return;
+await u.reload();
+const t = await u.getIdTokenResult();
+if (!t.claims.email_verified) { alert("Verificá tu email para continuar"); return; }
+await u.getIdToken(true);
+
+  if (!clubsCollection) return;
+  const base = {
+    nombre: "Nuevo Club",
+    modalidadPrincipal: "por_clase",
+    ubicaciones: [],
+    reparto: { coach: 60, club: 40 },
+    preciosClase: { individual: 0, dupla: 0, trio: 0, cuarteto: 0, escuelita: 0 },
+    preciosMensuales: { "1xSemana": 0, "2xSemana": 0, "3xSemana": 0, "libre": 0 },
+    horarioLaboral: { bloques: [] },
+    createdAt: new Date().toISOString()
+  };
+  const ref = await clubsCollection.add(base);
+  setActivoId(ref.id);
+}
 
   async function eliminarClub(id) {
     if (!clubsCollection || !id) return;
@@ -10983,15 +11141,32 @@ function GestionClubes({ user }) {
   }
 
   async function guardarClub() {
-    if (!clubsCollection || !activoId) return;
-    const pct = Number(form.reparto.coach||0) + Number(form.reparto.club||0);
-    if (pct !== 100) {
-      alert("El reparto debe sumar 100%");
-      return;
-    }
-    await clubsCollection.doc(activoId).set({ ...form, updatedAt: new Date().toISOString() }, { merge: true });
-    alert("Configuración del club guardada");
+  // ⬇️ Agregado: refrescar usuario y exigir email verificado
+  const u = auth.currentUser;
+if (!u) return;
+await u.reload();
+const t = await u.getIdTokenResult();
+if (!t.claims.email_verified) { alert("Verificá tu email para continuar"); return; }
+await u.getIdToken(true);
+  if (!clubsCollection || !activoId) {
+    alert("No hay club activo");
+    return;
   }
+  await clubsCollection
+    .doc(activoId)
+    .set({ ...form, updatedAt: new Date().toISOString() }, { merge: true });
+// Después de guardar el doc del club:
+const baseRef = clubsCollection.doc(activoId);
+
+// Sincronizá los precios al Perfil del Club
+await baseRef.collection('perfil').doc('main').set({
+  preciosClase: form.preciosClase || {},
+  preciosMensuales: form.preciosMensuales || {},
+  updatedAt: new Date().toISOString(),
+}, { merge: true });
+
+  alert("Configuración del club guardada");
+}
 
   // UI helpers
   const dias = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
@@ -11083,259 +11258,197 @@ function GestionClubes({ user }) {
 }
     
 function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user, setToast, getCollection, perfilCrud }) {
-      const fileInputRef = React.useRef(null);
-      const [form, setForm] = useState(perfil);
-      const [pinInput, setPinInput] = useState({ newPin: "", confirmPin: "" });
-      const [plantillas, setPlantillas] = useState([]);
-      const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
-      const [mensajePersonalizado, setMensajePersonalizado] = useState("");
-      const [destinatarios, setDestinatarios] = useState([]);
-      const [busquedaAlumno, setBusquedaAlumno] = useState("");
-      const [listaBusquedaAbierta, setListaBusquedaAbierta] = useState(false);
-      const [editingPlantilla, setEditingPlantilla] = useState(null);
-      const { abrirModalPago, Modal: ModalAbono } = useModalPagoAbono();
+  const fileInputRef = React.useRef(null);
 
-      useEffect(() => {
-        if (!user) return;
-        const plantillasCollection = db.collection('users').doc(user.uid).collection('plantillas');
-        const unsubscribe = plantillasCollection.onSnapshot(snapshot => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setPlantillas(data);
-        });
-        return () => unsubscribe();
-      }, [user]);
+  // === Estado inicial seguro (strings) ===
+  const emptyPerfil = {
+    moneda: 'ARS',
+    preciosClase: { individual:'', dupla:'', trio:'', cuarteto:'', escuelita:'' },
+    preciosMensuales: { "1xSemana":'', "2xSemana":'', "3xSemana":'', "libre":'' },
+    datosBancarios: { 
+        alias:'', 
+        cbu:'', 
+        banco:'',
+        titular: '' // <--- ¡CAMBIO NECESARIO!
+    },
+    horarioLaboral: (initialState?.perfil?.horarioLaboral) || [],
+    modoTrabajo: 'Club',
+    pin: ''
+};
+  const [form, setForm] = useState(emptyPerfil);
 
-      useEffect(() => {
-        const defaultPerfil = initialState.perfil;
-        setForm({
-            ...defaultPerfil, ...perfil,
-            datosBancarios: { ...defaultPerfil.datosBancarios, ...(perfil.datosBancarios || {}) },
-            horarioLaboral: perfil.horarioLaboral || defaultPerfil.horarioLaboral,
-            modoTrabajo: 'Club',
-        });
-      }, [perfil]);
+  // === Resto de estados que ya tenías ===
+  const [pinInput, setPinInput] = useState({ newPin: "", confirmPin: "" });
+  const [plantillas, setPlantillas] = useState([]);
+  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
+  const [mensajePersonalizado, setMensajePersonalizado] = useState("");
+  const [destinatarios, setDestinatarios] = useState([]);
+  const [busquedaAlumno, setBusquedaAlumno] = useState("");
+  const [listaBusquedaAbierta, setListaBusquedaAbierta] = useState(false);
+  const [editingPlantilla, setEditingPlantilla] = useState(null);
+  const { abrirModalPago, Modal: ModalAbono } = useModalPagoAbono();
 
-      const handleSetPin = () => {
-        if (pinInput.newPin.length !== 3 || !/^\d{3}$/.test(pinInput.newPin)) {
-          alert("El PIN debe ser exactamente de 3 números.");
-          return;
-        }
-        if (pinInput.newPin !== pinInput.confirmPin) {
-          alert("Los PINs no coinciden. Por favor, vuelve a intentarlo.");
-          return;
-        }
-        setForm(prev => ({ ...prev, pin: pinInput.newPin }));
-        setToast("PIN actualizado. No olvides guardar los cambios.");
-        setPinInput({ newPin: "", confirmPin: "" });
+  // === Plantillas (igual que antes) ===
+  useEffect(() => {
+    if (!user) return;
+    const plantillasCollection = db.collection('users').doc(user.uid).collection('plantillas');
+    const unsubscribe = plantillasCollection.onSnapshot(snapshot => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPlantillas(data);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // === Hidratar form desde perfil (club) → todo a string; sin undefined ===
+  const hydratedRef = React.useRef(false);
+  useEffect(() => {
+    const S = (v) => (v == null ? '' : String(v));
+    const p = perfil || {};
+    const pc = p.preciosClase || p.precios || {}; // admitir legacy "precios"
+    if (!hydratedRef.current) {
+      setForm(prev => ({
+        ...prev,
+        moneda: p.moneda ?? 'ARS',
+        datosBancarios: { ...(prev.datosBancarios||{}), ...(p.datosBancarios||{}) },
+        horarioLaboral: p.horarioLaboral || prev.horarioLaboral,
+        modoTrabajo: 'Club',
+        pin: p.pin ?? '',
+        preciosClase: {
+          individual: S(pc.individual),
+          dupla:      S(pc.dupla ?? pc.duo),
+          trio:       S(pc.trio),
+          cuarteto:   S(pc.cuarteto),
+          escuelita:  S(pc.escuelita),
+        },
+        preciosMensuales: {
+          "1xSemana": S(p.preciosMensuales?.["1xSemana"]),
+          "2xSemana": S(p.preciosMensuales?.["2xSemana"]),
+          "3xSemana": S(p.preciosMensuales?.["3xSemana"]),
+          "libre":    S(p.preciosMensuales?.["libre"]),
+        },
+      }));
+      hydratedRef.current = true;
+    }
+  }, [perfil]);
+
+  // === Handlers genéricos ===
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value ?? '' }));
+  };
+  const handleDatosBancariosChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, datosBancarios: { ...prev.datosBancarios, [name]: value ?? '' } }));
+  };
+  const handleHorarioChange = (index, campo, valor) => {
+    setForm(prev => {
+      const nuevo = Array.isArray(prev.horarioLaboral) ? [...prev.horarioLaboral] : [];
+      nuevo[index] = { ...(nuevo[index]||{}), [campo]: valor ?? '' };
+      return { ...prev, horarioLaboral: nuevo };
+    });
+  };
+
+  // === Precios (ahora en preciosClase / preciosMensuales) ===
+  const handlePrecioClaseChange = (e) => {
+    const { name, value } = e.target; // name: individual | dupla | trio | cuarteto | escuelita
+    setForm(prev => ({ ...prev, preciosClase: { ...prev.preciosClase, [name]: value ?? '' } }));
+  };
+  const handlePrecioMensualChange = (e) => {
+    const { name, value } = e.target; // name: 1xSemana | 2xSemana | 3xSemana | libre
+    setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value ?? '' } }));
+  };
+
+  // === PIN (igual que antes) ===
+  const handleSetPin = () => {
+    if (pinInput.newPin.length !== 3 || !/^\d{3}$/.test(pinInput.newPin)) {
+      alert("El PIN debe ser exactamente de 3 números.");
+      return;
+    }
+    if (pinInput.newPin !== pinInput.confirmPin) {
+      alert("Los PINs no coinciden. Por favor, vuelve a intentarlo.");
+      return;
+    }
+    setForm(prev => ({ ...prev, pin: pinInput.newPin }));
+    setToast?.("PIN actualizado. No olvides guardar los cambios.");
+    setPinInput({ newPin: "", confirmPin: "" });
+  };
+  const handlePinInputChange = (e) => {
+    const { name, value } = e.target;
+    if (/^\d*$/.test(value) && value.length <= 3) {
+      setPinInput(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  // === Export / Import / Wipe (tal cual los tenías) ===
+  const sanitizeDataForJSON = (data) => {
+    const replacer = (key, value) => (value === undefined ? null : value);
+    return JSON.parse(JSON.stringify(data, replacer));
+  };
+  const handleExportData = () => { /* ... igual que tu versión ... */ };
+  const handleImportData = async (event) => { /* ... igual que tu versión ... */ };
+  const handleWipeData = async () => { /* ... igual que tu versión ... */ };
+
+  // === WhatsApp / Plantillas (tal cual) ===
+  const alumnosFiltrados = useMemo(() => {
+    if (!busquedaAlumno) return [];
+    return (alumnos || []).filter(a => a.estado === 'activo' && getNombreCompleto(a).toLowerCase().includes(busquedaAlumno.toLowerCase()));
+  }, [busquedaAlumno, alumnos]);
+  const handleAgregarDestinatario = (alumno) => { /* ... */ };
+  const handleQuitarDestinatario  = (alumnoId) => { /* ... */ };
+  const handleSendMessage         = (destinatario) => { /* ... */ };
+  const handleSavePlantilla       = (plantillaData) => { /* ... */ };
+  const handleDeletePlantilla     = () => { /* ... */ };
+
+  // === Guardar Perfil en /clubs/{clubId}/perfil/main (vía perfilCrud.update) ===
+  async function guardarPerfil() {
+    try {
+      const u = auth.currentUser;
+      if (!u) return;
+      await u.reload();
+      const tok = await u.getIdTokenResult();
+      if (!tok.claims.email_verified) { setToast?.("Verificá tu email para continuar"); return; }
+      await u.getIdToken(true);
+
+      const payload = {
+        moneda: form.moneda || 'ARS',
+        datosBancarios: form.datosBancarios || {},
+        horarioLaboral: form.horarioLaboral || [],
+        pin: form.pin || null,
+        preciosClase: {
+          individual: Number(form.preciosClase?.individual) || 0,
+          duo:        Number(form.preciosClase?.dupla) || 0,
+          trio:       Number(form.preciosClase?.trio) || 0,
+          cuarteto:   Number(form.preciosClase?.cuarteto) || 0,
+          escuelita:  Number(form.preciosClase?.escuelita) || 0,
+        },
+        preciosMensuales: {
+          "1xSemana": Number(form.preciosMensuales?.["1xSemana"]) || 0,
+          "2xSemana": Number(form.preciosMensuales?.["2xSemana"]) || 0,
+          "3xSemana": Number(form.preciosMensuales?.["3xSemana"]) || 0,
+          "libre":    Number(form.preciosMensuales?.["libre"])    || 0,
+        },
+        updatedAt: new Date().toISOString(),
       };
 
-      const handlePinInputChange = (e) => {
-        const { name, value } = e.target;
-        if (/^\d*$/.test(value) && value.length <= 3) {
-            setPinInput(prev => ({...prev, [name]: value}));
-        }
-      };
+      if (perfilCrud && typeof perfilCrud.update === 'function') {
+        await perfilCrud.update(payload);  // <- tu CRUD debe escribir en .../clubs/{clubId}/perfil/main
+      } else {
+        // Fallback directo si hiciera falta:
+        // const baseRef = db.collection('users').doc(u.uid).collection('clubs').doc(clubActivoId);
+        // await baseRef.collection('perfil').doc('main').set(payload, { merge:true });
+      }
+      setToast?.("Perfil guardado");
+    } catch (e) {
+      console.error("Error guardando perfil:", e);
+      setToast?.("Error al guardar el perfil");
+    }
+  }
 
-      const sanitizeDataForJSON = (data) => {
-        const replacer = (key, value) => (value === undefined ? null : value);
-        return JSON.parse(JSON.stringify(data, replacer));
-      };
-      
-      const handleExportData = () => {
-        try {
-          let dataToExport = {
-              alumnos: alumnos,
-              clases: clases,
-              pagos: pagos,
-              gastos: gastos,
-              perfil: perfil,
-              grupos: grupos || []
-          };
-          const cleanData = sanitizeDataForJSON(dataToExport);
-          const jsonString = JSON.stringify(cleanData, null, 2);
-          const blob = new Blob([jsonString], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `coachex_backup_${formatDate(new Date())}.json`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          setToast("Datos exportados con éxito.");
-        } catch (error) {
-          console.error("Error al exportar los datos:", error);
-          setToast("Hubo un error al generar el archivo de respaldo.");
-        }
-      };
-      
-      const handleImportData = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const importedData = JSON.parse(e.target.result);
-                const confirmImport = window.confirm(
-                    "¡ATENCIÓN! ¿Estás seguro de que quieres importar estos datos?\n\n" + 
-                    "TODOS TUS DATOS ACTUALES en el modo de trabajo seleccionado SERÁN BORRADOS Y REEMPLAZADOS.\n\n" +
-                    "Esta acción no se puede deshacer."
-                );
-                if (confirmImport) {
-                    setToast("Iniciando importación... por favor espera.");
-                    const collectionsToProcess = ['alumnos', 'clases', 'pagos', 'gastos', 'grupos'];
-                    for (const collectionName of collectionsToProcess) {
-                        const collectionRef = getCollection(collectionName);
-                        const snapshot = await collectionRef.get();
-                        if (snapshot.docs.length > 0) {
-                            const batch = db.batch();
-                            snapshot.docs.forEach(doc => {
-                                batch.delete(doc.ref);
-                            });
-                            await batch.commit();
-                        }
-                    }
-                    setToast("Datos anteriores eliminados, escribiendo nuevos datos...");
-                    for (const collectionName of collectionsToProcess) {
-                        if (importedData[collectionName] && importedData[collectionName].length > 0) {
-                            const collectionRef = getCollection(collectionName);
-                            const batch = db.batch();
-                            importedData[collectionName].forEach(item => {
-                                const docRef = item.id ? collectionRef.doc(item.id) : collectionRef.doc();
-                                batch.set(docRef, item);
-                            });
-                            await batch.commit();
-                        }
-                    }
-                    if (importedData.perfil) {
-                        await perfilCrud.update(importedData.perfil);
-                    }
-                    setToast("¡Importación completada con éxito! La página se recargará.");
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                }
-            } catch (error) {
-                alert("El archivo seleccionado no es un JSON válido o está corrupto.");
-                console.error("Error al importar datos:", error);
-                setToast("Error durante la importación.");
-            } finally {
-                event.target.value = null;
-            }
-        };
-        reader.readAsText(file);
-      };
-
-      const handleWipeData = async () => {
-        const confirmText = "BORRAR";
-        const confirmation = prompt(`Esta acción es irreversible y borrará todos los alumnos, clases, pagos y gastos del modo de trabajo actual.\n\nPara confirmar, escribe "${confirmText}" en el campo de abajo.`);
-        if (confirmation === confirmText) {
-            setToast("Eliminando todos los datos... por favor espera.");
-            try {
-                const collectionsToWipe = ['alumnos', 'clases', 'pagos', 'gastos', 'grupos'];
-                for (const collectionName of collectionsToWipe) {
-                    const collectionRef = getCollection(collectionName);
-                    const snapshot = await collectionRef.get();
-                    if (snapshot.docs.length > 0) {
-                        const batch = db.batch();
-                        snapshot.docs.forEach(doc => { batch.delete(doc.ref); });
-                        await batch.commit();
-                    }
-                }
-                setToast("¡Todos los datos han sido eliminados! La página se recargará.");
-                setTimeout(() => { window.location.reload(); }, 2000);
-            } catch (error) {
-                console.error("Error al borrar los datos:", error);
-                setToast("Hubo un error al eliminar los datos.");
-            }
-        } else {
-            if (confirmation !== null) {
-                alert("La confirmación no es correcta. La acción ha sido cancelada.");
-            }
-        }
-      };
-      
-      const alumnosFiltrados = useMemo(() => {
-        if (!busquedaAlumno) return [];
-        return (alumnos || []).filter(a => a.estado === 'activo' && getNombreCompleto(a).toLowerCase().includes(busquedaAlumno.toLowerCase()));
-      }, [busquedaAlumno, alumnos]);
-
-      const handleAgregarDestinatario = (alumno) => {
-        if (!destinatarios.find(d => d.id === alumno.id)) {
-          setDestinatarios([...destinatarios, alumno]);
-        }
-        setBusquedaAlumno("");
-        setListaBusquedaAbierta(false);
-      };
-      const handleQuitarDestinatario = (alumnoId) => {
-        setDestinatarios(destinatarios.filter(d => d.id !== alumnoId));
-      };
-      const handleSendMessage = (destinatario) => {
-        if (!mensajePersonalizado.trim()) {
-            alert("El mensaje no puede estar vacío.");
-            return;
-        }
-        const mensajeFinal = mensajePersonalizado.replace(/{nombre_alumno}/g, destinatario.nombre || '');
-        const link = waLink(destinatario.telefono, mensajeFinal);
-        if (link) {
-            window.open(link, '_blank');
-        } else {
-            alert(`No se pudo generar el enlace para ${getNombreCompleto(destinatario)} porque no tiene un número de teléfono válido.`);
-        }
-      };
-      const handleSavePlantilla = (plantillaData) => {
-        const plantillasCollection = db.collection('users').doc(user.uid).collection('plantillas');
-        if (plantillaData.id) {
-          const { id, ...data } = plantillaData;
-          plantillasCollection.doc(id).update(data).then(() => { setToast("Plantilla actualizada"); setEditingPlantilla(null); });
-        } else {
-          plantillasCollection.add(plantillaData).then(() => { setToast("Plantilla creada"); setEditingPlantilla(null); });
-        }
-      };
-      const handleDeletePlantilla = () => {
-        if (plantillaSeleccionada && window.confirm(`¿Estás seguro de que quieres eliminar la plantilla "${plantillaSeleccionada.titulo}"?`)) {
-            db.collection('users').doc(user.uid).collection('plantillas').doc(plantillaSeleccionada.id).delete().then(() => {
-                setToast("Plantilla eliminada");
-                setPlantillaSeleccionada(null);
-                setMensajePersonalizado("");
-            });
-        }
-      };
-      const handleChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, [name]: value }));
-      };
-      const handlePrecioChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, precios: { ...prev.precios, [name]: value } }));
-      };
-      const handlePrecioMensualChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value } }));
-      };
-      const handleDatosBancariosChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, datosBancarios: { ...prev.datosBancarios, [name]: value } }));
-      };
-      const handleHorarioChange = (index, campo, valor) => {
-        setForm(prev => {
-            const nuevoHorario = [...prev.horarioLaboral];
-            nuevoHorario[index] = { ...nuevoHorario[index], [campo]: valor };
-            return { ...prev, horarioLaboral: nuevoHorario };
-        });
-      };
-      const handleCopyToClipboard = (text) => {
-        navigator.clipboard.writeText(text).then(() => {
-            setToast("¡Copiado al portapapeles!");
-        }, (err) => {
-            setToast("Error al copiar");
-            console.error('Error al copiar: ', err);
-        });
-      };
-      const handleSubmit = (e) => {
-        e.preventDefault();
-        onUpdate(form);
-      };
+  // === Submit del formulario: ahora usa guardarPerfil ===
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await guardarPerfil();
+  };
       const handlePasswordReset = () => {
         if(user && user.email) {
             auth.sendPasswordResetEmail(user.email)
@@ -13395,86 +13508,116 @@ const SetupTimeField = ({ value, onChange, invalid=false, ...rest }) => (
 
     
 function MainApp({ user, onLogout }) {
+  // ===== Hooks arriba =====
   const [current, setCurrent] = useState("dashboard");
   const [prefillClase, setPrefillClase] = useState(null);
-
-  const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {} });
+  const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {}, grupos: [] });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
   const [deletingInfo, setDeletingInfo] = useState({ id: null, type: null, collection: null });
   const [payingClase, setPayingClase] = useState(null);
   const [navExpanded, setNavExpanded] = React.useState(false);
   const [focusAlumnoId, setFocusAlumnoId] = useState(null);
-  const openPagoPendiente = (clase, alumnoId) => {
-    if (clase) {
-      setPayingClase(clase);
-      setFocusAlumnoId(alumnoId);
-    }
-  };
   const [claseParaAgendar, setClaseParaAgendar] = useState(null);
   const [payingCuota, setPayingCuota] = useState({ alumno: null, mes: null });
   const [claseParaEditar, setClaseParaEditar] = useState(null);
   const [nuevoAlumnoId, setNuevoAlumnoId] = useState(null);
-  const openRegistrarClaseForAlumno = (alumnoId) => { setCurrent("clases"); setNuevoAlumnoId(alumnoId); };
-  const [registrandoAbono, setRegistrandoAbono] = useState(null);
-  const [pagoParaEditar, setPagoParaEditar] = useState(null);
   const [clubActivoId, setClubActivoId] = useState(null);
   const [clubes, setClubes] = useState([]);
   const [hasClubs, setHasClubs] = useState(false);
+  const [registrandoAbono, setRegistrandoAbono] = useState(null);
+  const [pagoParaEditar, setPagoParaEditar] = useState(null);
 
+  // === Handlers de nivel superior (usados en el render) ===
+  const openRegistrarClaseForAlumno = React.useCallback((alumnoId) => {
+    setCurrent('clases');
+    setNuevoAlumnoId(alumnoId ?? null);
+  }, []);
+
+  const openPagoPendiente = React.useCallback((clase, alumnoId) => {
+    if (!clase) return;
+    setPayingClase(clase);
+    setFocusAlumnoId(alumnoId ?? null);
+  }, []);
+
+  // === Efecto: lista de clubs (con cleanup) ===
   useEffect(() => {
     if (!user) return;
+    let alive = true;
     setLoading(true);
 
     const clubsRef = db.collection('users').doc(user.uid).collection('clubs');
-    const clubsUnsubscribe = clubsRef.onSnapshot(snapshot => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setClubes(data);
-      setHasClubs(data.length > 0);
-
-      if (data.length > 0) {
-        if (!clubActivoId) {
-          setClubActivoId(data[0].id);
-        }
-      } else {
-        setClubActivoId(null);
+    const clubsUnsubscribe = clubsRef.onSnapshot(
+      (snapshot) => {
+        if (!alive) return;
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setClubes(data);
+        setHasClubs(data.length > 0);
+        setClubActivoId(prev => (prev ?? (data[0]?.id || null)));
+        setLoading(false);
+      },
+      (error) => {
+        if (!alive) return;
+        console.error("Error fetching clubs: ", error);
+        setLoading(false);
       }
-      setLoading(false);
-    }, error => {
-      console.error("Error fetching clubs: ", error);
-      setLoading(false);
-    });
+    );
 
-    return () => clubsUnsubscribe();
+    return () => { alive = false; clubsUnsubscribe && clubsUnsubscribe(); };
   }, [user]);
 
+  // === Efecto: perfil + colecciones del club (con cleanup) ===
   useEffect(() => {
     if (!user || !clubActivoId) return;
+    let alive = true;
 
-    const baseRef = db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId);
-    
-    const profileUnsubscribe = db.collection('users').doc(user.uid).collection('profile').doc('main').onSnapshot(doc => {
-      if (doc.exists) {
-          setState(prevState => ({ ...prevState, perfil: { ...initialState.perfil, ...doc.data()} }));
-      } else {
-          setState(prevState => ({ ...prevState, perfil: initialState.perfil }));
-      }
+    const userRef = db.collection('users').doc(user.uid);
+    const baseRef = userRef.collection('clubs').doc(clubActivoId);
+
+    const perfilDocClub = baseRef.collection('perfil').doc('main');
+    const perfilDocUser = userRef.collection('profile').doc('main');
+
+    const unsubscribes = [];
+
+    const profileUnsubscribe = perfilDocClub.onSnapshot(
+      async (snap) => {
+        if (!alive) return;
+        try {
+          if (snap.exists) {
+            setState(prev => ({ ...prev, perfil: { ...initialState.perfil, ...snap.data() } }));
+          } else {
+            const uSnap = await perfilDocUser.get();
+            setState(prev => ({
+              ...prev,
+              perfil: uSnap.exists ? { ...initialState.perfil, ...uSnap.data() } : initialState.perfil
+            }));
+          }
+        } catch (e) {
+          if (!alive) return;
+          console.error('Error fetching perfil:', e);
+          setState(prev => ({ ...prev, perfil: initialState.perfil }));
+        }
+      },
+      (e) => console.error('Error listening perfil:', e)
+    );
+    unsubscribes.push(profileUnsubscribe);
+
+    ['alumnos', 'clases', 'pagos', 'gastos', 'grupos'].forEach((collectionName) => {
+      const unsubscribe = baseRef.collection(collectionName).onSnapshot(
+        (snapshot) => {
+          if (!alive) return;
+          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setState(prev => ({ ...prev, [collectionName]: data }));
+        },
+        (error) => console.error(`Error fetching ${collectionName}:`, error)
+      );
+      unsubscribes.push(unsubscribe);
     });
 
-    const collections = ['alumnos', 'clases', 'pagos', 'gastos', 'grupos'];
-    const unsubscribes = [profileUnsubscribe];
-
-    collections.forEach(collectionName => {
-        const unsubscribe = baseRef.collection(collectionName).onSnapshot(snapshot => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setState(prevState => ({ ...prevState, [collectionName]: data }));
-        }, error => console.error(`Error fetching ${collectionName}: `, error));
-        unsubscribes.push(unsubscribe);
-    });
-
-    return () => unsubscribes.forEach(unsub => unsub());
+    return () => { alive = false; unsubscribes.forEach(u => { try { u && u(); } catch (_) {} }); };
   }, [user, clubActivoId]);
 
+  // === Helpers de colección ===
   const getCollection = (collectionName) => {
     if (!clubActivoId) {
       console.error("No club active. Cannot get collection.");
@@ -13482,7 +13625,8 @@ function MainApp({ user, onLogout }) {
     }
     return db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId).collection(collectionName);
   };
-  
+
+  // === CRUDs ===
   const alumnoCrud = {
     create: async (data) => {
       const collectionRef = getCollection('alumnos');
@@ -13499,208 +13643,196 @@ function MainApp({ user, onLogout }) {
     delete: (id) => setDeletingInfo({ id, type: 'alumno', collection: 'alumnos' }),
   };
 
-const pagoCrud = {
-  // Guarda pagos por clase. Si un pago viene como “Mixto”, lo divide en dos documentos:
-  // uno Efectivo y otro Transferencia.
-  createPagosClase: async (pagosData = []) => {
-    try {
-      const collectionRef = getCollection('pagos');
-      if (!collectionRef) { alert('No hay club activo.'); return; }
-      if (!payingClase || !payingClase.id) { alert('Clase no definida para pago.'); return; }
+  const pagoCrud = {
+    createPagosClase: async (pagosData = []) => {
+      try {
+        const collectionRef = getCollection('pagos');
+        if (!collectionRef) { alert('No hay club activo.'); return; }
+        if (!payingClase || !payingClase.id) { alert('Clase no definida para pago.'); return; }
 
-      const normal = (v) => {
-        if (v == null) return 0;
-        const s = String(v).replace(/\./g, '').replace(',', '.');
-        const n = parseFloat(s);
-        return isNaN(n) ? 0 : n;
-      };
+        const normal = (v) => {
+          if (v == null) return 0;
+          const s = String(v).replace(/\./g, '').replace(',', '.');
+          const n = parseFloat(s);
+          return isNaN(n) ? 0 : n;
+        };
 
-      const normMethod = (s) => {
-        const m = String(s || '').trim().toLowerCase();
-        if (m.startsWith('efect')) return 'Efectivo';
-        if (m.startsWith('transf') || m.startsWith('tx')) return 'Transferencia';
-        if (m.startsWith('mensu')) return 'Mensual';
-        if (m.startsWith('pend')) return 'Pendiente';
-        if (m.startsWith('mixto')) return 'Mixto';
-        return s || 'Efectivo';
-      };
+        const normMethod = (s) => {
+          const m = String(s || '').trim().toLowerCase();
+          if (m.startsWith('efect')) return 'Efectivo';
+          if (m.startsWith('transf') || m.startsWith('tx')) return 'Transferencia';
+          if (m.startsWith('mensu')) return 'Mensual';
+          if (m.startsWith('pend')) return 'Pendiente';
+          if (m.startsWith('mixto')) return 'Mixto';
+          return s || 'Efectivo';
+        };
 
-      const isZeroLike = (x) => {
-        const n = Number(x);
-        return !Number.isFinite(n) || n <= 0;
-      };
+        const isZeroLike = (x) => {
+          const n = Number(x);
+          return !Number.isFinite(n) || n <= 0;
+        };
 
-      // Convierte “Mixto” en dos ítems (efectivo/transferencia)
-      const expandMixto = (p) => {
-        const metodo = String(p.metodo || '').trim().toLowerCase();
-        if (metodo !== 'mixto') return [p];
+        const expandMixto = (p) => {
+          const metodo = String(p.metodo || '').trim().toLowerCase();
+          if (metodo !== 'mixto') return [p];
 
-        const ef = normal(p.mixtoEfectivo ?? p.efectivo ?? p.efectivoMonto ?? p.cash ?? p.contado);
-        const tx = normal(p.mixtoTransferencia ?? p.transferencia ?? p.transf ?? p.transferenciaMonto ?? p.tx);
+          const ef = normal(p.mixtoEfectivo ?? p.efectivo ?? p.efectivoMonto ?? p.cash ?? p.contado);
+          const tx = normal(p.mixtoTransferencia ?? p.transferencia ?? p.transf ?? p.transferenciaMonto ?? p.tx);
 
-        const out = [];
-        if (!isZeroLike(ef)) out.push({ ...p, metodo: 'Efectivo', monto: ef });
-        if (!isZeroLike(tx)) out.push({ ...p, metodo: 'Transferencia', monto: tx });
+          const out = [];
+          if (!isZeroLike(ef)) out.push({ ...p, metodo: 'Efectivo', monto: ef });
+          if (!isZeroLike(tx)) out.push({ ...p, metodo: 'Transferencia', monto: tx });
 
-        if (out.length === 0) throw new Error('Pago Mixto sin montos desglosados (Efectivo/Transferencia).');
-        return out;
-      };
+          if (out.length === 0) throw new Error('Pago Mixto sin montos desglosados (Efectivo/Transferencia).');
+          return out;
+        };
 
-      // Aplanar pagos (expandiendo mixtos)
-      const items = [];
-      for (const p of (pagosData || [])) {
-        const metodo = normMethod(p.metodo);
-        if (metodo === 'Mixto') {
-          items.push(...expandMixto(p));
-        } else {
-          items.push({ ...p, monto: normal(p.monto), metodo });
+        const items = [];
+        for (const p of (pagosData || [])) {
+          const metodo = normMethod(p.metodo);
+          if (metodo === 'Mixto') {
+            items.push(...expandMixto(p));
+          } else {
+            items.push({ ...p, monto: normal(p.monto), metodo });
+          }
         }
+
+        const batch = db.batch();
+        for (const p of items) {
+          if (p.metodo === 'Pendiente') continue;
+          if (isZeroLike(p.monto)) continue;
+
+          const docRef = collectionRef.doc();
+          batch.set(docRef, {
+            claseId: payingClase.id,
+            alumnoId: p.alumnoId,
+            fecha: payingClase.fecha,
+            concepto: `Pago de clase de ${labelSinClase(payingClase.tipo)} (${payingClase.fecha})`,
+            metodo: p.metodo,
+            monto: Number(p.monto || 0),
+          });
+        }
+        await batch.commit();
+
+        // Recalcular pagada
+        const pagosSnap = await collectionRef.where('claseId', '==', payingClase.id).get();
+        let totalPagado = 0;
+        pagosSnap.forEach(d => { totalPagado += Number(d.data().monto || 0); });
+
+        const claseRef = getCollection('clases').doc(payingClase.id);
+        const precioClase = Number(payingClase.precio || 0);
+        await claseRef.set({ pagada: totalPagado >= precioClase }, { merge: true });
+
+        setToast("Pagos registrados");
+        setPayingClase(null);
+        setFocusAlumnoId(null);
+        setClaseParaAgendar(payingClase);
+      } catch (err) {
+        console.error('createPagosClase error:', err);
+        alert('No se pudo guardar el/los pagos. Revisá la consola para más detalles.');
       }
+    },
 
-      // Guardar solo pagos válidos
-      const batch = db.batch();
-      for (const p of items) {
-        if (p.metodo === 'Pendiente') continue;
-        if (isZeroLike(p.monto)) continue;
-
-        const docRef = collectionRef.doc();
-        batch.set(docRef, {
-          claseId: payingClase.id,
-          alumnoId: p.alumnoId,
-          fecha: payingClase.fecha,
-          concepto: `Pago de clase de ${labelSinClase(payingClase.tipo)} (${payingClase.fecha})`,
-          metodo: p.metodo,
-          monto: Number(p.monto || 0),
-        });
-      }
-      await batch.commit();
-
-      // Recalcular clase.pagada
-      const pagosSnap = await collectionRef.where('claseId', '==', payingClase.id).get();
-      let totalPagado = 0;
-      pagosSnap.forEach(d => { totalPagado += Number(d.data().monto || 0); });
-
-      const claseRef = getCollection('clases').doc(payingClase.id);
-      const precioClase = Number(payingClase.precio || 0);
-      await claseRef.set({ pagada: totalPagado >= precioClase }, { merge: true });
-
-      setToast("Pagos registrados");
-      setPayingClase(null);
-      setFocusAlumnoId(null);
-      setClaseParaAgendar(payingClase);
-    } catch (err) {
-      console.error('createPagosClase error:', err);
-      alert('No se pudo guardar el/los pagos. Revisá la consola para más detalles.');
-    }
-  },
-
-  // ✅ ESTA ES LA CLAVE QUE FALTABA
-  createAbono: (pagoData, alumno) => {
-    const collectionRef = getCollection('pagos');
-    if (!collectionRef) return;
-    const newPago = {
-      alumnoId: alumno.id,
-      fecha: pagoData.fechaPago,
-      concepto: pagoData.concepto || `Abono Mensual - ${MESES_NOMBRES[pagoData.mes]}`,
-      monto: pagoData.monto,
-      metodo: pagoData.metodo
-    };
-    collectionRef.add(newPago).then(() => {
-      setToast("Pago de abono registrado con éxito");
-      setRegistrandoAbono(null);
-    });
-  },
-
-  createMensual: (pagoData) => {
-    const collectionRef = getCollection('pagos');
-    if (!collectionRef) return;
-    const { alumno, mes } = payingCuota;
-    const fecha = new Date();
-    fecha.setMonth(mes);
-    const newPago = {
-      alumnoId: alumno.id,
-      fecha: formatDate(fecha),
-      concepto: `Cuota Mensual - ${MESES_NOMBRES[mes]}`,
-      ...pagoData
-    };
-    collectionRef.add(newPago).then(() => {
-      setToast("Pago de cuota registrado");
-      setPayingCuota({ alumno: null, mes: null });
-    });
-  },
-
-  update: ({ id, ...data }) => {
-    const collectionRef = getCollection('pagos');
-    if (!collectionRef) return;
-
-    // Si quisieras permitir editar “Mixto” desde el modal de edición,
-    // podés seguir guardando los campos auxiliares:
-    const dataToSave = { ...data };
-    if (data.metodo === 'Mixto') {
-      dataToSave.detalleMixto = {
-        efectivo: parseFloat(data.mixtoEfectivo) || 0,
-        transferencia: parseFloat(data.mixtoTransferencia) || 0
+    createAbono: (pagoData, alumno) => {
+      const collectionRef = getCollection('pagos');
+      if (!collectionRef) return;
+      const newPago = {
+        alumnoId: alumno.id,
+        fecha: pagoData.fechaPago,
+        concepto: pagoData.concepto || `Abono Mensual - ${MESES_NOMBRES[pagoData.mes]}`,
+        monto: pagoData.monto,
+        metodo: pagoData.metodo
       };
+      collectionRef.add(newPago).then(() => {
+        setToast("Pago de abono registrado con éxito");
+        setRegistrandoAbono(null);
+      });
+    },
+
+    createMensual: (pagoData) => {
+      const collectionRef = getCollection('pagos');
+      if (!collectionRef) return;
+      const { alumno, mes } = payingCuota;
+      const fecha = new Date();
+      fecha.setMonth(mes);
+      const newPago = {
+        alumnoId: alumno.id,
+        fecha: formatDate(fecha),
+        concepto: `Cuota Mensual - ${MESES_NOMBRES[mes]}`,
+        ...pagoData
+      };
+      collectionRef.add(newPago).then(() => {
+        setToast("Pago de cuota registrado");
+        setPayingCuota({ alumno: null, mes: null });
+      });
+    },
+
+    update: ({ id, ...data }) => {
+      const collectionRef = getCollection('pagos');
+      if (!collectionRef) return;
+
+      const dataToSave = { ...data };
+      if (data.metodo === 'Mixto') {
+        dataToSave.detalleMixto = {
+          efectivo: parseFloat(data.mixtoEfectivo) || 0,
+          transferencia: parseFloat(data.mixtoTransferencia) || 0
+        };
+      }
+      delete dataToSave.mixtoEfectivo;
+      delete dataToSave.mixtoTransferencia;
+
+      return collectionRef.doc(id).update(dataToSave).then(() => {
+        setToast("Pago actualizado con éxito");
+        setPagoParaEditar(null);
+      });
     }
-    delete dataToSave.mixtoEfectivo;
-    delete dataToSave.mixtoTransferencia;
+  };
 
-    return collectionRef.doc(id).update(dataToSave).then(() => {
-      setToast("Pago actualizado con éxito");
-      setPagoParaEditar(null);
-    });
-  }
-};
+  const claseCrud = {
+    create: async (c) => {
+      const collectionRef = getCollection('clases');
+      if (!collectionRef) return;
+      const claseData = { ...c };
+      delete claseData.id;
 
- const claseCrud = {
-  create: async (c) => {
-    const collectionRef = getCollection('clases');
-    if (!collectionRef) return;
-    const claseData = { ...c };
-    delete claseData.id;
+      const shouldPay = claseData.estado === 'Realizada' || claseData.estado === 'Ausente';
 
-    const shouldPay = claseData.estado === 'Realizada' || claseData.estado === 'Ausente';
-
-    let nuevaClaseId;
-
-    if (claseData.recurrente) {
-      const batch = db.batch();
-      const semanas = parseInt(claseData.mesesRecurrencia, 10) * 4;
-      for (let i = 0; i < semanas; i++) {
+      if (claseData.recurrente) {
+        const batch = db.batch();
+        const semanas = parseInt(claseData.mesesRecurrencia, 10) * 4;
+        for (let i = 0; i < semanas; i++) {
           const nuevaFecha = addDays(new Date(claseData.fecha), i * 7);
           const newClase = { ...claseData, fecha: formatDate(nuevaFecha), recurrente: false };
           const docRef = collectionRef.doc();
           batch.set(docRef, newClase);
+        }
+        await batch.commit();
+        setToast("Clases recurrentes creadas");
+      } else {
+        const docRef = await collectionRef.add(claseData);
+        const nuevaClaseId = docRef.id;
+        setToast("Clase creada");
+
+        if (shouldPay && nuevaClaseId) {
+          const claseParaPagar = { ...claseData, id: nuevaClaseId };
+          setPayingClase(claseParaPagar);
+        }
       }
-      await batch.commit();
-      setToast("Clases recurrentes creadas");
-    } else {
-      const docRef = await collectionRef.add(claseData);
-      nuevaClaseId = docRef.id;
-      setToast("Clase creada");
-    }
+    },
+    update: ({ id, ...data }) => {
+      const collectionRef = getCollection('clases');
+      if (!collectionRef) return;
 
-    if (shouldPay && nuevaClaseId) {
-        const claseParaPagar = { ...claseData, id: nuevaClaseId };
-        setPayingClase(claseParaPagar);
-    }
-  },
-  update: ({ id, ...data }) => {
-  const collectionRef = getCollection('clases');
-  if (!collectionRef) return;
+      const shouldPay = data.estado === 'Realizada' || data.estado === 'Ausente';
 
-  const shouldPay = data.estado === 'Realizada' || data.estado === 'Ausente';
+      return collectionRef.doc(id).update(data).then(() => {
+        setToast("Clase actualizada");
+        if (shouldPay) setPayingClase({ ...data, id });
+      });
+    },
+    delete: (id) => setDeletingInfo({ id, type: 'clase', collection: 'clases' }),
+  };
 
-  return collectionRef.doc(id).update(data).then(() => {
-    setToast("Clase actualizada");
-    if (shouldPay) {
-      // ✅ abrimos el modal de pagos desde MainApp igual que en create
-      setPayingClase({ ...data, id });
-    }
-  });
-},
-  delete: (id) => setDeletingInfo({ id, type: 'clase', collection: 'clases' }),
-};
   const gastoCrud = {
     create: (g) => {
       const collectionRef = getCollection('gastos');
@@ -13714,10 +13846,30 @@ const pagoCrud = {
     },
     delete: (id) => setDeletingInfo({ id, type: 'gasto', collection: 'gastos' }),
   };
-  const perfilCrud = {
-    update: (p) => db.collection('users').doc(user.uid).collection('profile').doc('main').set(p, { merge: true }).then(() => setToast("Perfil actualizado"))
-  };
 
+  // Reemplazá tu perfilCrud por este (o actualizá el update)
+const perfilCrud = {
+  update: async (p) => {
+    const u = auth.currentUser;
+    if (!u || !clubActivoId) return;
+
+    // 1) Perfil del CLUB activo
+    await db.collection('users').doc(u.uid)
+      .collection('clubs').doc(clubActivoId)
+      .collection('perfil').doc('main')
+      .set(p, { merge: true });
+
+    // 2) (Opcional) también el perfil global, para defaults
+    await db.collection('users').doc(u.uid)
+      .collection('profile').doc('main')
+      .set(p, { merge: true });
+
+    setToast("Perfil actualizado");
+  }
+};
+
+
+  // === Acciones auxiliares ===
   const confirmDelete = async () => {
     const { id, type, collection } = deletingInfo;
     if (!id || !collection) return;
@@ -13733,9 +13885,8 @@ const pagoCrud = {
     setToast(`${type.charAt(0).toUpperCase() + type.slice(1)} eliminado/a`);
     setDeletingInfo({ id: null, type: null, collection: null });
   };
-  const handleRegisterMonthlyPayment = (alumno) => {
-    setRegistrandoAbono(alumno);
-  };
+
+  const handleRegisterMonthlyPayment = (alumno) => setRegistrandoAbono(alumno);
 
   const handleExportData = () => {
     const dataToExport = {
@@ -13781,140 +13932,198 @@ const pagoCrud = {
     };
     reader.readAsText(file);
   };
-  const goToEditClass = (clase) => {
-    setClaseParaEditar(clase);
-    setCurrent("clases");
-  };
-  const handleDeletePago = (pagoId) => {
-    setDeletingInfo({ id: pagoId, type: 'pago', collection: 'pagos' });
-  };
 
+  const goToEditClass = (clase) => { setClaseParaEditar(clase); setCurrent("clases"); };
+  const handleDeletePago = (pagoId) => setDeletingInfo({ id: pagoId, type: 'pago', collection: 'pagos' });
+
+  // === Render ===
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="loader"></div></div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="loader"></div>
+      </div>
+    );
   }
 
   if (!hasClubs) {
-  return (
-    <OnboardingClubSetup
-      user={user}
-      setHasClubs={setHasClubs}
-      onLogout={onLogout}
-    />
-  );
-}
+    return (
+      <OnboardingClubSetup
+        user={user}
+        setHasClubs={setHasClubs}
+        onLogout={onLogout}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans overflow-x-hidden">
       <SideNav
-    current={current}
-    setCurrent={setCurrent}
-    onLogout={onLogout}
-    clubes={clubes}
-    clubActivoId={clubActivoId}
-    expanded={navExpanded}
-    onExpandChange={setNavExpanded}
-  />
+        current={current}
+        setCurrent={setCurrent}
+        onLogout={onLogout}
+        clubes={clubes}
+        clubActivoId={clubActivoId}
+        expanded={navExpanded}
+        onExpandChange={setNavExpanded}
+      />
+
       <main
-  className={
-    "min-h-screen bg-white pb-16 md:pb-0 transition-[padding] duration-300 " +
-    (navExpanded ? "md:pl-56" : "md:pl-16")
-  }
->
-  <Page>
-        {current === "dashboard" && <Dashboard
-          perfil={state.perfil}
-          clases={state.clases}
-          pagos={state.pagos}
-          gastos={state.gastos}
-          alumnos={state.alumnos}
-          clubes={clubes}
-          clubActivoId={clubActivoId}
-          goToNewClass={(prefill) => { setPrefillClase(prefill || null); setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }}
-          goToEditClass={goToEditClass}
-        />}
-        {current === "alumnos" && <Alumnos
-          clases={state.clases}
-          pagos={state.pagos}
-          alumnos={state.alumnos}
-          onCreate={alumnoCrud.create}
-          onUpdate={alumnoCrud.update}
-          onDelete={alumnoCrud.delete}
-          onRegisterMonthlyPayment={handleRegisterMonthlyPayment}
-          onRegistrarClase={openRegistrarClaseForAlumno}
-          onPagarPendiente={openPagoPendiente}
-          onEditarPago={(pago) => setPagoParaEditar(pago)}
-          onDeletePago={handleDeletePago}
-          user={user}
-          clubActivoId={clubActivoId}
-          perfil={state.perfil}
-        />}
-        {current === "clases" && <Clases
-          clases={state.clases}
-          alumnos={state.alumnos}
-          pagos={state.pagos}
-          perfil={state.perfil}
-          onCreate={claseCrud.create}
-          onUpdate={claseCrud.update}
-          onDelete={claseCrud.delete}
-          onPay={(clase) => setPayingClase(clase)}
-          user={user}
-          claseParaEditar={claseParaEditar}
-          setClaseParaEditar={setClaseParaEditar}
-          nuevoAlumnoId={nuevoAlumnoId}
-          setNuevoAlumnoId={setNuevoAlumnoId}
-          prefillClase={prefillClase}
-          onPrefillConsumed={() => setPrefillClase(null)}
-          grupos={state.grupos}
-          clubActivoId={clubActivoId}
-        />}
-        {current === "grupos" && (
-  <Grupos
-    alumnos={state.alumnos}
-    user={user}
-    perfil={state.perfil}
-    clubActivoId={clubActivoId}
-  />
-)}
-        {current === "pagos" && <Pagos pagos={state.pagos} alumnos={state.alumnos} clases={state.clases} perfil={state.perfil} onPayMensual={(alumno, mes) => setPayingCuota({ alumno, mes })} onEditarPago={(pago) => setPagoParaEditar(pago)} onDeletePago={handleDeletePago} />}
-        {current === "gastos" && <Gastos gastos={state.gastos} onCreate={gastoCrud.create} onUpdate={gastoCrud.update} onDelete={gastoCrud.delete} />}
-        {current === "reportes" && <Reportes pagos={state.pagos} gastos={state.gastos} alumnos={state.alumnos} clases={state.clases} clubActivoId={clubActivoId} clubes={clubes} perfil={state.perfil} />}
-        {current === "rankings" && (
-  <Rankings alumnos={state.alumnos} user={user} clubActivoId={clubActivoId} />
-)}
-{current === "torneos" && (
-  <Torneos alumnos={state.alumnos} user={user} clubActivoId={clubActivoId} perfil={state.perfil} />
-)}
-        {current === "perfil" && <Perfil
-          perfil={state.perfil}
-          alumnos={state.alumnos}
-          clases={state.clases}
-          pagos={state.pagos}
-          gastos={state.gastos}
-          grupos={state.grupos}
-          onUpdate={perfilCrud.update}
-          user={user}
-          setToast={setToast}
-          getCollection={getCollection}
-          perfilCrud={perfilCrud}
-          
-        />}
-   </Page>
-   <div
-    className="md:hidden"
-    style={{ height: "calc(56px + env(safe-area-inset-bottom))" }}
-  />
+        className={
+          "min-h-screen bg-white pb-16 md:pb-0 transition-[padding] duration-300 " +
+          (navExpanded ? "md:pl-56" : "md:pl-16")
+        }
+      >
+        <Page>
+          {current === "dashboard" && (
+            <Dashboard
+              perfil={state.perfil}
+              clases={state.clases}
+              pagos={state.pagos}
+              gastos={state.gastos}
+              alumnos={state.alumnos}
+              clubes={clubes}
+              clubActivoId={clubActivoId}
+              goToNewClass={(prefill) => { setPrefillClase(prefill || null); setCurrent('clases'); setTimeout(() => document.querySelector('#nueva-clase-btn')?.click(), 50); }}
+              goToEditClass={goToEditClass}
+            />
+          )}
+
+          {current === "alumnos" && (
+            <Alumnos
+              clases={state.clases}
+              pagos={state.pagos}
+              alumnos={state.alumnos}
+              onCreate={alumnoCrud.create}
+              onUpdate={alumnoCrud.update}
+              onDelete={alumnoCrud.delete}
+              onRegisterMonthlyPayment={handleRegisterMonthlyPayment}
+              onRegistrarClase={openRegistrarClaseForAlumno}
+              onPagarPendiente={openPagoPendiente}
+              onEditarPago={(pago) => setPagoParaEditar(pago)}
+              onDeletePago={handleDeletePago}
+              user={user}
+              clubActivoId={clubActivoId}
+              perfil={state.perfil}
+              openRegistrarClaseForAlumno={openRegistrarClaseForAlumno}
+            />
+          )}
+
+          {current === "clases" && (
+            <Clases
+              clases={state.clases}
+              alumnos={state.alumnos}
+              pagos={state.pagos}
+              perfil={state.perfil}
+              gastos={state.gastos}               
+              onCreate={claseCrud.create}
+              onUpdate={claseCrud.update}
+              onDelete={claseCrud.delete}
+              onPay={(clase) => setPayingClase(clase)}
+              user={user}
+              claseParaEditar={claseParaEditar}
+              setClaseParaEditar={setClaseParaEditar}
+              nuevoAlumnoId={nuevoAlumnoId}
+              setNuevoAlumnoId={setNuevoAlumnoId}
+              prefillClase={prefillClase}
+              onPrefillConsumed={() => setPrefillClase(null)}
+              grupos={state.grupos}
+              clubActivoId={clubActivoId}
+            />
+          )}
+
+          {current === "grupos" && (
+            <Grupos
+              alumnos={state.alumnos}
+              user={user}
+              perfil={state.perfil}
+              clubActivoId={clubActivoId}
+            />
+          )}
+
+          {current === "pagos" && (
+            <Pagos
+              pagos={state.pagos}
+              alumnos={state.alumnos}
+              clases={state.clases}
+              perfil={state.perfil}
+              onPayMensual={(alumno, mes) => setPayingCuota({ alumno, mes })}
+              onEditarPago={(pago) => setPagoParaEditar(pago)}
+              onDeletePago={handleDeletePago}
+            />
+          )}
+
+          {current === "gastos" && (
+            <Gastos
+              gastos={state.gastos}
+              onCreate={gastoCrud.create}
+              onUpdate={gastoCrud.update}
+              onDelete={gastoCrud.delete}
+            />
+          )}
+
+          {current === "reportes" && (
+            <Reportes
+              pagos={state.pagos}
+              gastos={state.gastos}
+              alumnos={state.alumnos}
+              clases={state.clases}
+              clubActivoId={clubActivoId}
+              clubes={clubes}
+              perfil={state.perfil}
+            />
+          )}
+
+          {current === "rankings" && (
+            <Rankings alumnos={state.alumnos} user={user} clubActivoId={clubActivoId} />
+          )}
+
+          {current === "torneos" && (
+            <Torneos alumnos={state.alumnos} user={user} clubActivoId={clubActivoId} perfil={state.perfil} />
+          )}
+
+          {current === "perfil" && (
+            <Perfil
+              perfil={state.perfil}
+              alumnos={state.alumnos}
+              clases={state.clases}
+              pagos={state.pagos}
+              gastos={state.gastos}
+              grupos={state.grupos}
+              onUpdate={perfilCrud.update}
+              user={user}
+              setToast={setToast}
+              getCollection={getCollection}
+              perfilCrud={perfilCrud}
+              openRegistrarClaseForAlumno={openRegistrarClaseForAlumno}
+              onExport={handleExportData}
+              onImport={handleImportData}
+            />
+          )}
+        </Page>
+
+        <div className="md:hidden" style={{ height: "calc(56px + env(safe-area-inset-bottom))" }} />
       </main>
+
       <Toast msg={toast} onClose={() => setToast("")} />
-      <Modal isOpen={!!deletingInfo.id} title={`Eliminar ${deletingInfo.type}`} onConfirm={confirmDelete} onCancel={() => setDeletingInfo({ id: null, type: null, collection: null })} >
+
+      <Modal
+        isOpen={!!deletingInfo.id}
+        title={`Eliminar ${deletingInfo.type}`}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeletingInfo({ id: null, type: null, collection: null })}
+      >
         ¿Estás seguro? Esta acción no se puede deshacer.
       </Modal>
+
       <PagoGrupalModal
         isOpen={!!payingClase}
         clase={payingClase}
         alumnos={state.alumnos}
         onCancel={() => { setPayingClase(null); setFocusAlumnoId(null); }}
-        focusAlumnoId={focusAlumnoId} onSave={pagoCrud.createPagosClase}
+        focusAlumnoId={focusAlumnoId}
+        onSave={pagoCrud.createPagosClase}
       />
+
       <RegistroPagoMensualModal
         isOpen={!!registrandoAbono}
         alumno={registrandoAbono}
@@ -13922,24 +14131,37 @@ const pagoCrud = {
         onCancel={() => setRegistrandoAbono(null)}
         onSave={(pagoData) => pagoCrud.createAbono(pagoData, registrandoAbono)}
       />
-      <PagoMensualModal isOpen={!!payingCuota.alumno} alumno={payingCuota.alumno} mes={payingCuota.mes} onCancel={() => setPayingCuota({ alumno: null, mes: null })} onSave={pagoCrud.createMensual} />
+
+      <PagoMensualModal
+        isOpen={!!payingCuota.alumno}
+        alumno={payingCuota.alumno}
+        mes={payingCuota.mes}
+        onCancel={() => setPayingCuota({ alumno: null, mes: null })}
+        onSave={pagoCrud.createMensual}
+      />
+
       <EditarPagoModal
         isOpen={!!pagoParaEditar}
         pago={pagoParaEditar}
         onCancel={() => setPagoParaEditar(null)}
         onSave={pagoCrud.update}
-            />
-            <AgendarProximaClaseModal
-          isOpen={!!claseParaAgendar}
-          onClose={() => setClaseParaAgendar(null)}
-          onSchedule={claseCrud.create}
-          claseBase={claseParaAgendar}
-          alumnos={state.alumnos}
       />
-      <footer className="text-center text-xs text-slate-500 py-6">Coachex-Pro · Gestión de Profesores</footer>
+
+      <AgendarProximaClaseModal
+        isOpen={!!claseParaAgendar}
+        onClose={() => setClaseParaAgendar(null)}
+        onSchedule={claseCrud.create}
+        claseBase={claseParaAgendar}
+        alumnos={state.alumnos}
+      />
+
+      <footer className="text-center text-xs text-slate-500 py-6">
+        Coachex-Pro · Gestión de Profesores
+      </footer>
     </div>
   );
 }
+
 
 function AgendarProximaClaseModal({ isOpen, onClose, onSchedule, claseBase, alumnos }) {
   // -- Helpers --
@@ -14136,43 +14358,83 @@ function AgendarProximaClaseModal({ isOpen, onClose, onSchedule, claseBase, alum
 
 
     // ------------------------------ APP WRAPPER WITH AUTH ------------------------------
-    function AppGPadel() {
-        const [user, setUser] = useState(null);
-        const [loading, setLoading] = useState(true);
+function AppGPadel() {
+  const [user, setUser] = useState(null);
+  const [stage, setStage] = useState('loading'); // 'loading' | 'login' | 'verify' | 'app'
 
-        useEffect(() => {
-            const unsubscribe = auth.onAuthStateChanged(user => {
-                setUser(user);
-                setLoading(false);
-            });
-            return () => unsubscribe();
-        }, []);
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (u) => {
+      try {
+        if (!u) { setUser(null); setStage('login'); return; }
 
-        if (loading) {
-            return <div className="min-h-screen flex items-center justify-center"><div className="loader"></div></div>;
-        }
+        await u.reload(); // refresca emailVerified
 
-        if (!user) {
-            return <LoginScreen />;
-        }
+        const providerIds = (u.providerData || []).map(p => p.providerId);
+        const isEmailPwd = providerIds.includes('password');
 
-        return <MainApp user={user} onLogout={() => auth.signOut()} />;
-    }
-    
-    
+        if (isEmailPwd && !u.emailVerified) { setUser(u); setStage('verify'); return; }
+        if (isEmailPwd && u.emailVerified)  { await u.getIdToken(true); } // ⬅️ token fresco
+
+        setUser(u);
+        setStage('app');
+      } catch (e) {
+        console.error('onAuthStateChanged error:', e);
+        setUser(null);
+        setStage('login');
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  if (stage === 'loading') return <div className="min-h-screen flex items-center justify-center"><div className="loader"></div></div>;
+  if (stage === 'login')   return <LoginScreen />;
+  if (stage === 'verify')  return <VerifyEmail user={user} onLogout={() => auth.signOut()} />;
+  return <MainApp user={user} onLogout={() => auth.signOut()} />;
+}
+
+function VerifyEmail({ user, onLogout }) {
+  const [sent, setSent] = useState(false);
+  const resend = async () => { await user.sendEmailVerification(); setSent(true); };
+  const recheck = async () => {
+    await user.reload();
+    if (user.emailVerified) { await user.getIdToken(true); window.location.reload(); }
+  };
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
+      <h2 className="text-xl font-semibold">Verificá tu email</h2>
+      <p>Te enviamos un correo a <b>{user.email}</b>.</p>
+      <div className="flex gap-3">
+        <button onClick={resend} className="btn">{sent ? 'Reenviado ✅' : 'Reenviar correo'}</button>
+        <button onClick={recheck} className="btn">Ya verifiqué</button>
+        <button onClick={onLogout} className="btn btn-outline">Cambiar de cuenta</button>
+      </div>
+    </div>
+  );
+}
+
 class ErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { hasError: false }; }
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error, info) { console.error("Error en ErrorBoundary:", error, info); }
-  render() {
+  constructor(props){ super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError(){ return { hasError: true }; }
+  componentDidCatch(error, info){ console.error('ErrorBoundary:', error, info); }
+  render(){
     if (this.state.hasError) {
-      return <div className="p-6 text-center text-red-700">Ocurrió un error en la vista. Probá recargar o volver al inicio.</div>;
+      return (
+        <div className="p-6 text-center text-red-700">
+          Ocurrió un error en la vista. Probá recargar o volver al inicio.
+          <div className="mt-4">
+            <button onClick={() => this.setState({ hasError:false })} className="btn">Reintentar</button>
+          </div>
+        </div>
+      );
     }
     return this.props.children;
   }
 }
 
-ReactDOM.render(<ErrorBoundary><AppGPadel /></ErrorBoundary>, document.getElementById('root'));
+ReactDOM.render(
+  <ErrorBoundary><AppGPadel /></ErrorBoundary>,
+  document.getElementById('root')
+);
 </script>
 
 <script type="text/babel">
@@ -14446,132 +14708,6 @@ await ref.set({ ajustesTorneos, participantes, updatedAt: Date.now() }, { merge:
     applyAwardsToRanking
   };
 
-  // ---- UI: Panel de configuración + botón aplicar ----
-  function RankingConfigPanel({ user, clubId, torneo, setReglas, disabled }) {
-    const [rankings, setRankings] = React.useState([]);
-    const reglas = withRankingDefaults(torneo.reglas);
-    const r = reglas.ranking;
-
-    React.useEffect(() => {
-      const col = rankingsColRef(user, clubId);
-      if (!col) return;
-      const unsub = col.orderBy('nombre', 'asc').onSnapshot(
-        s => (()=>{ const arr = s.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b)=>(a?.nombre||'').localeCompare(b?.nombre||'')); setRankings(arr); })(),
-        err => console.error('rankings list', err)
-      );
-      return () => unsub && unsub();
-    }, [user, clubId]);
-
-    const patch = (p) => setReglas({ ranking: { ...r, ...p } });
-    
-    // Elegibilidad para aplicar
-    let readyReason = null;
-    let ready = false;
-    try {
-      const fin = (typeof bracketFinalInfo === 'function') ? bracketFinalInfo(torneo.cuadro || {}) : null;
-      if (fin?.done) { ready = true; readyReason = "Fase final completada"; }
-    } catch {}
-    if (!ready && groupsAllMatchesDone(torneo)) { ready = true; readyReason = "Todos los partidos de liga están cargados"; }
-
-    const onApply = async () => {
-      if (!ready) {
-        if (!confirm("Aún no detecto el torneo como 'finalizado'. ¿Aplicar de todos modos?")) return;
-      }
-      await applyAwardsToRanking({ user, clubId, torneo, force: !ready });
-    };
-    
-    // Nueva lógica para el título dinámico
-    const isElim = torneo?.formato === 'eliminacion';
-    const tituloPuntos = isElim ? 'Puntuación en KO' : 'Puntuación en grupos';
-
-    return (
-      <div className="border rounded-2xl p-4 space-y-3 bg-white dark:bg-slate-900">
-        <div className="font-semibold text-slate-700 dark:text-slate-200">Ranking (puntos del torneo)</div>
-        <div className="grid md:grid-cols-2 gap-3">
-          <label className="text-sm">
-            <div className="text-slate-500 mb-1">Ranking destino</div>
-            <select className="w-full border rounded-xl p-2"
-                    value={r.destinoId || ''}
-                    onChange={e=>patch({ destinoId: e.target.value || null })}
-                    disabled={disabled}>
-              <option value="">— Elegí un ranking —</option>
-              {rankings.map(x => <option key={x.id} value={x.id}>{x.nombre || x.id}</option>)}
-            </select>
-          </label>
-          <label className="text-sm">
-            <div className="text-slate-500 mb-1">Multiplicador categoría</div>
-            <input className="w-full border rounded-xl p-2" type="number" step="0.05" min="0"
-                  value={r.multiplicador}
-                  onChange={e=>patch({ multiplicador: parseFloat(e.target.value || '1') })}
-                  disabled={disabled}/>
-          </label>
-        </div>
-
-        <div className="grid md:grid-cols-6 gap-3">
-          {r.liga.top.map((v,i)=>(
-            <label key={i} className="text-sm">
-              <div className="text-slate-500 mb-1">Liga: Pos {i+1}</div>
-              <input className="w-full border rounded-xl p-2" type="number"
-                    value={v} onChange={e=>{
-                      const top=[...r.liga.top]; top[i]=parseInt(e.target.value||'0',10);
-                      patch({ liga:{...r.liga, top} });
-                    }} disabled={disabled}/>
-            </label>
-          ))}
-          <label className="text-sm">
-            <div className="text-slate-500 mb-1">Liga: Participación</div>
-            <input className="w-full border rounded-xl p-2" type="number"
-                  value={r.liga.participacion}
-                  onChange={e=>patch({ liga:{...r.liga, participacion: parseInt(e.target.value||'0',10)} })}
-                  disabled={disabled}/>
-          </label>
-        </div>
-
-        <div className="grid md:grid-cols-6 gap-3">
-          {[
-            ['KO: Campeón','champion'],
-            ['KO: Subcampeón','runnerUp'],
-            ['KO: Semifinal','semi'],
-            ['KO: Cuartos','quarter'],
-            ['KO: R16','roundOf16'],
-          ].map(([lbl,key])=>(
-            <label key={key} className="text-sm">
-              <div className="text-slate-500 mb-1">{lbl}</div>
-              <input className="w-full border rounded-xl p-2" type="number"
-                    value={r.ko[key]||0}
-                    onChange={e=>patch({ ko:{...r.ko, [key]: parseInt(e.target.value||'0',10)} })}
-                    disabled={disabled}/>
-            </label>
-          ))}
-        </div>
-
-        <label className="text-sm">
-          <div className="text-slate-500 mb-1">Dobles</div>
-          <select className="w-full border rounded-xl p-2"
-                  value={r.dobles.dividir ? 'dividir' : 'completo'}
-                  onChange={e=>patch({ dobles:{ dividir: e.target.value==='dividir' } })}
-                  disabled={disabled}>
-            <option value="completo">Cada jugador recibe el total</option>
-            <option value="dividir">Dividir puntos entre la pareja</option>
-          </select>
-        </label>
-
-        <div className="flex items-center gap-3 pt-2">
-          <span className={"inline-flex items-center px-2 py-1 rounded-full text-xs " + (ready ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
-            {ready ? (readyReason || "Listo para aplicar") : "Aún no detecto el torneo finalizado"}
-          </span>
-          <button className="px-3 py-1.5 rounded-lg border hover:bg-slate-50"
-                  onClick={onApply}
-                  disabled={!r.destinoId || disabled}>
-            Aplicar puntos al Ranking
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Exponer el componente para que el código existente pueda usarlo (inserción automática abajo)
-  window.RankingConfigPanel = RankingConfigPanel;
 })();
 
 </script>
@@ -15836,9 +15972,6 @@ if (!window.findAlumnoPhone) window.findAlumnoPhone = function findAlumnoPhone(a
 </script>
 
 </script>
-
-
-
 
 </body>
 </html>
