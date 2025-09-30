@@ -11304,32 +11304,33 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
   useEffect(() => {
     const S = (v) => (v == null ? '' : String(v));
     const p = perfil || {};
-    const pc = p.preciosClase || p.precios || {}; // admitir legacy "precios"
-    if (!hydratedRef.current) {
-      setForm(prev => ({
-        ...prev,
-        moneda: p.moneda ?? 'ARS',
-        datosBancarios: { ...(prev.datosBancarios||{}), ...(p.datosBancarios||{}) },
-        horarioLaboral: p.horarioLaboral || prev.horarioLaboral,
-        modoTrabajo: 'Club',
-        pin: p.pin ?? '',
-        preciosClase: {
-          individual: S(pc.individual),
-          dupla:      S(pc.dupla ?? pc.duo),
-          trio:       S(pc.trio),
-          cuarteto:   S(pc.cuarteto),
-          escuelita:  S(pc.escuelita),
-        },
-        preciosMensuales: {
-          "1xSemana": S(p.preciosMensuales?.["1xSemana"]),
-          "2xSemana": S(p.preciosMensuales?.["2xSemana"]),
-          "3xSemana": S(p.preciosMensuales?.["3xSemana"]),
-          "libre":    S(p.preciosMensuales?.["libre"]),
-        },
-      }));
-      hydratedRef.current = true;
-    }
-  }, [perfil]);
+    const pc = p.preciosClase || p.precios || {};
+
+    // Se eliminó la condición para que el formulario siempre refleje el perfil más reciente.
+    setForm(prev => ({
+      ...prev,
+      nombre: p.nombre || '', // <-- Añadir también aquí para que se carguen
+      apellido: p.apellido || '',
+      telefono: p.telefono || '',
+      moneda: p.moneda ?? 'ARS',
+      datosBancarios: { ...(prev.datosBancarios||{}), ...(p.datosBancarios||{}) },
+      horarioLaboral: p.horarioLaboral || prev.horarioLaboral,
+      pin: p.pin ?? '',
+      preciosClase: {
+        individual: S(pc.individual),
+        dupla:      S(pc.dupla ?? pc.duo),
+        trio:       S(pc.trio),
+        cuarteto:   S(pc.cuarteto),
+        escuelita:  S(pc.escuelita),
+      },
+      preciosMensuales: {
+        "1xSemana": S(p.preciosMensuales?.["1xSemana"]),
+        "2xSemana": S(p.preciosMensuales?.["2xSemana"]),
+        "3xSemana": S(p.preciosMensuales?.["3xSemana"]),
+        "libre":    S(p.preciosMensuales?.["libre"]),
+      },
+    }));
+  }, [perfil]); // Este useEffect se ejecutará cada vez que el objeto 'perfil' cambie.
 
   // === Handlers genéricos ===
   const handleChange = (e) => {
@@ -11410,25 +11411,31 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
       await u.getIdToken(true);
 
       const payload = {
-        moneda: form.moneda || 'ARS',
-        datosBancarios: form.datosBancarios || {},
-        horarioLaboral: form.horarioLaboral || [],
-        pin: form.pin || null,
-        preciosClase: {
-          individual: Number(form.preciosClase?.individual) || 0,
-          duo:        Number(form.preciosClase?.dupla) || 0,
-          trio:       Number(form.preciosClase?.trio) || 0,
-          cuarteto:   Number(form.preciosClase?.cuarteto) || 0,
-          escuelita:  Number(form.preciosClase?.escuelita) || 0,
-        },
-        preciosMensuales: {
-          "1xSemana": Number(form.preciosMensuales?.["1xSemana"]) || 0,
-          "2xSemana": Number(form.preciosMensuales?.["2xSemana"]) || 0,
-          "3xSemana": Number(form.preciosMensuales?.["3xSemana"]) || 0,
-          "libre":    Number(form.preciosMensuales?.["libre"])    || 0,
-        },
-        updatedAt: new Date().toISOString(),
-      };
+    // --- CAMPOS AÑADIDOS ---
+    nombre: form.nombre || '',
+    apellido: form.apellido || '',
+    telefono: form.telefono || '',
+    // --- FIN DE CAMPOS AÑADIDOS ---
+
+    moneda: form.moneda || 'ARS',
+    datosBancarios: form.datosBancarios || {},
+    horarioLaboral: form.horarioLaboral || [],
+    pin: form.pin || null,
+    preciosClase: {
+      individual: Number(form.preciosClase?.individual) || 0,
+      dupla:      Number(form.preciosClase?.dupla) || 0, // Corregido para usar dupla
+      trio:       Number(form.preciosClase?.trio) || 0,
+      cuarteto:   Number(form.preciosClase?.cuarteto) || 0,
+      escuelita:  Number(form.preciosClase?.escuelita) || 0,
+    },
+    preciosMensuales: {
+      "1xSemana": Number(form.preciosMensuales?.["1xSemana"]) || 0,
+      "2xSemana": Number(form.preciosMensuales?.["2xSemana"]) || 0,
+      "3xSemana": Number(form.preciosMensuales?.["3xSemana"]) || 0,
+      "libre":    Number(form.preciosMensuales?.["libre"])    || 0,
+    },
+    updatedAt: new Date().toISOString(),
+};
 
       if (perfilCrud && typeof perfilCrud.update === 'function') {
         await perfilCrud.update(payload);  // <- tu CRUD debe escribir en .../clubs/{clubId}/perfil/main
