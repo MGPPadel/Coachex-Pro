@@ -14393,6 +14393,17 @@ function AppGPadel() {
 }
 
 function VerifyEmail({ user, onLogout }) {
+  // --- INICIO DE LA CORRECCIÓN ---
+  // Si por alguna razón el usuario es nulo, no renderizamos nada para evitar el error.
+  if (!user) {
+    return (
+        <div className="min-h-screen flex items-center justify-center">
+            <div className="loader"></div>
+        </div>
+    );
+  }
+  // --- FIN DE LA CORRECCIÓN ---
+
   const [sent, setSent] = useState(false);
   const resend = async () => { await user.sendEmailVerification(); setSent(true); };
   const recheck = async () => {
