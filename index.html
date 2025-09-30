@@ -195,7 +195,7 @@ function Page({ children }) {
         nombre: "Profe",
         apellido: "Pádel",
         telefono: "",
-        precios: {},
+        precios: { individual: "5000", dupla: "4000", trio: "3500", cuarteto: "3000", escuelita: "2500" },
         preciosMensuales: {},
         metodoCobro: "porClase",
         modoTrabajo: "Club",
@@ -226,9 +226,10 @@ function Page({ children }) {
     const DEPORTES = ["Pádel", "Tenis"];
     const ESTADOS_ALUMNO = [{value: "activo", label: "Activo"}, {value: "espera", label: "Lista de espera"}];
     const ESTADOS_CLASE = ["Programada", "Realizada", "Cancelada", "Ausente"];
-const TIPOS_CLASE_MAP = { "Clase 1 persona": 1, "Clase 2 personas": 2, "Clase 3 personas": 3, "Clase 4 personas": 4, Escuelita: 1 };
-const TIPOS_CLASE = Object.keys(TIPOS_CLASE_MAP);
+    const TIPOS_CLASE_MAP = { "Clase 1 persona": 1, "Clase 2 personas": 2, "Clase 3 personas": 3, "Clase 4 personas": 4, Escuelita: 1 };
+    const TIPOS_CLASE = Object.keys(TIPOS_CLASE_MAP);
 
+// Mapeo consistente de 'tipo' -> clave de precios del perfil
 const PRECIO_KEY_POR_TIPO = {
   "Clase 1 persona": "individual",
   "Clase 2 personas": "dupla",
@@ -237,9 +238,8 @@ const PRECIO_KEY_POR_TIPO = {
   "Escuelita": "escuelita"
 };
 
-// Mapeo consistente de 'tipo' -> clave de precios del perfil
+// Normaliza etiquetas de tipo de clase a los nombres canónicos usados en la app
 function normalizarTipoClase(t) {
-  // [ ... TU FUNCIÓN normalizarTipoClase COMPLETA ... ]
   if (!t) return "Clase 1 persona";
   // Convertimos el argumento a una cadena de texto de forma segura
   const s = String(t)
@@ -279,11 +279,7 @@ function normalizarTipoClase(t) {
 }
 const getPrecioSugerido = (tipo, perfil) => {
   const key = PRECIO_KEY_POR_TIPO[tipo] || "individual";
-
-  // CORRECCIÓN: Busca en preciosClase (nuevo) o precios (antiguo)
-  const tabla = (perfil && perfil.preciosClase) 
-    ? perfil.preciosClase 
-    : ((perfil && perfil.precios) ? perfil.precios : {});
+  const tabla = (perfil && perfil.precios) ? perfil.precios : {};
 
   function resolveTipoEfectivo(tipoOriginal, alumnoIds) {
   const n = (alumnoIds || []).filter(Boolean).length;
@@ -297,7 +293,6 @@ const getPrecioSugerido = (tipo, perfil) => {
   // Caso contrario, mantenemos el tipo declarado
   return tipoOriginal;
 }
-
 
 const computePrecioClase = (tipo, alumnoIds, perfil, alumnoMap) => {
   // 👇 ajustar tipo según cantidad (4+ => Escuelita)
@@ -1547,49 +1542,44 @@ window.generarReportePDF = async function generarReportePDF({
     }
   } catch (_) {}
 
-  // ---------- ENCABEZADO COMPACTO Y CENTRADO ----------
-  const pageW = doc.internal.pageSize.getWidth();
+  // ---------- Encabezado (ajustado) ----------
+  const pageW  = doc.internal.pageSize.getWidth();
   const margin = 14;
-  let yPos = 12; // Empezamos un poco más arriba
+  const rightX = pageW - margin;
 
-  // 1. Logo Centrado (más pequeño)
-  const logoW = 22, logoH = 22; // Reducido de 28 a 22
-  const logoX = (pageW - logoW) / 2;
-  try { if (logoDataUrl) doc.addImage(logoDataUrl, "PNG", logoX, yPos, logoW, logoH); } catch(_) {}
-  yPos += logoH + 6; // Menos espacio después del logo
+  // Logo a la izquierda
+  const logoX = margin - 4, logoY = 8, logoW = 25, logoH = 25;
+  try { if (logoDataUrl) doc.addImage(logoDataUrl, "PNG", logoX, logoY, logoW, logoH); } catch(_) {}
 
-  // 2. Título "Coachex-Pro" Centrado (más pequeño)
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18); // Reducido de 22 a 18
-  doc.text("Coachex-Pro", pageW / 2, yPos, { align: "center" });
-  yPos += 10;
-
-  // 3. Subtítulo del Reporte (también más pequeño)
+  // “Coachex-Pro” centrado debajo del logo
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(14); // Reducido de 16 a 14
-  doc.setTextColor(100);
-  doc.text(`Reporte ${tipo}`, pageW / 2, yPos, { align: "center" });
-  yPos += 10;
-  
-  // 4. Línea separadora
-  doc.setDrawColor(220);
-  doc.setLineWidth(0.5);
-  doc.line(margin, yPos, pageW - margin, yPos);
-  yPos += 12;
+  doc.setFontSize(9);
+  doc.setTextColor(100); // gris
+  doc.text("Coachex-Pro", logoX + logoW / 2, logoY + logoH + 6, { align: "center" });
 
-  // 5. Metadatos (Profesor, Fecha) debajo de la línea
-  const nombreCompleto = `${perfil?.nombre || ""} ${perfil?.apellido || ""}`.trim();
+  // Título a la derecha con la fuente de la app (helvetica bold)
+  doc.setTextColor(0);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.text(`Reporte ${tipo}`, rightX, 18, { align: "right" });
+
+  // Metadatos a la derecha
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(`Generado: ${new Date().toLocaleDateString("es-AR")}`, rightX, 25, { align: "right" });
+
+  if (perfil) {
+    const nombreCompleto = `${perfil?.nombre || ""} ${perfil?.apellido || ""}`.trim();
+    doc.text(`Profesor/a: ${nombreCompleto || "-"}`, rightX, 31, { align: "right" });
+  }
+  if (tipo !== "Diario" && rangoTexto) {
+    doc.text(`Período: ${rangoTexto}`, rightX, 37, { align: "right" });
+  }
+
+  // Restablecer estilo por las dudas
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(0);
-  doc.text(`Profesor/a: ${nombreCompleto || "-"}`, margin, yPos);
-  doc.text(`Generado: ${new Date().toLocaleDateString("es-AR")}`, pageW - margin, yPos, { align: "right" });
-  yPos += 6;
-  if (tipo !== "Diario" && rangoTexto) {
-    doc.text(`Período: ${rangoTexto}`, pageW - margin, yPos, { align: "right" });
-  }
-  
-  // Ajustamos la posición Y para el contenido que sigue
-  const startYContenido = yPos + 15;
 
   // ---------- Resumen ----------
   const totalIngresos = (pagos || []).reduce((a, p) => a + Number(p.monto || 0), 0);
@@ -1597,12 +1587,12 @@ window.generarReportePDF = async function generarReportePDF({
   const balance       = totalIngresos - totalGastos;
 
   doc.setFontSize(12);
-  doc.text("Resumen", margin, startYContenido);
+  doc.text("Resumen", 14, 48);
   doc.setFontSize(10);
-  doc.text(`Clases registradas: ${clases.length}`, margin, startYContenido + 7);
-  doc.text(`Ingresos: $${fmtMoney(totalIngresos)}`, margin, startYContenido + 13);
-  doc.text(`Gastos: $${fmtMoney(totalGastos)}`,   margin, startYContenido + 19);
-  doc.text(`Balance: $${fmtMoney(balance)}`,      margin, startYContenido + 25);
+  doc.text(`Clases registradas: ${clases.length}`, 14, 55);
+  doc.text(`Ingresos: $${fmtMoney(totalIngresos)}`, 14, 61);
+  doc.text(`Gastos: $${fmtMoney(totalGastos)}`,   14, 67);
+  doc.text(`Balance: $${fmtMoney(balance)}`,      14, 73);
 
   // ---------- Por tipo (tabla compacta) ----------
   const totPorTipo = (clases || []).reduce((acc, c) => {
@@ -1613,7 +1603,7 @@ window.generarReportePDF = async function generarReportePDF({
   const tiposRows = Object.entries(totPorTipo).map(([k,v]) => [k, String(v)]);
   if (tiposRows.length && doc.autoTable) {
     doc.autoTable({
-      startY: startYContenido + 31,
+      startY: 79,
       head: [["Tipo", "Cantidad"]],
       body: tiposRows,
       styles: { fontSize: 9 },
@@ -1640,7 +1630,7 @@ window.generarReportePDF = async function generarReportePDF({
 
   const startYTabla = (doc.lastAutoTable && doc.lastAutoTable.finalY
     ? doc.lastAutoTable.finalY + 6
-    : startYContenido + 38
+    : 86
   );
 
   if (bodyClases.length && doc.autoTable) {
@@ -1648,15 +1638,16 @@ window.generarReportePDF = async function generarReportePDF({
       startY: startYTabla,
       head: [["Fecha","Hora","Alumno(s)","Tipo","Estado"]],
       body: bodyClases,
+      // anti-overflow
       tableWidth: "auto",
       margin: { left: 12, right: 12 },
       styles: { fontSize: 9, cellPadding: 2, overflow: "linebreak" },
       columnStyles: {
-        0: { cellWidth: 24 },
-        1: { cellWidth: 16 },
-        2: { cellWidth: 82 },
-        3: { cellWidth: 38 },
-        4: { cellWidth: 24 },
+        0: { cellWidth: 24 }, // Fecha
+        1: { cellWidth: 16 }, // Hora
+        2: { cellWidth: 82 }, // Alumno(s)
+        3: { cellWidth: 38 }, // Tipo
+        4: { cellWidth: 24 }, // Estado
       },
       theme: "grid",
       headStyles: { fillColor: [63,63,65], textColor: 255, fontStyle: "bold", halign: "left" },
@@ -1678,6 +1669,8 @@ window.generarReportePDF = async function generarReportePDF({
 
   if (hayPagos || hayGastos) {
     doc.addPage();
+
+    // ===== Pagos (4 columnas, sin overflow) =====
     if (hayPagos) {
       const bodyPagos = pagos.map(p => [
         fechaDDMMYYYY(p.fecha || ""),
@@ -1685,19 +1678,25 @@ window.generarReportePDF = async function generarReportePDF({
         `$${fmtMoney(p.monto || 0)}`,
         p.metodo || "-"
       ]);
+
+      // Cálculo de anchos con colchón
       const mlP = 16, mrP = 16;
       const availWP = pageW - mlP - mrP;
-      const safeWP  = Math.floor(availWP * 0.88);
+      const safeWP  = Math.floor(availWP * 0.88); // 12% libre
+
       const wFechaP   = 22;
       const wMontoP   = 26;
       const wMetodoP  = 24;
       const wConceptoP = Math.max(40, safeWP - wFechaP - wMontoP - wMetodoP);
+
       doc.setFontSize(12);
       doc.text("Pagos", 14, 16);
+
       doc.autoTable({
         startY: 20,
         head: [["Fecha","Concepto","Monto","Método"]],
         body: bodyPagos,
+
         tableWidth: safeWP,
         margin: { left: mlP, right: mrP },
         styles: {
@@ -1711,9 +1710,11 @@ window.generarReportePDF = async function generarReportePDF({
           2: { cellWidth: wMontoP, halign: "right" },
           3: { cellWidth: wMetodoP },
         },
+
         theme: "grid",
         headStyles: { fillColor: [63,63,65], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [245,247,248] },
+
         didParseCell: (data) => {
           if (data.section === "body" && data.column.index === 1) {
             data.cell.text = doc.splitTextToSize(String(data.cell.text ?? ""), wConceptoP);
@@ -1722,25 +1723,32 @@ window.generarReportePDF = async function generarReportePDF({
         },
       });
     }
+
+    // ===== Gastos (3 columnas, sin overflow) =====
     if (hayGastos) {
       const bodyGastos = gastos.map(g => ([
         fechaDDMMYYYY(g.fecha || ""),
         g.concepto || "-",
         `$${fmtMoney(g.monto || 0)}`
       ]));
+
       const startYGastos = (doc.lastAutoTable?.finalY ? doc.lastAutoTable.finalY + 10 : 20);
       doc.setFontSize(12);
       doc.text("Gastos", 14, startYGastos - 4);
+
       const mlG = 16, mrG = 16;
       const availWG = pageW - mlG - mrG;
-      const safeWG  = Math.floor(availWG * 0.88);
+      const safeWG  = Math.floor(availWG * 0.88); // 12% libre
+
       const wFechaG   = 22;
       const wMontoG   = 26;
       const wConceptoG = Math.max(40, safeWG - wFechaG - wMontoG);
+
       doc.autoTable({
         startY: startYGastos,
         head: [["Fecha","Concepto","Monto"]],
         body: bodyGastos,
+
         tableWidth: safeWG,
         margin: { left: mlG, right: mrG },
         styles: {
@@ -1753,9 +1761,11 @@ window.generarReportePDF = async function generarReportePDF({
           1: { cellWidth: wConceptoG },
           2: { cellWidth: wMontoG, halign: "right" },
         },
+
         theme: "grid",
         headStyles: { fillColor: [63,63,65], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [245,247,248] },
+
         didParseCell: (data) => {
           if (data.section === "body" && data.column.index === 1) {
             data.cell.text = doc.splitTextToSize(String(data.cell.text || ""), wConceptoG);
@@ -1770,6 +1780,7 @@ window.generarReportePDF = async function generarReportePDF({
   const pageH = doc.internal.pageSize.height;
   doc.setFontSize(8);
   doc.text("Generado por Coachex-Pro", 12, pageH - 10);
+
   const hoyISO = new Date().toISOString().slice(0, 10);
   const sufijo = (tipo === "Diario")
     ? (clases?.[0]?.fecha ? fechaDDMMYYYY(clases[0].fecha).replaceAll("/", "-") : hoyISO)
@@ -1777,6 +1788,7 @@ window.generarReportePDF = async function generarReportePDF({
 
   doc.save(`Reporte_${tipo}_${sufijo}.pdf`);
 };
+
 
 // Enviar PDF por WhatsApp (sin descargar en fallback, salvo que lo pidas)
 async function sharePdfViaWhatsApp({ blob, filename, text, phone, autoDownloadInFallback = false }) {
@@ -1954,26 +1966,22 @@ return (clases || [])
     return res;
   };
 
-    const bloquesManana = useMemo(() => {
+  const bloquesManana = useMemo(() => {
     const nombreDia = getNombreDiaFromYMD(manana);
-    const data = clubActivo ? (clubActivo.horarioLaboral || []) : (perfil?.horarioLaboral || []);
-    
-    // Paso 1: Obtenemos la lista de bloques, sin importar si es un objeto con la propiedad 'bloques' o un array directo.
-    const listaBloques = Array.isArray(data.bloques) ? data.bloques : (Array.isArray(data) ? data : []);
-
-    // Paso 2: Filtramos la lista, aceptando tanto 'dia' como 'diaLabel' para el nombre del día.
-    return listaBloques
-      .filter(b => (b.dia === nombreDia || b.diaLabel === nombreDia) && (b.activo ?? true))
+    const data = clubActivo ? (clubActivo.horarioLaboral || {}) : (perfil?.horarioLaboral || []);
+    if (clubActivo && data && Array.isArray(data.bloques)) {
+      return data.bloques
+        .filter(b => b.dia === nombreDia && (b.activo ?? true))
+        .map(b => ({ desde: b.desde, hasta: b.hasta }));
+    }
+    const arr = Array.isArray(data) ? data : [];
+    return arr
+      .filter(b => b.dia === nombreDia && (b.activo ?? true))
       .map(b => ({ desde: b.desde, hasta: b.hasta }));
-
   }, [clubActivo, perfil, manana]);
 
   const horarioDisponibleManana = useMemo(() => {
-    const ocupadas = new Set(
-  (clasesManana || [])
-    .filter(clase => String(clase.estado || '').toLowerCase() !== 'cancelada')
-    .map(clase => clase.hora)
-);
+    const ocupadas = new Set((clasesManana || []).map(c => c.hora));
     const slots = [];
     bloquesManana.forEach(b => {
       generateSlots(b.desde, b.hasta, 60).forEach(h => {
@@ -2632,23 +2640,7 @@ function Alumnos({
 
   const sortedAlumnos = useMemo(() => {
     const qLower = q.trim().toLowerCase();
-    
-    const fil = (alumnos || []).filter(a => {
-      // Si la búsqueda está vacía, mostrar todos los alumnos
-      if (!qLower) return true;
-
-      // Condición 1: Buscar por nombre completo (como antes)
-      const nameMatch = getNombreCompleto(a).toLowerCase().includes(qLower);
-
-      // Condición 2: Buscar en los horarios fijos del alumno
-      const scheduleMatch = (a.horarios || []).some(h => 
-        h.dia.toLowerCase().includes(qLower)
-      );
-
-      // El alumno aparece si cumple CUALQUIERA de las dos condiciones
-      return nameMatch || scheduleMatch;
-    });
-
+    const fil = (alumnos || []).filter(a => !qLower || getNombreCompleto(a).toLowerCase().includes(qLower));
     return fil.sort((a,b)=> getNombreCompleto(a).localeCompare(getNombreCompleto(b), "es", {sensitivity:"base"}));
   }, [alumnos, q]);
 
@@ -2727,11 +2719,11 @@ function Alumnos({
           title={<span className="text-[#34745B]">Listado de alumnos</span>}
           right={
             <input
-  value={q}
-  onChange={(e) => setQ(e.target.value)}
-  placeholder="Buscar por nombre o día..."
-  className="border rounded-xl px-3 py-1.5 text-sm"
-/>
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar por nombre..."
+              className="border rounded-xl px-3 py-1.5 text-sm"
+            />
           }
         >
           <div className="overflow-x-auto">
@@ -2785,36 +2777,37 @@ function Alumnos({
                       </span>
                     </td>
                     <td className="p-2 text-right">
-  <div className="inline-flex gap-2">
-    <button
-      type="button"
-      onClick={() => setAlumnoFicha(a)}
-      className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
-    >
-      👁️ Ver ficha
-    </button>
-    <button
-      type="button"
-      onClick={() => openRegistrarClaseForAlumno(a.id)}
-      className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
-    >
-      🟢 Registrar clase
-    </button>
-    <button
-      onClick={() => openEdit(a)}
-      className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
-    >
-      ✏️ Editar
-    </button>
-    <button
-      type="button"
-      onClick={() => onDelete(a.id)}
-      className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50"
-    >
-      🗑️ Eliminar
-    </button>
-  </div>
-</td>
+                      <div className="inline-flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setAlumnoFicha(a)}
+                          className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+                        >
+                          👁️ Ver ficha
+                        </button>
+         <button
+  type="button"
+  onClick={() => openRegistrarClaseForAlumno(a.id)}
+  className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+>
+  🟢 Registrar clase
+</button>
+
+<button
+  onClick={() => openEdit(a)}
+  className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+>
+                          ✏️ Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(a.id)}
+                          className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50"
+                        >
+                          🗑️ Eliminar
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -3519,16 +3512,16 @@ function Clases({
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
 
-   const emptyForm = {
-   alumnoIds: [""],
-   fecha: formatDate(new Date()),
-   hora: "18:00",
-   tipo: "Clase 1 persona",
-   estado: "Programada",
-   precio: String(getPrecioSugerido("Clase 1 persona", perfil)),
-   notas: "",
-   cancha: ""
- };
+  const emptyForm = {
+    alumnoIds: [""],
+    fecha: formatDate(new Date()),
+    hora: "18:00",
+    tipo: "Clase 1 persona",
+    estado: "Programada",
+    precio: (parseFloat((perfil.precios || {}).individual || 0)).toString(),
+    notas: "",
+    cancha: ""
+  };
   const [form, setForm] = useState(emptyForm);
 
   const [grupoSeleccionadoId, setGrupoSeleccionadoId] = useState("");
@@ -3661,7 +3654,7 @@ function Clases({
       if (name === "tipo") {
         const canon = normalizarTipoClase(val);
         newState.tipo = canon;
-        newState.precio = computePrecioClase(canon, prev.alumnoIds, perfil, alumnoMap);
+        newState.precio = getPrecioSugerido(canon, perfil);
         const numAlumnos = TIPOS_CLASE_MAP[canon] || 1;
         newState.alumnoIds = Array.from({ length: numAlumnos }, (_, i) => prev.alumnoIds[i] || "");
       }
@@ -3673,9 +3666,10 @@ function Clases({
     setForm(prev => {
       const newAlumnoIds = [...(prev.alumnoIds || [])];
       newAlumnoIds[index] = newId;
-      const canon = normalizarTipoClase(prev.tipo);
-      const nuevoPrecio = computePrecioClase(canon, newAlumnoIds, perfil, alumnoMap);
-   return { ...prev, alumnoIds: newAlumnoIds, precio: nuevoPrecio };
+      const primerAlumno = alumnoMap.get(newAlumnoIds[0]);
+      const esMensual = primerAlumno?.plan === 'mensual';
+      const nuevoPrecio = esMensual ? "0" : getPrecioSugerido(prev.tipo, perfil);
+      return { ...prev, alumnoIds: newAlumnoIds, precio: nuevoPrecio };
     });
     if (index === 0 && newId) {
       const alumnoSeleccionado = alumnoMap.get(newId);
@@ -11157,15 +11151,6 @@ await u.getIdToken(true);
   await clubsCollection
     .doc(activoId)
     .set({ ...form, updatedAt: new Date().toISOString() }, { merge: true });
-// Después de guardar el doc del club:
-const baseRef = clubsCollection.doc(activoId);
-
-// Sincronizá los precios al Perfil del Club
-await baseRef.collection('perfil').doc('main').set({
-  preciosClase: form.preciosClase || {},
-  preciosMensuales: form.preciosMensuales || {},
-  updatedAt: new Date().toISOString(),
-}, { merge: true });
 
   alert("Configuración del club guardada");
 }
@@ -11265,18 +11250,13 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
   // === Estado inicial seguro (strings) ===
   const emptyPerfil = {
     moneda: 'ARS',
-    preciosClase: { individual:'', dupla:'', trio:'', cuarteto:'', escuelita:'' },
+    preciosClase: { individual:'', duo:'', trio:'', cuarteto:'', escuelita:'' },
     preciosMensuales: { "1xSemana":'', "2xSemana":'', "3xSemana":'', "libre":'' },
-    datosBancarios: { 
-        alias:'', 
-        cbu:'', 
-        banco:'',
-        titular: '' // <--- ¡CAMBIO NECESARIO!
-    },
+    datosBancarios: { alias:'', cbu:'', banco:'' },
     horarioLaboral: (initialState?.perfil?.horarioLaboral) || [],
     modoTrabajo: 'Club',
     pin: ''
-};
+  };
   const [form, setForm] = useState(emptyPerfil);
 
   // === Resto de estados que ya tenías ===
@@ -11306,33 +11286,32 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
   useEffect(() => {
     const S = (v) => (v == null ? '' : String(v));
     const p = perfil || {};
-    const pc = p.preciosClase || p.precios || {};
-
-    // Se eliminó la condición para que el formulario siempre refleje el perfil más reciente.
-    setForm(prev => ({
-      ...prev,
-      nombre: p.nombre || '', // <-- Añadir también aquí para que se carguen
-      apellido: p.apellido || '',
-      telefono: p.telefono || '',
-      moneda: p.moneda ?? 'ARS',
-      datosBancarios: { ...(prev.datosBancarios||{}), ...(p.datosBancarios||{}) },
-      horarioLaboral: p.horarioLaboral || prev.horarioLaboral,
-      pin: p.pin ?? '',
-      preciosClase: {
-        individual: S(pc.individual),
-        dupla:      S(pc.dupla ?? pc.duo),
-        trio:       S(pc.trio),
-        cuarteto:   S(pc.cuarteto),
-        escuelita:  S(pc.escuelita),
-      },
-      preciosMensuales: {
-        "1xSemana": S(p.preciosMensuales?.["1xSemana"]),
-        "2xSemana": S(p.preciosMensuales?.["2xSemana"]),
-        "3xSemana": S(p.preciosMensuales?.["3xSemana"]),
-        "libre":    S(p.preciosMensuales?.["libre"]),
-      },
-    }));
-  }, [perfil]); // Este useEffect se ejecutará cada vez que el objeto 'perfil' cambie.
+    const pc = p.preciosClase || p.precios || {}; // admitir legacy "precios"
+    if (!hydratedRef.current) {
+      setForm(prev => ({
+        ...prev,
+        moneda: p.moneda ?? 'ARS',
+        datosBancarios: { ...(prev.datosBancarios||{}), ...(p.datosBancarios||{}) },
+        horarioLaboral: p.horarioLaboral || prev.horarioLaboral,
+        modoTrabajo: 'Club',
+        pin: p.pin ?? '',
+        preciosClase: {
+          individual: S(pc.individual),
+          duo:        S(pc.duo ?? pc.dupla),
+          trio:       S(pc.trio),
+          cuarteto:   S(pc.cuarteto),
+          escuelita:  S(pc.escuelita),
+        },
+        preciosMensuales: {
+          "1xSemana": S(p.preciosMensuales?.["1xSemana"]),
+          "2xSemana": S(p.preciosMensuales?.["2xSemana"]),
+          "3xSemana": S(p.preciosMensuales?.["3xSemana"]),
+          "libre":    S(p.preciosMensuales?.["libre"]),
+        },
+      }));
+      hydratedRef.current = true;
+    }
+  }, [perfil]);
 
   // === Handlers genéricos ===
   const handleChange = (e) => {
@@ -11353,7 +11332,7 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
 
   // === Precios (ahora en preciosClase / preciosMensuales) ===
   const handlePrecioClaseChange = (e) => {
-    const { name, value } = e.target; // name: individual | dupla | trio | cuarteto | escuelita
+    const { name, value } = e.target; // name: individual | duo | trio | cuarteto | escuelita
     setForm(prev => ({ ...prev, preciosClase: { ...prev.preciosClase, [name]: value ?? '' } }));
   };
   const handlePrecioMensualChange = (e) => {
@@ -11413,31 +11392,25 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
       await u.getIdToken(true);
 
       const payload = {
-    // --- CAMPOS AÑADIDOS ---
-    nombre: form.nombre || '',
-    apellido: form.apellido || '',
-    telefono: form.telefono || '',
-    // --- FIN DE CAMPOS AÑADIDOS ---
-
-    moneda: form.moneda || 'ARS',
-    datosBancarios: form.datosBancarios || {},
-    horarioLaboral: form.horarioLaboral || [],
-    pin: form.pin || null,
-    preciosClase: {
-      individual: Number(form.preciosClase?.individual) || 0,
-      dupla:      Number(form.preciosClase?.dupla) || 0, // Corregido para usar dupla
-      trio:       Number(form.preciosClase?.trio) || 0,
-      cuarteto:   Number(form.preciosClase?.cuarteto) || 0,
-      escuelita:  Number(form.preciosClase?.escuelita) || 0,
-    },
-    preciosMensuales: {
-      "1xSemana": Number(form.preciosMensuales?.["1xSemana"]) || 0,
-      "2xSemana": Number(form.preciosMensuales?.["2xSemana"]) || 0,
-      "3xSemana": Number(form.preciosMensuales?.["3xSemana"]) || 0,
-      "libre":    Number(form.preciosMensuales?.["libre"])    || 0,
-    },
-    updatedAt: new Date().toISOString(),
-};
+        moneda: form.moneda || 'ARS',
+        datosBancarios: form.datosBancarios || {},
+        horarioLaboral: form.horarioLaboral || [],
+        pin: form.pin || null,
+        preciosClase: {
+          individual: Number(form.preciosClase?.individual) || 0,
+          duo:        Number(form.preciosClase?.duo) || 0,
+          trio:       Number(form.preciosClase?.trio) || 0,
+          cuarteto:   Number(form.preciosClase?.cuarteto) || 0,
+          escuelita:  Number(form.preciosClase?.escuelita) || 0,
+        },
+        preciosMensuales: {
+          "1xSemana": Number(form.preciosMensuales?.["1xSemana"]) || 0,
+          "2xSemana": Number(form.preciosMensuales?.["2xSemana"]) || 0,
+          "3xSemana": Number(form.preciosMensuales?.["3xSemana"]) || 0,
+          "libre":    Number(form.preciosMensuales?.["libre"])    || 0,
+        },
+        updatedAt: new Date().toISOString(),
+      };
 
       if (perfilCrud && typeof perfilCrud.update === 'function') {
         await perfilCrud.update(payload);  // <- tu CRUD debe escribir en .../clubs/{clubId}/perfil/main
@@ -13856,27 +13829,11 @@ function MainApp({ user, onLogout }) {
     delete: (id) => setDeletingInfo({ id, type: 'gasto', collection: 'gastos' }),
   };
 
-  // Reemplazá tu perfilCrud por este (o actualizá el update)
-const perfilCrud = {
-  update: async (p) => {
-    const u = auth.currentUser;
-    if (!u || !clubActivoId) return;
-
-    // 1) Perfil del CLUB activo
-    await db.collection('users').doc(u.uid)
-      .collection('clubs').doc(clubActivoId)
-      .collection('perfil').doc('main')
-      .set(p, { merge: true });
-
-    // 2) (Opcional) también el perfil global, para defaults
-    await db.collection('users').doc(u.uid)
-      .collection('profile').doc('main')
-      .set(p, { merge: true });
-
-    setToast("Perfil actualizado");
-  }
-};
-
+  const perfilCrud = {
+    update: (p) =>
+      db.collection('users').doc(user.uid).collection('profile').doc('main')
+        .set(p, { merge: true }).then(() => setToast("Perfil actualizado"))
+  };
 
   // === Acciones auxiliares ===
   const confirmDelete = async () => {
@@ -13972,7 +13929,6 @@ const perfilCrud = {
         onLogout={onLogout}
         clubes={clubes}
         clubActivoId={clubActivoId}
-        onClubChange={setClubActivoId}
         expanded={navExpanded}
         onExpandChange={setNavExpanded}
       />
@@ -14403,17 +14359,6 @@ function AppGPadel() {
 }
 
 function VerifyEmail({ user, onLogout }) {
-  // --- INICIO DE LA CORRECCIÓN ---
-  // Si por alguna razón el usuario es nulo, no renderizamos nada para evitar el error.
-  if (!user) {
-    return (
-        <div className="min-h-screen flex items-center justify-center">
-            <div className="loader"></div>
-        </div>
-    );
-  }
-  // --- FIN DE LA CORRECCIÓN ---
-
   const [sent, setSent] = useState(false);
   const resend = async () => { await user.sendEmailVerification(); setSent(true); };
   const recheck = async () => {
