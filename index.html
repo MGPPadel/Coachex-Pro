@@ -1547,44 +1547,49 @@ window.generarReportePDF = async function generarReportePDF({
     }
   } catch (_) {}
 
-  // ---------- Encabezado (ajustado) ----------
-  const pageW  = doc.internal.pageSize.getWidth();
+  // ---------- ENCABEZADO COMPACTO Y CENTRADO ----------
+  const pageW = doc.internal.pageSize.getWidth();
   const margin = 14;
-  const rightX = pageW - margin;
+  let yPos = 12; // Empezamos un poco más arriba
 
-  // Logo a la izquierda
-  const logoX = margin - 4, logoY = 8, logoW = 25, logoH = 25;
-  try { if (logoDataUrl) doc.addImage(logoDataUrl, "PNG", logoX, logoY, logoW, logoH); } catch(_) {}
+  // 1. Logo Centrado (más pequeño)
+  const logoW = 22, logoH = 22; // Reducido de 28 a 22
+  const logoX = (pageW - logoW) / 2;
+  try { if (logoDataUrl) doc.addImage(logoDataUrl, "PNG", logoX, yPos, logoW, logoH); } catch(_) {}
+  yPos += logoH + 6; // Menos espacio después del logo
 
-  // “Coachex-Pro” centrado debajo del logo
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(100); // gris
-  doc.text("Coachex-Pro", logoX + logoW / 2, logoY + logoH + 6, { align: "center" });
-
-  // Título a la derecha con la fuente de la app (helvetica bold)
-  doc.setTextColor(0);
+  // 2. Título "Coachex-Pro" Centrado (más pequeño)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text(`Reporte ${tipo}`, rightX, 18, { align: "right" });
+  doc.setFontSize(18); // Reducido de 22 a 18
+  doc.text("Coachex-Pro", pageW / 2, yPos, { align: "center" });
+  yPos += 10;
 
-  // Metadatos a la derecha
+  // 3. Subtítulo del Reporte (también más pequeño)
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Generado: ${new Date().toLocaleDateString("es-AR")}`, rightX, 25, { align: "right" });
+  doc.setFontSize(14); // Reducido de 16 a 14
+  doc.setTextColor(100);
+  doc.text(`Reporte ${tipo}`, pageW / 2, yPos, { align: "center" });
+  yPos += 10;
+  
+  // 4. Línea separadora
+  doc.setDrawColor(220);
+  doc.setLineWidth(0.5);
+  doc.line(margin, yPos, pageW - margin, yPos);
+  yPos += 12;
 
-  if (perfil) {
-    const nombreCompleto = `${perfil?.nombre || ""} ${perfil?.apellido || ""}`.trim();
-    doc.text(`Profesor/a: ${nombreCompleto || "-"}`, rightX, 31, { align: "right" });
-  }
-  if (tipo !== "Diario" && rangoTexto) {
-    doc.text(`Período: ${rangoTexto}`, rightX, 37, { align: "right" });
-  }
-
-  // Restablecer estilo por las dudas
-  doc.setFont("helvetica", "normal");
+  // 5. Metadatos (Profesor, Fecha) debajo de la línea
+  const nombreCompleto = `${perfil?.nombre || ""} ${perfil?.apellido || ""}`.trim();
   doc.setFontSize(10);
   doc.setTextColor(0);
+  doc.text(`Profesor/a: ${nombreCompleto || "-"}`, margin, yPos);
+  doc.text(`Generado: ${new Date().toLocaleDateString("es-AR")}`, pageW - margin, yPos, { align: "right" });
+  yPos += 6;
+  if (tipo !== "Diario" && rangoTexto) {
+    doc.text(`Período: ${rangoTexto}`, pageW - margin, yPos, { align: "right" });
+  }
+  
+  // Ajustamos la posición Y para el contenido que sigue
+  const startYContenido = yPos + 15;
 
   // ---------- Resumen ----------
   const totalIngresos = (pagos || []).reduce((a, p) => a + Number(p.monto || 0), 0);
@@ -1592,12 +1597,12 @@ window.generarReportePDF = async function generarReportePDF({
   const balance       = totalIngresos - totalGastos;
 
   doc.setFontSize(12);
-  doc.text("Resumen", 14, 48);
+  doc.text("Resumen", margin, startYContenido);
   doc.setFontSize(10);
-  doc.text(`Clases registradas: ${clases.length}`, 14, 55);
-  doc.text(`Ingresos: $${fmtMoney(totalIngresos)}`, 14, 61);
-  doc.text(`Gastos: $${fmtMoney(totalGastos)}`,   14, 67);
-  doc.text(`Balance: $${fmtMoney(balance)}`,      14, 73);
+  doc.text(`Clases registradas: ${clases.length}`, margin, startYContenido + 7);
+  doc.text(`Ingresos: $${fmtMoney(totalIngresos)}`, margin, startYContenido + 13);
+  doc.text(`Gastos: $${fmtMoney(totalGastos)}`,   margin, startYContenido + 19);
+  doc.text(`Balance: $${fmtMoney(balance)}`,      margin, startYContenido + 25);
 
   // ---------- Por tipo (tabla compacta) ----------
   const totPorTipo = (clases || []).reduce((acc, c) => {
@@ -1608,7 +1613,7 @@ window.generarReportePDF = async function generarReportePDF({
   const tiposRows = Object.entries(totPorTipo).map(([k,v]) => [k, String(v)]);
   if (tiposRows.length && doc.autoTable) {
     doc.autoTable({
-      startY: 79,
+      startY: startYContenido + 31,
       head: [["Tipo", "Cantidad"]],
       body: tiposRows,
       styles: { fontSize: 9 },
@@ -1635,7 +1640,7 @@ window.generarReportePDF = async function generarReportePDF({
 
   const startYTabla = (doc.lastAutoTable && doc.lastAutoTable.finalY
     ? doc.lastAutoTable.finalY + 6
-    : 86
+    : startYContenido + 38
   );
 
   if (bodyClases.length && doc.autoTable) {
@@ -1643,16 +1648,15 @@ window.generarReportePDF = async function generarReportePDF({
       startY: startYTabla,
       head: [["Fecha","Hora","Alumno(s)","Tipo","Estado"]],
       body: bodyClases,
-      // anti-overflow
       tableWidth: "auto",
       margin: { left: 12, right: 12 },
       styles: { fontSize: 9, cellPadding: 2, overflow: "linebreak" },
       columnStyles: {
-        0: { cellWidth: 24 }, // Fecha
-        1: { cellWidth: 16 }, // Hora
-        2: { cellWidth: 82 }, // Alumno(s)
-        3: { cellWidth: 38 }, // Tipo
-        4: { cellWidth: 24 }, // Estado
+        0: { cellWidth: 24 },
+        1: { cellWidth: 16 },
+        2: { cellWidth: 82 },
+        3: { cellWidth: 38 },
+        4: { cellWidth: 24 },
       },
       theme: "grid",
       headStyles: { fillColor: [63,63,65], textColor: 255, fontStyle: "bold", halign: "left" },
@@ -1674,8 +1678,6 @@ window.generarReportePDF = async function generarReportePDF({
 
   if (hayPagos || hayGastos) {
     doc.addPage();
-
-    // ===== Pagos (4 columnas, sin overflow) =====
     if (hayPagos) {
       const bodyPagos = pagos.map(p => [
         fechaDDMMYYYY(p.fecha || ""),
@@ -1683,25 +1685,19 @@ window.generarReportePDF = async function generarReportePDF({
         `$${fmtMoney(p.monto || 0)}`,
         p.metodo || "-"
       ]);
-
-      // Cálculo de anchos con colchón
       const mlP = 16, mrP = 16;
       const availWP = pageW - mlP - mrP;
-      const safeWP  = Math.floor(availWP * 0.88); // 12% libre
-
+      const safeWP  = Math.floor(availWP * 0.88);
       const wFechaP   = 22;
       const wMontoP   = 26;
       const wMetodoP  = 24;
       const wConceptoP = Math.max(40, safeWP - wFechaP - wMontoP - wMetodoP);
-
       doc.setFontSize(12);
       doc.text("Pagos", 14, 16);
-
       doc.autoTable({
         startY: 20,
         head: [["Fecha","Concepto","Monto","Método"]],
         body: bodyPagos,
-
         tableWidth: safeWP,
         margin: { left: mlP, right: mrP },
         styles: {
@@ -1715,11 +1711,9 @@ window.generarReportePDF = async function generarReportePDF({
           2: { cellWidth: wMontoP, halign: "right" },
           3: { cellWidth: wMetodoP },
         },
-
         theme: "grid",
         headStyles: { fillColor: [63,63,65], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [245,247,248] },
-
         didParseCell: (data) => {
           if (data.section === "body" && data.column.index === 1) {
             data.cell.text = doc.splitTextToSize(String(data.cell.text ?? ""), wConceptoP);
@@ -1728,32 +1722,25 @@ window.generarReportePDF = async function generarReportePDF({
         },
       });
     }
-
-    // ===== Gastos (3 columnas, sin overflow) =====
     if (hayGastos) {
       const bodyGastos = gastos.map(g => ([
         fechaDDMMYYYY(g.fecha || ""),
         g.concepto || "-",
         `$${fmtMoney(g.monto || 0)}`
       ]));
-
       const startYGastos = (doc.lastAutoTable?.finalY ? doc.lastAutoTable.finalY + 10 : 20);
       doc.setFontSize(12);
       doc.text("Gastos", 14, startYGastos - 4);
-
       const mlG = 16, mrG = 16;
       const availWG = pageW - mlG - mrG;
-      const safeWG  = Math.floor(availWG * 0.88); // 12% libre
-
+      const safeWG  = Math.floor(availWG * 0.88);
       const wFechaG   = 22;
       const wMontoG   = 26;
       const wConceptoG = Math.max(40, safeWG - wFechaG - wMontoG);
-
       doc.autoTable({
         startY: startYGastos,
         head: [["Fecha","Concepto","Monto"]],
         body: bodyGastos,
-
         tableWidth: safeWG,
         margin: { left: mlG, right: mrG },
         styles: {
@@ -1766,11 +1753,9 @@ window.generarReportePDF = async function generarReportePDF({
           1: { cellWidth: wConceptoG },
           2: { cellWidth: wMontoG, halign: "right" },
         },
-
         theme: "grid",
         headStyles: { fillColor: [63,63,65], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [245,247,248] },
-
         didParseCell: (data) => {
           if (data.section === "body" && data.column.index === 1) {
             data.cell.text = doc.splitTextToSize(String(data.cell.text || ""), wConceptoG);
@@ -1785,7 +1770,6 @@ window.generarReportePDF = async function generarReportePDF({
   const pageH = doc.internal.pageSize.height;
   doc.setFontSize(8);
   doc.text("Generado por Coachex-Pro", 12, pageH - 10);
-
   const hoyISO = new Date().toISOString().slice(0, 10);
   const sufijo = (tipo === "Diario")
     ? (clases?.[0]?.fecha ? fechaDDMMYYYY(clases[0].fecha).replaceAll("/", "-") : hoyISO)
@@ -1793,7 +1777,6 @@ window.generarReportePDF = async function generarReportePDF({
 
   doc.save(`Reporte_${tipo}_${sufijo}.pdf`);
 };
-
 
 // Enviar PDF por WhatsApp (sin descargar en fallback, salvo que lo pidas)
 async function sharePdfViaWhatsApp({ blob, filename, text, phone, autoDownloadInFallback = false }) {
@@ -1971,22 +1954,26 @@ return (clases || [])
     return res;
   };
 
-  const bloquesManana = useMemo(() => {
+    const bloquesManana = useMemo(() => {
     const nombreDia = getNombreDiaFromYMD(manana);
-    const data = clubActivo ? (clubActivo.horarioLaboral || {}) : (perfil?.horarioLaboral || []);
-    if (clubActivo && data && Array.isArray(data.bloques)) {
-      return data.bloques
-        .filter(b => b.dia === nombreDia && (b.activo ?? true))
-        .map(b => ({ desde: b.desde, hasta: b.hasta }));
-    }
-    const arr = Array.isArray(data) ? data : [];
-    return arr
-      .filter(b => b.dia === nombreDia && (b.activo ?? true))
+    const data = clubActivo ? (clubActivo.horarioLaboral || []) : (perfil?.horarioLaboral || []);
+    
+    // Paso 1: Obtenemos la lista de bloques, sin importar si es un objeto con la propiedad 'bloques' o un array directo.
+    const listaBloques = Array.isArray(data.bloques) ? data.bloques : (Array.isArray(data) ? data : []);
+
+    // Paso 2: Filtramos la lista, aceptando tanto 'dia' como 'diaLabel' para el nombre del día.
+    return listaBloques
+      .filter(b => (b.dia === nombreDia || b.diaLabel === nombreDia) && (b.activo ?? true))
       .map(b => ({ desde: b.desde, hasta: b.hasta }));
+
   }, [clubActivo, perfil, manana]);
 
   const horarioDisponibleManana = useMemo(() => {
-    const ocupadas = new Set((clasesManana || []).map(c => c.hora));
+    const ocupadas = new Set(
+  (clasesManana || [])
+    .filter(clase => String(clase.estado || '').toLowerCase() !== 'cancelada')
+    .map(clase => clase.hora)
+);
     const slots = [];
     bloquesManana.forEach(b => {
       generateSlots(b.desde, b.hasta, 60).forEach(h => {
@@ -2645,7 +2632,23 @@ function Alumnos({
 
   const sortedAlumnos = useMemo(() => {
     const qLower = q.trim().toLowerCase();
-    const fil = (alumnos || []).filter(a => !qLower || getNombreCompleto(a).toLowerCase().includes(qLower));
+    
+    const fil = (alumnos || []).filter(a => {
+      // Si la búsqueda está vacía, mostrar todos los alumnos
+      if (!qLower) return true;
+
+      // Condición 1: Buscar por nombre completo (como antes)
+      const nameMatch = getNombreCompleto(a).toLowerCase().includes(qLower);
+
+      // Condición 2: Buscar en los horarios fijos del alumno
+      const scheduleMatch = (a.horarios || []).some(h => 
+        h.dia.toLowerCase().includes(qLower)
+      );
+
+      // El alumno aparece si cumple CUALQUIERA de las dos condiciones
+      return nameMatch || scheduleMatch;
+    });
+
     return fil.sort((a,b)=> getNombreCompleto(a).localeCompare(getNombreCompleto(b), "es", {sensitivity:"base"}));
   }, [alumnos, q]);
 
@@ -2724,11 +2727,11 @@ function Alumnos({
           title={<span className="text-[#34745B]">Listado de alumnos</span>}
           right={
             <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar por nombre..."
-              className="border rounded-xl px-3 py-1.5 text-sm"
-            />
+  value={q}
+  onChange={(e) => setQ(e.target.value)}
+  placeholder="Buscar por nombre o día..."
+  className="border rounded-xl px-3 py-1.5 text-sm"
+/>
           }
         >
           <div className="overflow-x-auto">
@@ -2782,37 +2785,36 @@ function Alumnos({
                       </span>
                     </td>
                     <td className="p-2 text-right">
-                      <div className="inline-flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setAlumnoFicha(a)}
-                          className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
-                        >
-                          👁️ Ver ficha
-                        </button>
-         <button
-  type="button"
-  onClick={() => openRegistrarClaseForAlumno(a.id)}
-  className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
->
-  🟢 Registrar clase
-</button>
-
-<button
-  onClick={() => openEdit(a)}
-  className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
->
-                          ✏️ Editar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(a.id)}
-                          className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50"
-                        >
-                          🗑️ Eliminar
-                        </button>
-                      </div>
-                    </td>
+  <div className="inline-flex gap-2">
+    <button
+      type="button"
+      onClick={() => setAlumnoFicha(a)}
+      className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+    >
+      👁️ Ver ficha
+    </button>
+    <button
+      type="button"
+      onClick={() => openRegistrarClaseForAlumno(a.id)}
+      className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+    >
+      🟢 Registrar clase
+    </button>
+    <button
+      onClick={() => openEdit(a)}
+      className="px-2 py-1 text-xs rounded-lg border hover:bg-slate-50"
+    >
+      ✏️ Editar
+    </button>
+    <button
+      type="button"
+      onClick={() => onDelete(a.id)}
+      className="px-2 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50"
+    >
+      🗑️ Eliminar
+    </button>
+  </div>
+</td>
                   </tr>
                 ))}
               </tbody>
@@ -13970,6 +13972,7 @@ const perfilCrud = {
         onLogout={onLogout}
         clubes={clubes}
         clubActivoId={clubActivoId}
+        onClubChange={setClubActivoId}
         expanded={navExpanded}
         onExpandChange={setNavExpanded}
       />
