@@ -865,6 +865,44 @@ function Modal({
   );
 }
 
+function InputModal({ isOpen, title, message, onCancel, onConfirm, inputType = "text", placeholder = "" }) {
+  const [value, setValue] = useState("");
+
+  if (!isOpen) return null;
+
+  const handleConfirm = () => {
+    onConfirm(value);
+    setValue(""); // Resetea para la próxima vez
+  };
+  
+  const handleCancel = () => {
+    onCancel();
+    setValue("");
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      title={title}
+      onCancel={handleCancel}
+      onConfirm={handleConfirm}
+      confirmText="Aceptar"
+      size="sm"
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-slate-600">{message}</p>
+        <input
+          type={inputType}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder}
+          className="w-full border rounded-lg px-3 py-2"
+          autoFocus
+        />
+      </div>
+    </Modal>
+  );
+}
 
 function ModalPagoAbono({ open, onClose, alumno, mes, monto, onConfirm }) {
   if (!open) return null;
@@ -1044,6 +1082,56 @@ window.NavIcons.Logout = window.NavIcons.Logout || function NavIconLogout(p){
   );
 };
 
+function MoreMenuSheet({ isOpen, onClose, tabs, current, setCurrent }) {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 md:hidden"
+      onClick={onClose}
+      aria-modal="true"
+      role="dialog"
+    >
+      {/* Fondo oscuro */}
+      <div className="absolute inset-0 bg-black/40 transition-opacity"></div>
+
+      {/* Panel deslizable */}
+      <div
+        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-lg transition-transform transform translate-y-full"
+        style={{ transform: isOpen ? 'translateY(0)' : 'translateY(100%)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-4 border-b">
+          <h3 className="text-center font-semibold text-slate-700">Más Opciones</h3>
+        </div>
+        <nav className="p-2">
+          <ul className="space-y-1">
+            {tabs.map(t => {
+              const Icon = t.icon;
+              const isActive = current === t.id;
+              return (
+                <li key={t.id}>
+                  <button
+                    onClick={() => {
+                      setCurrent(t.id);
+                      onClose();
+                    }}
+                    className={`w-full flex items-center gap-4 px-3 py-3 rounded-lg text-left text-slate-800 ${
+                      isActive ? 'bg-emerald-50 text-emerald-800 font-semibold' : 'hover:bg-slate-100'
+                    }`}
+                  >
+                    <Icon className="h-6 w-6" />
+                    <span>{t.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      </div>
+    </div>
+  );
+}
     
 function SideNav({
   current,
@@ -1055,6 +1143,8 @@ function SideNav({
   expanded = false,
   onExpandChange,
 }) {
+
+const [isMoreMenuOpen, setIsMoreMenuOpen] = React.useState(false);
   // ===== Fallback icons (monocromo, stroke=currentColor) =====
   const ic = {
     Home: ({ className = "" }) => (
@@ -1141,27 +1231,36 @@ function SideNav({
   // Usa set de íconos si existe; sino, fallback
   const I = (name, fallback) => (window.NavIcons && window.NavIcons[name]) || fallback;
 
-  const tabs = [
+  const IconMore = ({ className }) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
+      <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
+    </svg>
+  );
+
+    const allTabs = [
     { id: "dashboard", label: "Dashboard", icon: I("Home", ic.Home) },
     { id: "alumnos",  label: "Alumnos",   icon: I("Users", ic.Users) },
     { id: "clases",   label: "Clases",    icon: I("Calendar", ic.Calendar) },
+    { id: "pagos",    label: "Pagos",     icon: I("Cash", ic.Cash) },
     { id: "grupos",   label: "Grupos",    icon: I("Layers", ic.Layers) },
     { id: "torneos",  label: "Torneos",   icon: (window.NavIcons && (window.NavIcons.Tournament || window.NavIcons.Brackets)) || ic.Brackets },
     { id: "rankings", label: "Ranking",   icon: I("Trophy", ic.Trophy) },
-    { id: "pagos",    label: "Pagos",     icon: I("Cash", ic.Cash) },
     { id: "gastos",   label: "Gastos",    icon: I("Receipt", ic.Receipt) },
     { id: "reportes", label: "Reportes",  icon: I("Chart", ic.Chart) },
     { id: "perfil",   label: "Perfil",    icon: I("User", ic.User) },
   ];
 
+  const primaryTabs = allTabs.slice(0, 4);
+  const secondaryTabs = allTabs.slice(4);
+
+
   const onTab = (id) => setCurrent && setCurrent(id);
 
-  return (
+return (
     <>
-      {/* Sidebar izquierda (Desktop/Tablet) */}
+      {/* Sidebar izquierda (Desktop/Tablet) - SIN CAMBIOS */}
       <aside
         className={
-          // 👇 aquí estaba el typo antes: "bg[#303030]"; debe ser "bg-[#303030]"
           "hidden md:flex fixed inset-y-0 left-0 z-40 bg-[#303030] text-white " +
           (expanded ? "w-56" : "w-16") +
           " transition-[width] duration-300 pt-5"
@@ -1203,25 +1302,24 @@ function SideNav({
             )}
           </div>
 
-          {/* Navegación */}
+          {/* Navegación de escritorio usa la lista completa de pestañas */}
           <nav className="flex-1 mt-2">
-            {tabs.map((t) => {
+            {allTabs.map((t) => {
               const active = current === t.id;
               const Icon = t.icon;
               return (
                 <button
                   key={t.id}
                   onClick={() => {
-          setCurrent && setCurrent(t.id);
-          onExpandChange && onExpandChange(false);
-        }}
-        title={t.label}
-        className={
-          "relative w-full mx-2 my-1 flex items-center gap-3 px-3 py-2 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 " +
-          (active ? "bg-white/15" : "hover:bg-white/10")
-        }
-      >
-                  {/* Indicador activo */}
+                    setCurrent && setCurrent(t.id);
+                    onExpandChange && onExpandChange(false);
+                  }}
+                  title={t.label}
+                  className={
+                    "relative w-full mx-2 my-1 flex items-center gap-3 px-3 py-2 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 " +
+                    (active ? "bg-white/15" : "hover:bg-white/10")
+                  }
+                >
                   <span
                     aria-hidden
                     className={
@@ -1266,7 +1364,7 @@ function SideNav({
         </div>
       </aside>
 
-      {/* Barra inferior (Mobile) */}
+      {/* --- INICIO DE LA BARRA INFERIOR MODIFICADA --- */}
       <nav
         className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#303030] text-white flex items-stretch justify-around border-t border-white/10"
         style={{
@@ -1274,7 +1372,8 @@ function SideNav({
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
-        {tabs.map((t) => {
+        {/* Mapeamos solo las pestañas principales */}
+        {primaryTabs.map((t) => {
           const Icon = t.icon;
           return (
             <button
@@ -1290,11 +1389,33 @@ function SideNav({
             </button>
           );
         })}
+
+        {/* Botón para abrir el menú "Más" */}
+        <button
+          onClick={() => setIsMoreMenuOpen(true)}
+          className={
+            "flex-1 flex flex-col items-center justify-center text-[11px] transition-colors active:bg-white/5 " +
+            // Se ilumina si la pestaña activa está dentro del menú "Más"
+            (secondaryTabs.some(t => t.id === current) ? "bg-white/10" : "")
+          }
+        >
+          <IconMore className="h-5 w-5 mb-0.5" />
+          <span className="leading-none">Más</span>
+        </button>
       </nav>
+
+      {/* Renderizamos el nuevo menú desplegable que creamos */}
+      <MoreMenuSheet
+        isOpen={isMoreMenuOpen}
+        onClose={() => setIsMoreMenuOpen(false)}
+        tabs={secondaryTabs}
+        current={current}
+        setCurrent={setCurrent}
+      />
+      {/* --- FIN DE LA BARRA INFERIOR MODIFICADA --- */}
     </>
   );
 }
-
 
 
 
@@ -2388,6 +2509,7 @@ return (
 
     function AlumnoForm({ initialData, onSubmit, onCancel, onRegisterMonthlyPayment, studentBeingEdited }) {
       const [form, setForm] = useState(initialData)
+      const [error, setError] = useState('');
 
       const isMensual = form.plan === 'mensual';
       const canRegisterAbono = isMensual && Boolean(studentBeingEdited?.id);
@@ -2411,10 +2533,24 @@ return (
       const addHorario = () => setForm(f => ({ ...f, horarios: [...(f.horarios || []), { dia: "Lunes", hora: "18:00" }] }));
       const delHorario = (idx) => setForm(f => ({ ...f, horarios: f.horarios.filter((_, i) => i !== idx) }));
       const setHorario = (idx, key, val) => setForm(f => ({ ...f, horarios: f.horarios.map((h, i) => i === idx ? { ...h, [key]: val } : h) }));
-      function handleSubmit(e) { e.preventDefault(); if (!form.nombre.trim()) return alert("Ingresá un nombre"); onSubmit(form); }
+      function handleSubmit(e) {
+    e.preventDefault();
+    // Limpiamos errores anteriores
+    setError('');
+
+    // Validación
+    if (!form.nombre.trim()) {
+      setError("El campo 'Nombre' no puede estar vacío.");
+      return; // Detenemos el envío
+    }
+    
+    // Si todo está bien, se ejecuta el submit
+    onSubmit(form);
+  }
       return (
         <form onSubmit={handleSubmit} className="grid md:grid-cols-6 gap-3">
           <div className="md:col-span-3"><label className="text-sm text-slate-600">Nombre</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Sofía" required /></div>
+          {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
           <div className="md:col-span-3"><label className="text-sm text-slate-600">Apellido</label><input name="apellido" value={form.apellido} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Pérez" /></div>
           <div className="md:col-span-3"><label className="text-sm text-slate-600">Teléfono</label><input name="telefono" value={form.telefono} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: 549381..." /></div>
           <div className="md:col-span-3"><label className="text-sm text-slate-600">Contacto Padre/Madre (Escuelita)</label><input name="contactoPadre" value={form.contactoPadre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" placeholder="Nombre y teléfono" /></div>
@@ -2496,6 +2632,8 @@ function CuentaCorrienteAlumno({ user, clubId, alumno, perfil, desdeMes, hastaMe
   const [lineas, setLineas] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
+  const [showInputModal, setShowInputModal] = useState(false);
+  const [mesParaExcedente, setMesParaExcedente] = useState(null)
 
   const refetch = React.useCallback(async () => {
     try {
@@ -2527,13 +2665,24 @@ function CuentaCorrienteAlumno({ user, clubId, alumno, perfil, desdeMes, hastaMe
     }
   };
 
-  const pagarExcedente = async (mes) => {
-    const monto = prompt(`Importe a registrar como pago de Excedente del mes ${mes}:`, "0");
+    const pagarExcedente = async (mes) => {
+    const monto = await abrirInputModal({
+      title: "Pagar Excedente",
+      message: `Ingresa el importe a registrar como pago de Excedente para el mes ${mes}:`,
+      inputType: "number",
+      placeholder: "0"
+    });
+
+    // Si el usuario cancela, monto será null
+    if (monto === null) return;
+
     const val = Number(monto || 0);
     if (!isFinite(val) || val <= 0) return;
+
     await acreditarExcedenteMensual({ user, clubId, alumno, mes, monto: val, metodo: "Efectivo" });
     await refetch();
   };
+  // --- FIN DE MODIFICACIONES ---
 
   if (loading) return <div className="p-3 text-sm text-slate-500">Cargando cuenta corriente…</div>;
   if (error)   return <div className="p-3 text-sm text-red-600">{error}</div>;
@@ -2600,11 +2749,10 @@ function CuentaCorrienteAlumno({ user, clubId, alumno, perfil, desdeMes, hastaMe
           </tbody>
         </table>
       </div>
-      <ModalAbono
-  open={!!registrandoAbono}
-  alumno={registrandoAbono?.alumno}
-  onClose={cerrarAbono}
-/>
+
+      {/* Renderiza los modales aquí */}
+      <ModalAbono />
+      <InputModalExcedente />
     </div>
   );
 }
@@ -3665,18 +3813,23 @@ function Clases({
     const grupo = grupos.find(g => g.id === id);
     if (grupo) {
       setForm(prev => {
-  const nuevosAlumnos = grupo.alumnoIds || [];
-  const nuevoTipoClase = normalizarTipoClase(`Clase ${nuevosAlumnos.length} personas`);
-  return {
-  ...prev,
-  alumnoIds: nuevosAlumnos,
-  tipo: nuevoTipoClase,
-  precio: String(getPrecioSugerido(nuevoTipoClase, perfil))
-};
-});
+        const nuevosAlumnos = grupo.alumnoIds || [];
+        
+        // --- AQUÍ ESTÁ LA CORRECCIÓN ---
+        // Ahora usamos la lógica que detecta si son 4+ alumnos para asignar "Escuelita"
+        const tipoEfectivo = resolveTipoEfectivo(`Clase ${nuevosAlumnos.length} personas`, nuevosAlumnos);
+
+        return {
+          ...prev,
+          alumnoIds: nuevosAlumnos,
+          tipo: tipoEfectivo, // Asignamos el tipo correcto ("Escuelita")
+          precio: String(getPrecioSugerido(tipoEfectivo, perfil)) // Y se calcula el precio correcto
+        };
+      });
 
       setFormStep(3);
     } else {
+      // Esto se mantiene igual
       setForm(prev => ({ ...prev, alumnoIds: [""] }));
       setFormStep(1);
     }
@@ -4462,6 +4615,9 @@ return (
 }
 
       function Grupos({ alumnos, user, perfil, clubActivoId }) {
+
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [grupoParaEliminar, setGrupoParaEliminar] = useState(null);
   // --- Estados del Componente ---
   const [grupos, setGrupos] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -4591,12 +4747,22 @@ return (
   };
 
   const handleEliminarGrupo = (id) => {
-    if (window.confirm("¿Estás seguro de que quieres eliminar este grupo?")) {
-      gruposCollection.doc(id).delete().catch(error => {
+    
+    setGrupoParaEliminar(id); // Guarda el ID del grupo que se va a eliminar
+    setShowConfirmModal(true); // Abre el modal
+  };
+
+  // Crea esta nueva función para la confirmación final
+  const confirmarEliminacion = () => {
+    if (grupoParaEliminar) {
+      gruposCollection.doc(grupoParaEliminar).delete().catch(error => {
         console.error("Error al eliminar el grupo: ", error);
-        alert("Hubo un error al eliminar el grupo.");
+        alert("Hubo un error al eliminar el grupo."); // Este alert también se podría cambiar por un Toast
       });
     }
+    // Cierra el modal y limpia los estados
+    setShowConfirmModal(false);
+    setGrupoParaEliminar(null);
   };
 
   const abrirEditar = (grupo) => {
@@ -4687,7 +4853,7 @@ return (
     </div>
   );
 
-  return (
+   return (
     <div className="space-y-4">
       <div className="flex gap-2 border-b-2 border-slate-200">
         <button
@@ -4910,6 +5076,24 @@ return (
           </div>
         </div>
       </Modal>
+
+      {/* --- INICIO DE LA MODIFICACIÓN: Modal de Confirmación para Eliminar --- */}
+      <Modal
+        isOpen={showConfirmModal}
+        title="Confirmar Eliminación de Grupo"
+        onCancel={() => {
+          setShowConfirmModal(false);
+          setGrupoParaEliminar(null);
+        }}
+        onConfirm={confirmarEliminacion}
+        confirmText="Sí, eliminar"
+        cancelText="Cancelar"
+        size="sm"
+      >
+        <p>¿Estás seguro de que quieres eliminar este grupo? Esta acción es permanente y no se puede deshacer.</p>
+      </Modal>
+      {/* --- FIN DE LA MODIFICACIÓN --- */}
+
     </div>
   );
 }
@@ -10501,11 +10685,11 @@ const resumenClasesMes = useMemo(() => {
     } else if (periodo === 'mes') {
         const currentMonthName = MESES_NOMBRES[new Date().getMonth()];
         const currentYear = new Date().getFullYear();
-        periodoTexto = `el mes de ${currentMonthName} de ${currentYear}`;
+        periodoTexto = `El mes de ${currentMonthName} de ${currentYear}`;
     } else if (periodo === 'customMonth' && mesSeleccionado) {
         const [year, month] = mesSeleccionado.split('-');
         const selectedMonthName = MESES_NOMBRES[parseInt(month) - 1];
-        periodoTexto = `el mes de ${selectedMonthName} de ${year}`;
+        periodoTexto = `El mes de ${selectedMonthName} de ${year}`;
     }
 
     let finalY = 20;
@@ -13750,28 +13934,105 @@ const otrosIngresosCrud = {
     setToast("Datos exportados con éxito.");
   };
 
-  const handleImportData = (event) => {
+  const handleImportData = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
+        
+        // 1. Confirmación de seguridad con el usuario
         const confirmImport = window.confirm(
           "¡ATENCIÓN! ¿Estás seguro de que quieres importar estos datos?\n\n" +
-          "TODOS TUS DATOS ACTUALES SERÁN BORRADOS Y REEMPLAZADOS.\n\n" +
-          "Esta acción no se puede deshacer."
+          "TODOS TUS DATOS ACTUALES DEL CLUB SELECCIONADO SERÁN BORRADOS Y REEMPLAZADOS.\n\n" +
+          "Esta acción no se puede deshacer. Se recomienda exportar un backup antes de continuar."
         );
-        if (confirmImport) {
-          setToast("Importando datos... La página se recargará al finalizar.");
-          console.log("Datos a importar:", importedData);
-          alert("La funcionalidad de escritura en la base de datos está pendiente. Revisa la consola para ver los datos que se importarían.");
+
+        if (!confirmImport) {
+          event.target.value = null; // Limpiar el input para poder seleccionar el mismo archivo de nuevo
+          return;
         }
+
+        // 2. Verificar que el usuario y el club estén activos
+        if (!user || !clubActivoId) {
+          setToast("Error: No se pudo identificar al usuario o al club activo.");
+          return;
+        }
+        
+        setToast("Iniciando importación... No cierres la página.");
+        const baseRef = db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId);
+
+        // 3. Borrar todos los datos existentes en las colecciones
+        const collectionsToWipe = ['alumnos', 'clases', 'pagos', 'gastos', 'grupos', 'otrosIngresos'];
+        for (const collectionName of collectionsToWipe) {
+          setToast(`Borrando ${collectionName}...`);
+          const collectionRef = baseRef.collection(collectionName);
+          const snapshot = await collectionRef.limit(500).get(); // Trabajar en lotes de 500
+          
+          while (snapshot.size > 0) {
+            const batch = db.batch();
+            snapshot.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            // Obtener el siguiente lote si aún hay documentos
+            const nextSnapshot = await collectionRef.limit(500).get();
+            if (nextSnapshot.size === snapshot.size) break; // Evitar bucle infinito si algo falla
+            snapshot = nextSnapshot;
+          }
+        }
+
+        // 4. Importar los nuevos datos usando Batch Writes
+        const collectionsToImport = ['alumnos', 'clases', 'pagos', 'gastos', 'grupos', 'otrosIngresos'];
+        for (const collectionName of collectionsToImport) {
+          const documents = importedData[collectionName] || [];
+          if (documents.length > 0) {
+            setToast(`Importando ${documents.length} ${collectionName}...`);
+            const collectionRef = baseRef.collection(collectionName);
+            let batch = db.batch();
+            let count = 0;
+
+            for (const doc of documents) {
+              const { id, ...data } = doc;
+              // Si el documento tiene un ID del backup, lo respetamos. Si no, Firestore crea uno nuevo.
+              const docRef = id ? collectionRef.doc(id) : collectionRef.doc();
+              batch.set(docRef, data);
+              count++;
+
+              // Si llegamos al límite del lote, lo ejecutamos y creamos uno nuevo
+              if (count === 499) {
+                await batch.commit();
+                batch = db.batch();
+                count = 0;
+              }
+            }
+            // Ejecutar el último lote si quedaron operaciones pendientes
+            if (count > 0) {
+              await batch.commit();
+            }
+          }
+        }
+
+        // 5. Actualizar el documento de perfil por separado
+        if (importedData.perfil) {
+          setToast("Actualizando perfil...");
+          const perfilRef = baseRef.collection('perfil').doc('main');
+          // Usamos 'set' con 'merge: true' para no borrar otros campos que pudieran existir
+          await perfilRef.set(importedData.perfil, { merge: true });
+        }
+
+        // 6. Feedback final y recarga de la página
+        setToast("¡Importación completada con éxito! La página se recargará.");
+        setTimeout(() => window.location.reload(), 2000);
+
       } catch (error) {
-        alert("El archivo seleccionado no es un JSON válido o está corrupto.");
-        console.error("Error al parsear JSON:", error);
+        setToast("Error: La importación falló. Revisa la consola para más detalles.");
+        console.error("Error durante la importación:", error);
       } finally {
-        event.target.value = null;
+        // Limpiar el input para permitir volver a seleccionar el mismo archivo
+        if(event.target) {
+            event.target.value = null;
+        }
       }
     };
     reader.readAsText(file);
