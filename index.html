@@ -4287,6 +4287,16 @@ function Rankings({ alumnos = [], user, clubActivoId, perfil }) {
 
   const alumnosMap = React.useMemo(() => new Map(alumnos.map(a => [a.id, a])), [alumnos]);
   const teamsMap = React.useMemo(() => new Map((teams || []).map(t => [t.id, t])), [teams]);
+  
+  const sortedAlumnos = useMemo(() => 
+    [...alumnos].sort((a, b) => getNombreCompleto(a).localeCompare(getNombreCompleto(b)))
+  , [alumnos]);
+
+  const sortedParticipantes = useMemo(() => 
+    participantes.map(id => alumnosMap.get(id)).filter(Boolean)
+                 .sort((a, b) => getNombreCompleto(a).localeCompare(getNombreCompleto(b)))
+  , [participantes, alumnosMap]);
+  
   const rankingsCol = React.useMemo(() => user && clubActivoId ? db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId).collection('rankings') : null, [user, clubActivoId]);
   const selectedRanking = React.useMemo(() => rankings.find(r => r.id === selectedId) || null, [rankings, selectedId]);
   const matchesCol = React.useMemo(() => selectedRanking ? rankingsCol.doc(selectedRanking.id).collection('matches') : null, [rankingsCol, selectedRanking]);
@@ -4416,35 +4426,14 @@ function Rankings({ alumnos = [], user, clubActivoId, perfil }) {
               const teamA = teamsMap.get(m.equipoA);
               const teamB = teamsMap.get(m.equipoB);
               if (!teamA || !teamB) continue;
-
-              // --- INICIO DE LA CORRECCIÓN ---
               teamA.members.forEach(id => { 
                   const p = base.get(id); 
-                  if (p) { 
-                      p.PJ++; 
-                      if (m.resultado === 'A') { // Gana Equipo A
-                          p.G++; 
-                          p.PTS += m.puntosA || 0; 
-                      } else { // Pierde Equipo A
-                          p.P++; 
-                          p.PTS += m.puntosA || 0; // CORREGIDO: Debe sumar los puntos de A (0 si pierde)
-                      } 
-                  } 
+                  if (p) { p.PJ++; if (m.resultado === 'A') { p.G++; p.PTS += m.puntosA || 0; } else { p.P++; p.PTS += m.puntosA || 0; } } 
               });
               teamB.members.forEach(id => { 
                   const p = base.get(id); 
-                  if (p) { 
-                      p.PJ++; 
-                      if (m.resultado === 'B') { // Gana Equipo B
-                          p.G++; 
-                          p.PTS += m.puntosB || 0; 
-                      } else { // Pierde Equipo B
-                          p.P++; 
-                          p.PTS += m.puntosB || 0; // CORREGIDO: Debe sumar los puntos de B (0 si pierde)
-                      } 
-                  } 
+                  if (p) { p.PJ++; if (m.resultado === 'B') { p.G++; p.PTS += m.puntosB || 0; } else { p.P++; p.PTS += m.puntosB || 0; } } 
               });
-              // --- FIN DE LA CORRECCIÓN ---
           }
       }
       base.forEach((row, id) => { row.PTS += Number(ajustesManual[id] || 0); });
@@ -4453,7 +4442,7 @@ function Rankings({ alumnos = [], user, clubActivoId, perfil }) {
       return arr.filter(r => !excluidosInterno.includes(r.alumnoId));
   }, [participantes, teams, matches, ajustesManual, alumnosMap, excluidosInterno, teamsMap]);
   
-  const standingsTorneos = React.useMemo(() => {
+  const standingsTorneos = useMemo(() => {
     const allPlayerIds = new Set([...Object.keys(awardsTotals || {}), ...Object.keys(torneoPTS || {}), ...Object.keys(ajustesTorneos || {})]);
     const base = new Map(Array.from(allPlayerIds).map(id => [id, { alumnoId: id, PJ: 0, G: 0, P: 0, PTS: 0 }]));
     for (const [id, cnt] of Object.entries(awardsTotals || {})) {
@@ -4475,12 +4464,12 @@ function Rankings({ alumnos = [], user, clubActivoId, perfil }) {
   const updateRanking = async () => { if (!rankingsCol || !selectedRanking) return; const payload = { participantes, teams, puntosCfg, ajustesManual, ajustesTorneos, excluidosInterno, excluidosTorneos, torneosFinalizado: !!selectedRanking.torneosFinalizado, updatedAt: Date.now() }; await rankingsCol.doc(selectedRanking.id).set(payload, { merge: true }); alert("Ranking guardado"); };
   const handleSave = async () => { if (view === 'torneos' && ajustesBloqueados) { alert('Ingresa tu PIN para guardar.'); return; } await updateRanking(); };
   const deleteRanking = async (id) => { if (!rankingsCol || !confirm("¿Eliminar este ranking?")) return; await rankingsCol.doc(id).delete(); };
-  const submitMatch = async (e) => { e.preventDefault(); if (!matchesCol) return; const { fecha, resultado, score, jugadorA, jugadorB, equipoA, equipoB } = matchForm; const cfg = puntosCfg || { win: 3, loss: 0 }; const puntosA = resultado === "A" ? cfg.win : cfg.loss; const puntosB = resultado === "B" ? cfg.win : cfg.loss; const payload = { fecha, resultado, score, puntosA, puntosB, modalidad: modalidadPartido, createdAt: Date.now() }; if (modalidadPartido === "singles") { if (!jugadorA || !jugadorB || jugadorA === jugadorB) return alert("Elegí dos alumnos distintos."); payload.jugadorA = jugadorA; payload.jugadorB = jugadorB; } else { if (!equipoA || !equipoB || equipoA === equipoB) return alert("Elegí dos equipos distintos."); payload.equipoA = equipoA; payload.equipoB = equipoB; } await matchesCol.add(payload); setMatchForm(f => ({ ...f, score: "" })); };
+  const submitMatch = async (e) => { e.preventDefault(); if (!matchesCol) return; const { fecha, resultado, score, jugadorA, jugadorB, equipoA, equipoB } = matchForm; const cfg = puntosCfg || { win: 3, loss: 0 }; const puntosA = resultado === "A" ? cfg.win : cfg.loss; const puntosB = resultado === "B" ? cfg.win : cfg.loss; const payload = { fecha, resultado, score, puntosA, puntosB, modalidad: modalidadPartido, createdAt: Date.now() }; if (modalidadPartido === "singles") { if (!jugadorA || !jugadorB || jugadorA === jugadorB) return alert("Elegí dos alumnos distintos."); payload.jugadorA = jugadorA; payload.jugadorB = jugadorB; } else { if (!equipoA || !equipoB || equipoA === equipoB) return alert("Elegí dos equipos distintos."); payload.equipoA = equipoA; payload.equipoB = equipoB; } await matchesCol.add(payload); setMatchForm(f => ({ ...f, score: "", jugadorA: "", jugadorB: "", equipoA: "", equipoB: "" })); };
   const deleteMatch = async (id) => { if (matchesCol) await matchesCol.doc(id).delete(); };
-  const addParticipante = (id) => setParticipantes(p => p.includes(id) ? p : [...p, id]);
+  const addParticipante = (id) => { if(id) setParticipantes(p => p.includes(id) ? p : [...p, id]); };
   const removeParticipante = (id) => setParticipantes(p => p.filter(x => x !== id));
   const addTeam = () => { if (!sel1 || !sel2 || sel1 === sel2) return alert("Debes seleccionar dos jugadores diferentes."); setTeams(t => [...t, { id: `team_${Date.now()}`, members: [sel1, sel2] }]); setSel1(''); setSel2(''); };
-  const removeTeam = (id) => { setTeams(t => t.filter(x => x.id !== id)); setMatchForm(p => ({ ...p, equipoA: p.equipoA === teamId ? "" : p.equipoA, equipoB: p.equipoB === teamId ? "" : p.equipoB })); };
+  const removeTeam = (id) => { setTeams(t => t.filter(x => x.id !== id)); setMatchForm(p => ({ ...p, equipoA: p.equipoA === id ? "" : p.equipoA, equipoB: p.equipoB === id ? "" : p.equipoB })); };
   const getTeamLabel = (teamId) => { const team = teamsMap.get(teamId); if (!team) return ""; return `${getNombreCompleto(alumnosMap.get(team.members[0]))} / ${getNombreCompleto(alumnosMap.get(team.members[1]))}`; };
   
   const torneosFinalizado = !!selectedRanking?.torneosFinalizado;
@@ -4569,19 +4558,16 @@ function Rankings({ alumnos = [], user, clubActivoId, perfil }) {
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm font-semibold text-slate-700 mb-1">Agregar participante (Singles)</p>
-                      <select value="" onChange={e => addParticipante(e.target.value)} className="w-full border rounded-lg px-3 py-2">
-                        <option value="">— Seleccionar alumno —</option>
-                        {alumnos.map(a => (<option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>))}
-                      </select>
+                      <AlumnoSearchSelect value="" onChange={addParticipante} alumnos={sortedAlumnos} excludeIds={participantes} placeholder="Buscar alumno para agregar..."/>
                       {participantes.length > 0 && (<ul className="mt-2 space-y-1 text-sm">{participantes.map(id => (<li key={id} className="flex justify-between items-center border rounded-lg px-2 py-1"><span>{getNombreCompleto(alumnosMap.get(id))}</span><button className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50" onClick={() => removeParticipante(id)}>Quitar</button></li>))}</ul>)}
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-slate-700 mb-1">Crear parejas (Dobles)</p>
-                      <div className="grid md:grid-cols-3 gap-2 items-end">
-                        <select className="w-full border rounded-lg p-2" value={sel1} onChange={e => setSel1(e.target.value)}><option value="">Jugador 1</option>{alumnos.map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}</select>
-                        <select className="w-full border rounded-lg p-2" value={sel2} onChange={e => setSel2(e.target.value)}><option value="">Jugador 2</option>{alumnos.map(a => <option key={a.id} value={a.id}>{getNombreCompleto(a)}</option>)}</select>
-                        <button type="button" onClick={addTeam} className="px-3 py-2 rounded-lg bg-slate-800 text-white disabled:opacity-50" disabled={!sel1 || !sel2}>Crear</button>
+                      <div className="space-y-2">
+                        <AlumnoSearchSelect value={sel1} onChange={setSel1} alumnos={sortedAlumnos} excludeIds={[sel2]} placeholder="Buscar Jugador 1"/>
+                        <AlumnoSearchSelect value={sel2} onChange={setSel2} alumnos={sortedAlumnos} excludeIds={[sel1]} placeholder="Buscar Jugador 2"/>
                       </div>
+                      <button type="button" onClick={addTeam} className="mt-2 w-full px-3 py-2 rounded-lg bg-slate-800 text-white disabled:opacity-50" disabled={!sel1 || !sel2}>Crear Pareja</button>
                       {teams.length > 0 && (<ul className="mt-2 space-y-1 text-sm">{teams.map(t => (<li key={t.id} className="flex justify-between items-center border rounded-lg px-2 py-1"><span>{getTeamLabel(t.id)}</span><button className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50" onClick={() => removeTeam(t.id)}>Quitar</button></li>))}</ul>)}
                     </div>
                     <div className="md:col-span-2">
@@ -4593,9 +4579,48 @@ function Rankings({ alumnos = [], user, clubActivoId, perfil }) {
                     </div>
                   </div>
                 )}
-                {tab === 'registrar' && ( <form onSubmit={submitMatch} className="grid md:grid-cols-6 gap-2 items-end"><div className="md:col-span-2"><label className="text-xs">Modalidad</label><select value={modalidadPartido} onChange={e => setModalidadPartido(e.target.value)} className="w-full border rounded-lg px-2 py-1"><option value="singles">Singles</option><option value="dobles">Dobles</option></select></div><div className="md:col-span-4"><label className="text-xs">Fecha</label><input type="date" value={matchForm.fecha} onChange={e => setMatchForm(f => ({ ...f, fecha: e.target.value }))} className="w-full border rounded-lg px-2 py-1" /></div>{modalidadPartido === 'singles' ? (<><div className="md:col-span-3"><label className="text-xs">Jugador A</label><select value={matchForm.jugadorA} onChange={e => setMatchForm(f => ({ ...f, jugadorA: e.target.value }))} className="w-full border rounded-lg px-2 py-1"><option value="">—</option>{participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}</select></div><div className="md:col-span-3"><label className="text-xs">Jugador B</label><select value={matchForm.jugadorB} onChange={e => setMatchForm(f => ({ ...f, jugadorB: e.target.value }))} className="w-full border rounded-lg px-2 py-1"><option value="">—</option>{participantes.map(id => <option key={id} value={id}>{getNombreCompleto(alumnosMap.get(id))}</option>)}</select></div></>) : (<><div className="md:col-span-3"><label className="text-xs">Equipo A</label><select value={matchForm.equipoA} onChange={e => setMatchForm(f => ({ ...f, equipoA: e.target.value }))} className="w-full border rounded-lg px-2 py-1"><option value="">—</option>{teams.map(t => <option key={t.id} value={t.id}>{getTeamLabel(t.id)}</option>)}</select></div><div className="md:col-span-3"><label className="text-xs">Equipo B</label><select value={matchForm.equipoB} onChange={e => setMatchForm(f => ({ ...f, equipoB: e.target.value }))} className="w-full border rounded-lg px-2 py-1"><option value="">—</option>{teams.map(t => <option key={t.id} value={t.id}>{getTeamLabel(t.id)}</option>)}</select></div></>)}<div className="md:col-span-2"><label className="text-xs">Resultado</label><select value={matchForm.resultado} onChange={e => setMatchForm(f => ({ ...f, resultado: e.target.value }))} className="w-full border rounded-lg px-2 py-1"><option value="A">Gana A</option><option value="B">Gana B</option></select></div><div className="md:col-span-2"><label className="text-xs">Score (opcional)</label><input type="text" value={matchForm.score} onChange={e => setMatchForm(f => ({ ...f, score: e.target.value }))} className="w-full border rounded-lg px-2 py-1" placeholder="Ej: 6-4 4-6 10-8" /></div><div className="md:col-span-2"><button type="submit" className="w-full px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">+ Registrar</button></div></form> )}
-                {tab === 'tabla' && ( <div><div className="flex items-center justify-between mb-2"><p className="text-sm font-semibold text-slate-700">Tabla de Posiciones — Ranking Interno</p><button className="text-xs px-2 py-1 rounded-lg border hover:bg-slate-50" onClick={() => setEditRowsInterno(s => !s)}>{editRowsInterno ? "Listo" : "Editar tabla"}</button></div><div className="overflow-x-auto max-h-[60vh] overflow-y-auto rounded-lg border"><table className="min-w-full text-sm"><thead className="sticky top-0 z-10 bg-white shadow-sm"><tr className="text-left text-slate-700"><th className="p-2">#</th><th className="p-2">Alumno</th><th className="p-2">PJ</th><th className="p-2">G</th><th className="p-2">P</th><th className="p-2">PTS</th>{editRowsInterno && <th className="p-2 w-12"></th>}</tr></thead><tbody>{standingsInterno.map((row, idx) => (<tr key={row.alumnoId} className="border-t odd:bg-white even:bg-slate-50"><td className="p-2">{idx + 1}</td><td className="p-2">{getNombreCompleto(alumnosMap.get(row.alumnoId))}</td><td className="p-2">{row.PJ}</td><td className="p-2">{row.G}</td><td className="p-2">{row.P}</td><td className="p-2 font-bold">{row.PTS}</td>{editRowsInterno && ( <td className="p-2 text-right"><button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50" onClick={() => excluirInterno(row.alumnoId)} title="Quitar de la tabla">🗑️</button></td> )}</tr>))}</tbody></table></div>{editRowsInterno && excluidosInterno.length > 0 && ( <div className="mt-2 text-xs"><div className="font-medium mb-1">Excluidos</div><ul className="flex flex-wrap gap-2">{excluidosInterno.map(id => ( <li key={id} className="px-2 py-1 rounded border bg-slate-50">{getNombreCompleto(alumnosMap.get(id))}<button className="ml-2 underline" onClick={() => restaurarInterno(id)}>Restaurar</button></li> ))}</ul></div> )}</div> )}
-                {tab === 'historial' && ( <div><p className="text-sm font-semibold text-slate-700 mb-2">Historial de Partidos</p>{matches.length === 0 && <p className="text-sm text-slate-500">Sin partidos registrados.</p>}<ul className="space-y-2">{matches.map(m => (<li key={m.id} className="p-2 border rounded-lg bg-white flex justify-between items-center"><div className="text-sm"><span className="text-slate-500 mr-2">{m.fecha}</span>{m.modalidad === 'singles' ? (<><b>{getNombreCompleto(alumnosMap.get(m.jugadorA))}</b> vs <b>{getNombreCompleto(alumnosMap.get(m.jugadorB))}</b></>) : (<><b>{getTeamLabel(m.equipoA)}</b> vs <b>{getTeamLabel(m.equipoB)}</b></>)}{m.score ? <> — <span className="text-slate-600">{m.score}</span></> : null}<span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{m.resultado === "A" ? "Gana A" : "Gana B"}</span></div><button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50" onClick={() => deleteMatch(m.id)}>🗑️</button></li>))}</ul></div> )}
+                {tab === 'registrar' && ( 
+                  <form onSubmit={submitMatch} className="grid md:grid-cols-6 gap-2 items-end">
+                    <div className="md:col-span-2"><label className="text-xs">Modalidad</label><select value={modalidadPartido} onChange={e => setModalidadPartido(e.target.value)} className="w-full border rounded-lg px-2 py-1"><option value="singles">Singles</option><option value="dobles">Dobles</option></select></div>
+                    <div className="md:col-span-4"><label className="text-xs">Fecha</label><input type="date" value={matchForm.fecha} onChange={e => setMatchForm(f => ({ ...f, fecha: e.target.value }))} className="w-full border rounded-lg px-2 py-1" /></div>
+                    {modalidadPartido === 'singles' ? (
+                      <>
+                        <div className="md:col-span-3"><label className="text-xs">Jugador A</label><AlumnoSearchSelect value={matchForm.jugadorA} onChange={v => setMatchForm(f=>({...f, jugadorA: v}))} alumnos={sortedParticipantes} excludeIds={[matchForm.jugadorB]} placeholder="Buscar Jugador A"/></div>
+                        <div className="md:col-span-3"><label className="text-xs">Jugador B</label><AlumnoSearchSelect value={matchForm.jugadorB} onChange={v => setMatchForm(f=>({...f, jugadorB: v}))} alumnos={sortedParticipantes} excludeIds={[matchForm.jugadorA]} placeholder="Buscar Jugador B"/></div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="md:col-span-3"><label className="text-xs">Equipo A</label><select value={matchForm.equipoA} onChange={e => setMatchForm(f => ({ ...f, equipoA: e.target.value }))} className="w-full border rounded-lg px-2 py-1"><option value="">—</option>{teams.map(t => <option key={t.id} value={t.id}>{getTeamLabel(t.id)}</option>)}</select></div>
+                        <div className="md:col-span-3"><label className="text-xs">Equipo B</label><select value={matchForm.equipoB} onChange={e => setMatchForm(f => ({ ...f, equipoB: e.target.value }))} className="w-full border rounded-lg px-2 py-1"><option value="">—</option>{teams.map(t => <option key={t.id} value={t.id}>{getTeamLabel(t.id)}</option>)}</select></div>
+                      </>
+                    )}
+                    <div className="md:col-span-2"><label className="text-xs">Resultado</label><select value={matchForm.resultado} onChange={e => setMatchForm(f => ({ ...f, resultado: e.target.value }))} className="w-full border rounded-lg px-2 py-1"><option value="A">Gana A</option><option value="B">Gana B</option></select></div>
+                    <div className="md:col-span-2"><label className="text-xs">Score (opcional)</label><input type="text" value={matchForm.score} onChange={e => setMatchForm(f => ({ ...f, score: e.target.value }))} className="w-full border rounded-lg px-2 py-1" placeholder="Ej: 6-4 4-6 10-8" /></div>
+                    <div className="md:col-span-2"><button type="submit" className="w-full px-3 py-2 rounded-lg bg-[#34745B] hover:bg-green-800 text-white text-sm">+ Registrar</button></div>
+                  </form> 
+                )}
+                {tab === 'tabla' && ( 
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-slate-700">Tabla de Posiciones — Ranking Interno</p>
+                      <button className="text-xs px-2 py-1 rounded-lg border hover:bg-slate-50" onClick={() => setEditRowsInterno(s => !s)}>{editRowsInterno ? "Listo" : "Editar tabla"}</button>
+                    </div>
+                    <div className="overflow-x-auto max-h-[60vh] overflow-y-auto rounded-lg border">
+                      <table className="min-w-full text-sm">
+                        <thead className="sticky top-0 z-10 bg-white shadow-sm"><tr className="text-left text-slate-700"><th className="p-2">#</th><th className="p-2">Alumno</th><th className="p-2">PJ</th><th className="p-2">G</th><th className="p-2">P</th><th className="p-2">PTS</th>{editRowsInterno && <th className="p-2 w-12"></th>}</tr></thead>
+                        <tbody>{standingsInterno.map((row, idx) => (<tr key={row.alumnoId} className="border-t odd:bg-white even:bg-slate-50"><td className="p-2">{idx + 1}</td><td className="p-2">{getNombreCompleto(alumnosMap.get(row.alumnoId))}</td><td className="p-2">{row.PJ}</td><td className="p-2">{row.G}</td><td className="p-2">{row.P}</td><td className="p-2 font-bold">{row.PTS}</td>{editRowsInterno && ( <td className="p-2 text-right"><button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50" onClick={() => excluirInterno(row.alumnoId)} title="Quitar de la tabla">🗑️</button></td> )}</tr>))}</tbody>
+                      </table>
+                    </div>
+                    {editRowsInterno && excluidosInterno.length > 0 && ( <div className="mt-2 text-xs"><div className="font-medium mb-1">Excluidos</div><ul className="flex flex-wrap gap-2">{excluidosInterno.map(id => ( <li key={id} className="px-2 py-1 rounded border bg-slate-50">{getNombreCompleto(alumnosMap.get(id))}<button className="ml-2 underline" onClick={() => restaurarInterno(id)}>Restaurar</button></li> ))}</ul></div> )}
+                  </div> 
+                )}
+                {tab === 'historial' && ( 
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 mb-2">Historial de Partidos</p>
+                    {matches.length === 0 && <p className="text-sm text-slate-500">Sin partidos registrados.</p>}
+                    <ul className="space-y-2">{matches.map(m => (<li key={m.id} className="p-2 border rounded-lg bg-white flex justify-between items-center"><div className="text-sm"><span className="text-slate-500 mr-2">{m.fecha}</span>{m.modalidad === 'singles' ? (<><b>{getNombreCompleto(alumnosMap.get(m.jugadorA))}</b> vs <b>{getNombreCompleto(alumnosMap.get(m.jugadorB))}</b></>) : (<><b>{getTeamLabel(m.equipoA)}</b> vs <b>{getTeamLabel(m.equipoB)}</b></>)}{m.score ? <> — <span className="text-slate-600">{m.score}</span></> : null}<span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{m.resultado === "A" ? "Gana A" : "Gana B"}</span></div><button className="text-xs px-2 py-1 rounded-lg border text-red-600 hover:bg-red-50" onClick={() => deleteMatch(m.id)}>🗑️</button></li>))}</ul>
+                  </div> 
+                )}
               </Card>
             ) : (
               <Card title={<span className="text-[#34745B]">{selectedRanking.nombre}</span>} right={<button onClick={handleSave} disabled={ajustesBloqueados} className={`px-3 py-1.5 rounded-lg text-white text-sm ${ajustesBloqueados ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#34745B] hover:bg-green-800'}`}>Guardar</button>}>
@@ -4618,19 +4643,7 @@ function Rankings({ alumnos = [], user, clubActivoId, perfil }) {
                     </div>
                     <div className="overflow-x-auto max-h-[60vh] overflow-y-auto rounded-lg border">
                       <table className="min-w-full text-sm">
-                        <thead className="sticky top-0 z-10 bg-white shadow-sm">
-                          <tr className="text-left text-slate-700">
-                            <th className="p-2">#</th>
-                            <th className="p-2">Alumno</th>
-                            <th className="p-2 text-right">PJ</th>
-                            <th className="p-2 text-right">G</th>
-                            <th className="p-2 text-right">P</th>
-                            <th className="p-2 text-right">Pts. Torneo</th>
-                            <th className="p-2 text-right">Ajuste</th>
-                            <th className="p-2 text-right font-bold">PTS Total</th>
-                            {editRowsTorneos && <th className="p-2 w-12"></th>}
-                          </tr>
-                        </thead>
+                        <thead className="sticky top-0 z-10 bg-white shadow-sm"><tr className="text-left text-slate-700"><th className="p-2">#</th><th className="p-2">Alumno</th><th className="p-2 text-right">PJ</th><th className="p-2 text-right">G</th><th className="p-2 text-right">P</th><th className="p-2 text-right">Pts. Torneo</th><th className="p-2 text-right">Ajuste</th><th className="p-2 text-right font-bold">PTS Total</th>{editRowsTorneos && <th className="p-2 w-12"></th>}</tr></thead>
                         <tbody>
                           {standingsTorneos.map((row, idx) => {
                             const puntosBase = torneoPTS[row.alumnoId] || 0;
