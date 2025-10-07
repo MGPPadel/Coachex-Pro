@@ -2040,454 +2040,178 @@ function normalizarTelefonoParaWhatsApp(rawDigits, defaultCountry = "54") {
 }
 
     
-  function Dashboard({ perfil, clases, pagos, gastos, alumnos, clubes, clubActivoId, goToNewClass, goToEditClass }) {
-  useEffect(() => {
-    console.log("DATOS RECIBIDOS POR EL DASHBOARD:", { clubId: clubActivoId, nombrePerfil: perfil?.nombre });
-  }, [clubActivoId, perfil?.nombre]);
-
+ function Dashboard({ perfil, clases, pagos, gastos, alumnos, clubes, clubActivoId, goToNewClass, goToEditClass }) {
+  // --- Lógica interna (cálculos) ---
   const [currentDate, setCurrentDate] = useState(new Date());
   const [mostrarSoloHorarioLaboral, setMostrarSoloHorarioLaboral] = useState(false);
-
   const weekStartDate = getWeekStartDate(currentDate);
   const weekDates = Array.from({ length: 7 }, (_, i) => formatDate(addDays(weekStartDate, i)));
-
-  // 🔹 club activo y datos de horario
   const clubActivo = clubActivoId ? (clubes || []).find(c => c.id === clubActivoId) : null;
-  const nombreLugar = clubActivo ? (clubActivo.nombre || "—") : "—";
+  const nombreLugar = clubActivo ? clubActivo.nombre : "—";
   const nombreCompleto = `${perfil?.nombre || ''} ${perfil?.apellido || ''}`.trim();
   const horarioData = clubActivo ? clubActivo.horarioLaboral : perfil?.horarioLaboral;
-
-  const alumnoMap    = useMemo(() => new Map((alumnos || []).map(a => [a.id, getNombreCompleto(a)])), [alumnos]);
+  const alumnoMap = useMemo(() => new Map((alumnos || []).map(a => [a.id, getNombreCompleto(a)])), [alumnos]);
   const alumnoObjMap = useMemo(() => new Map((alumnos || []).map(a => [a.id, a])), [alumnos]);
-
   const [contactosExpandId, setContactosExpandId] = useState(null);
   const [contactosMsg, setContactosMsg] = useState("");
-
-  const hoy          = formatDate(new Date());
+  const hoy = formatDate(new Date());
   const semanaInicio = formatDate(getWeekStartDate(new Date()));
-  const semanaFin    = formatDate(addDays(getWeekStartDate(new Date()), 6));
-  const manana       = formatDate(addDays(new Date(), 1));
+  const manana = formatDate(addDays(new Date(), 1));
 
-  // === Clases: hoy (todas excepto canceladas) para la Agenda
-  const clasesHoyTodas = useMemo(() => {
-    return (clases || [])
-      .filter(c => c.fecha === hoy && String(c.estado || '').toLowerCase() !== 'cancelada')
-      .map(c => ({ ...c, nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ') }))
-      .sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
-  }, [clases, hoy, alumnoMap]);
-
-  // === Clases: hoy realizadas (KPI)
-  const clasesHoyRealizadas = useMemo(() => {
-    return (clases || [])
-      .filter(c => c.fecha === hoy && String(c.estado || '').toLowerCase() === 'realizada')
-      .map(c => ({ ...c, nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ') }))
-      .sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
-  }, [clases, hoy, alumnoMap]);
-
-  // === Clases: mañana (todas excepto canceladas) para Agenda de contactos
-  const clasesManana = useMemo(() => {
-    return (clases || [])
-      .filter(c => c.fecha === manana && String(c.estado || '').toLowerCase() !== 'cancelada')
-      .map(c => ({ ...c, nombresAlumnos: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ') }))
-      .sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
-  }, [clases, manana, alumnoMap]);
-
-  // --- Horario disponible para mañana ---
-  const getDayIndex = (d) => (d.getDay() === 0 ? 6 : d.getDay() - 1); // 0..6 (Lun..Dom)
-  const getNombreDiaFromYMD = (yyyy_mm_dd) => {
-    const d = new Date(`${yyyy_mm_dd}T00:00:00`);
-    return DIAS_SEMANA_NOMBRES[getDayIndex(d)];
-  };
+  const clasesHoy = useMemo(() => (clases || []).filter(c => c.fecha === hoy && String(c.estado || '').toLowerCase() !== 'cancelada').sort((a, b) => a.hora.localeCompare(b.hora)), [clases, hoy]);
+  const clasesManana = useMemo(() => (clases || []).filter(c => c.fecha === manana && String(c.estado || '').toLowerCase() !== 'cancelada').sort((a, b) => a.hora.localeCompare(b.hora)), [clases, manana]);
+  const resumenClasesHoy = useMemo(() => {
+    const clasesRealizadas = clasesHoy.filter(c => c.estado === 'Realizada');
+    if (clasesRealizadas.length === 0) return [];
+    const counts = clasesRealizadas.reduce((acc, c) => { const tipo = normalizarTipoClase(c.tipo); acc[tipo] = (acc[tipo] || 0) + 1; return acc; }, {});
+    return Object.entries(counts).map(([tipo, cant]) => `${cant} clase${cant > 1 ? 's' : ''} de ${labelSinClase(tipo)}`);
+  }, [clasesHoy]);
+  const balanceSemana = useMemo(() => {
+    const ingresos = (pagos || []).filter(p => p.fecha >= semanaInicio).reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
+    const egresos = (gastos || []).filter(g => g.fecha >= semanaInicio).reduce((acc, g) => acc + parseFloat(g.monto || 0), 0);
+    return ingresos - egresos;
+  }, [pagos, gastos, semanaInicio]);
+  const horarioFormateado = (() => {
+    const data = horarioData; if (!data) return ["No configurado"];
+    const lista = Array.isArray(data.bloques) ? data.bloques : (Array.isArray(data) ? data.filter(d => d.activo) : []);
+    if (lista.length === 0) return ["Sin horarios definidos."];
+    return lista.map(b => `${b.dia}: ${b.desde} - ${b.hasta}`);
+  })();
   const generateSlots = (desde, hasta, stepMin = 60) => {
-    const [h1, m1] = (desde || '08:00').split(':').map(Number);
-    const [h2, m2] = (hasta || '20:00').split(':').map(Number);
-    const start = h1 * 60 + m1;
-    const end   = h2 * 60 + m2;
+    const [h1, m1] = (desde || '08:00').split(':').map(Number); const [h2, m2] = (hasta || '20:00').split(':').map(Number);
+    const start = h1 * 60 + m1; const end = h2 * 60 + m2;
     const res = [];
-    for (let t = start; t + stepMin <= end; t += stepMin) {
+    for (let t = start; t < end; t += stepMin) {
       const hh = String(Math.floor(t / 60)).padStart(2, '0');
       const mm = String(t % 60).padStart(2, '0');
       res.push(`${hh}:${mm}`);
     }
     return res;
   };
-
-  const bloquesManana = useMemo(() => {
-    const nombreDia = getNombreDiaFromYMD(manana);
-    const data = clubActivo ? (clubActivo.horarioLaboral || []) : (perfil?.horarioLaboral || []);
-    const listaBloques = Array.isArray(data?.bloques) ? data.bloques : (Array.isArray(data) ? data : []);
-    return listaBloques
-      .filter(b => (b.dia === nombreDia || b.diaLabel === nombreDia) && (b.activo ?? true))
-      .map(b => ({ desde: b.desde, hasta: b.hasta }));
-  }, [clubActivo, perfil, manana]);
-
   const horarioDisponibleManana = useMemo(() => {
-    const ocupadas = new Set((clasesManana || []).filter(c => String(c.estado || '').toLowerCase() !== 'cancelada').map(c => c.hora));
+    const ocupadas = new Set(clasesManana.map(c => c.hora));
     const slots = [];
-    bloquesManana.forEach(b => {
-      generateSlots(b.desde, b.hasta, 60).forEach(h => { if (!ocupadas.has(h)) slots.push(h); });
-    });
-    return slots.sort((a, b) => a.localeCompare(b));
-  }, [bloquesManana, clasesManana]);
+    const diaDeManana = DIAS_SEMANA_NOMBRES[(new Date(manana + 'T00:00:00').getDay() + 6) % 7];
+    const bloquesDelDia = (horarioData?.bloques || horarioData || []).filter(b => b.dia === diaDeManana && (b.activo ?? true));
+    bloquesDelDia.forEach(b => { generateSlots(b.desde, b.hasta).forEach(h => { if (!ocupadas.has(h)) slots.push(h); }); });
+    return slots.sort();
+  }, [horarioData, clasesManana, manana]);
 
-  const resumenClasesHoy = useMemo(() => {
-    if (!clasesHoyRealizadas.length) return [];
-    const counts = clasesHoyRealizadas.reduce((acc, c) => {
-      const tipo = normalizarTipoClase(c.tipo || 'Clase 1 persona');
-      acc[tipo] = (acc[tipo] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(counts).map(([tipo, cantidad]) => {
-      const nombreClase = labelSinClase(tipo);
-      return `${cantidad} ${cantidad > 1 ? 'clases' : 'clase'} de ${nombreClase}`;
-    });
-  }, [clasesHoyRealizadas]);
-
-  // ✅ balance semanal con rango completo [inicio..fin]
-  const balanceSemana = useMemo(() => {
-    const enRango = (f) => f >= semanaInicio && f <= semanaFin;
-    const ingresos = (pagos || [])
-      .filter(p => enRango(p.fecha) && String(p.metodo || '').toLowerCase() !== 'pendiente')
-      .reduce((acc, p) => acc + parseFloat(p.monto || 0), 0);
-    const egresos = (gastos || [])
-      .filter(g => enRango(g.fecha))
-      .reduce((acc, g) => acc + parseFloat(g.monto || 0), 0);
-    return ingresos - egresos;
-  }, [pagos, gastos, semanaInicio, semanaFin]);
-
-  const horarioFormateado = (() => {
-    const data = horarioData;
-    const esClub = !!clubActivo;
-    if (!data) return ["No especificado"];
-    if (esClub && data.bloques) {
-      if (!data.bloques.length) return ["No hay horarios definidos para este club."];
-      return data.bloques.map(b => `${b.dia}: ${b.desde} - ${b.hasta}`);
-    }
-    if (!esClub && Array.isArray(data)) {
-      const activos = data.filter(d => d.activo);
-      if (!activos.length) return ["No hay días de trabajo definidos."];
-      return activos.map(d => `${d.dia}: ${d.desde} - ${d.hasta}`);
-    }
-    return ["Horario no configurado."];
-  })();
-
-  // ====== UI: tamaños cómodos para iPhone ======
-  const btn = "rounded-xl px-4 py-2 text-[15px] leading-none min-h-[44px] border transition";
-  const btnGhost = `${btn} bg-white border-slate-300 text-slate-800 hover:bg-slate-50`;
-  const btnPrimary = `${btn} bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700`;
-  const btnDark = `${btn} bg-slate-800 border-slate-900 text-white hover:bg-slate-900`;
-  const btnMuted = `${btn} bg-slate-100 border-slate-200 text-slate-800 hover:bg-slate-200`;
-
+  // Contenedor principal en una sola columna para apilar las tarjetas en el orden deseado
   return (
-    <div className="grid gap-6">
-      {/* ===== Fila superior: 2 columnas (stack en móvil) ===== */}
-      <div className="grid md:grid-cols-2 gap-6 w-full max-w-full">
-        {/* Lugar de Trabajo */}
-        <div className="bg-white p-4 rounded-2xl flex flex-wrap justify-between items-start shadow-sm border border-slate-200 w-full">
-          <div className="text-[15px] space-y-2">
-            <h3 className="font-semibold text-[#34745B] text-base">Lugar de Trabajo</h3>
-            <p className="text-slate-600">
-              <strong>Modo actual:</strong>{" "}
-              <span className="font-semibold text-slate-800 break-words">{nombreLugar}</span>
-            </p>
-            <p className="text-slate-600"><strong>Profesor/a:</strong> <span className="break-words">{nombreCompleto || "—"}</span></p>
+    <div className="grid grid-cols-1 gap-6">
+
+      <Card title={<span className="text-[#34745B]">Lugar y Horario</span>}>
+        <div className="flex flex-col sm:flex-row justify-between text-sm">
+          <div className="space-y-1">
+            <p><strong>Modo actual:</strong> {nombreLugar}</p>
+            <p><strong>Profesor/a:</strong> {nombreCompleto}</p>
           </div>
-          <div className="text-[15px] space-y-1 text-right w-full sm:w-auto mt-3 sm:mt-0">
-            <strong className="block text-[#34745B]">Horario Laboral:</strong>
-            <div className="text-slate-600 space-y-0.5">
-              {horarioFormateado.map((linea, index) => (<div key={index} className="break-words">{linea}</div>))}
-            </div>
-          </div>
-        </div>
-
-        {/* Reportes PDF */}
-        <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 w-full">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-base font-semibold text-[#34745B]">Reportes PDF</h3>
-          </div>
-          <p className="text-[15px] text-slate-600 mb-3">
-            Descargá reportes listos para enviar por WhatsApp o email.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 w-full">
-  <button
-    type="button"
-    className={`${btnPrimary} w-full min-h-[44px] text-sm sm:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2`}
-    aria-label="Generar reporte diario"
-    onClick={() => {
-      const hoyStr = formatDate(new Date());
-      const clasesDia = (clases || [])
-        .filter(c => c.fecha === hoyStr && String(c.estado || '').toLowerCase() === 'realizada')
-        .map(c => ({ ...c, alumnoNombres: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean) }));
-      const pagosDia = (pagos || []).filter(p => p.fecha === hoyStr);
-      const gastosDia = (gastos || []).filter(g => g.fecha === hoyStr);
-      generarReportePDF({ tipo: "Diario", clases: clasesDia, pagos: pagosDia, gastos: gastosDia, perfil });
-    }}
-  >
-    Diario
-  </button>
-
-  <button
-    type="button"
-    className={`${btnDark} w-full min-h-[44px] text-sm sm:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2`}
-    aria-label="Generar reporte semanal"
-    onClick={() => {
-      const start = formatDate(getWeekStartDate(new Date()));
-      const end   = formatDate(addDays(getWeekStartDate(new Date()), 6));
-      const enRango = (f) => (f >= start && f <= end);
-      const clasesSem = (clases || [])
-        .filter(c => enRango(c.fecha) && String(c.estado || '').toLowerCase() === 'realizada')
-        .map(c => ({ ...c, alumnoNombres: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean) }));
-      const pagosSem  = (pagos || []).filter(p => enRango(p.fecha));
-      const gastosSem = (gastos || []).filter(g => enRango(g.fecha));
-      generarReportePDF({ tipo: "Semanal", clases: clasesSem, pagos: pagosSem, gastos: gastosSem, perfil });
-    }}
-  >
-    Semanal
-  </button>
-
-  <button
-    type="button"
-    className={`${btnMuted} w-full min-h-[44px] text-sm sm:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2`}
-    aria-label="Generar reporte mensual"
-    onClick={() => {
-      const hoy = new Date();
-      const y = hoy.getFullYear();
-      const m = hoy.getMonth();
-      const desde = formatDate(new Date(y, m, 1));
-      const hasta = formatDate(new Date(y, m + 1, 0));
-      const enRango = (f) => (f >= desde && f <= hasta);
-      const clasesMes = (clases || [])
-        .filter(c => enRango(c.fecha) && String(c.estado || '').toLowerCase() === 'realizada')
-        .map(c => ({ ...c, alumnoNombres: (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean) }));
-      const pagosMes  = (pagos || []).filter(p => enRango(p.fecha));
-      const gastosMes = (gastos || []).filter(g => enRango(g.fecha));
-      generarReportePDF({ tipo: "Mensual", clases: clasesMes, pagos: pagosMes, gastos: gastosMes, perfil });
-    }}
-  >
-    Mensual
-  </button>
-</div>
-
-
-          <p className="mt-3 text-[13px] text-slate-500">
-            El reporte incluye resumen (clases, ingresos, gastos, balance) y una tabla de clases realizadas.
-          </p>
-        </section>
-      </div>
-
-      {/* ===== Tarjetas KPI ===== */}
-      <div className="grid md:grid-cols-3 gap-4 w-full">
-        <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
-          <p className="text-[15px] text-green-800">Clases de Hoy</p>
-          <p className="text-xl sm:text-2xl font-bold text-[#34745B]">{clasesHoyRealizadas.length}</p>
-          {resumenClasesHoy.length > 0 && (
-            <div className="text-[13px] text-green-700 mt-2 border-t border-green-200 pt-2 space-y-0.5">
-              {resumenClasesHoy.map((linea, index) => (<p key={index}>{linea}</p>))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
-          <p className="text-[15px] text-slate-600">Horario disponible para mañana</p>
-          <div className="mt-1 text-[13px] text-slate-500">{horarioDisponibleManana.length} libres</div>
-
-          {horarioDisponibleManana.length === 0 ? (
-            <p className="text-[15px] text-slate-500 mt-2">
-              No hay horas libres dentro del horario laboral.
-            </p>
-          ) : (
-            <div className="mt-3">
-            <div className="grid grid-cols-2 gap-2">
-              {horarioDisponibleManana.map((h) => (
-                <div
-                  key={h}
-                  className="flex items-center justify-between gap-2 px-2 py-1 rounded-full border bg-white text-slate-700 text-sm"
-                  title={`Agendar ${h}`}
-                >
-                  <span className="px-1">{h}</span>
-                  <button
-                    type="button"
-                    onClick={() => goToNewClass && goToNewClass({ fecha: manana, hora: h })}
-                    className="text-xs px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white"
-                  >
-                    Agendar
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-          )}
-        </div>
-
-        <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
-          <p className="text-[15px] text-green-800">Balance de la Semana</p>
-          <p className={`text-2xl font-bold ${balanceSemana >= 0 ? 'text-[#34745B]' : 'text-red-900'}`}>
-            {formatCurrency(balanceSemana)}
-          </p>
-        </div>
-      </div>
-
-      {/* ===== Agendas ===== */}
-      <div className="grid md:grid-cols-2 gap-4 w-full">
-        <Card title={<span className="text-[#34745B]">Agenda del Día</span>}>
-          {!clasesHoyTodas.length ? (
-            <p className="text-[15px] text-slate-500">No hay clases programadas para hoy.</p>
-          ) : (
-            <ul className="space-y-2">
-              {clasesHoyTodas.map(c => {
-                const nombres = (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ') || 'Sin alumno';
-                return (
-                  <li key={c.id} className="p-2 border-b flex justify-between items-center">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-700 break-words text-[15px]">{c.hora} - {nombres}</p>
-                      <p className="text-[13px] text-slate-500">
-                        {c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}
-                      </p>
-                    </div>
-                    {c.estado !== 'Programada' && (
-                      <span
-                        className={`px-2 py-1 rounded-full text-[12px] font-semibold shrink-0 ${
-                          c.estado === 'Realizada' ? 'bg-green-100 text-green-800' :
-                          c.estado === 'Ausente'    ? 'bg-orange-100 text-orange-800' :
-                          c.estado === 'Cancelada'  ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-800'
-                        }`}
-                      >
-                        {c.estado}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-
-        <Card title={<span className="text-[#34745B]">Agenda de Mañana · Contactos</span>}>
-          {!clasesManana.length ? (
-            <p className="text-[15px] text-slate-500">No hay clases programadas para mañana.</p>
-          ) : (
-            <ul className="space-y-2">
-              {clasesManana.map(c => {
-                const nombres = (c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ') || 'Sin alumno';
-                return (
-                  <li key={c.id} className="p-2 border rounded-lg">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-700 break-words text-[15px]">{c.hora} - {nombres}</p>
-                        <p className="text-[13px] text-slate-500">
-                          {c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 rounded-full text-[12px] bg-slate-100 text-slate-800">{c.estado}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const canchaTxt = c.cancha ? ` en ${c.cancha}` : "";
-                            const def = `Hola! Te recuerdo tu clase ${c.tipo}${canchaTxt} el ${c.fecha} a las ${c.hora}.`;
-                            setContactosMsg(def);
-                            setContactosExpandId(contactosExpandId === c.id ? null : c.id);
-                          }}
-                          className={btnGhost}
-                        >
-                          Contactos
-                        </button>
-                      </div>
-                    </div>
-
-                    {contactosExpandId === c.id && (
-                      <div className="mt-3 p-3 bg-slate-50 rounded-lg border">
-                        <div className="mb-3">
-                          <label className="text-[12px] text-slate-500 block mb-1">Mensaje (editable)</label>
-                          <textarea
-                            value={contactosMsg}
-                            onChange={(e)=>setContactosMsg(e.target.value)}
-                            className="w-full border rounded-lg px-3 py-2 text-[15px] min-h-[44px]"
-                            rows={2}
-                          />
-                        </div>
-
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-[15px] min-w-[420px]">
-                            <thead>
-                              <tr className="text-slate-500">
-                                <th className="text-left px-2 py-2">Alumno</th>
-                                <th className="text-left px-2 py-2">Teléfono</th>
-                                <th className="text-left px-2 py-2">Acción</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(c.alumnoIds || []).filter(Boolean).map(id => {
-                                const a = alumnoObjMap.get(id);
-                                if (!a) return null;
-                                const nombre = getNombreCompleto(a);
-                                const telRaw = (a.telefono || a.contactoPadre || "").toString();
-                                const digits = telRaw.replace(/\D/g, "");
-                                const canchaTxt = c.cancha ? ` en ${c.cancha}` : "";
-                                const base = `Hola! Te recuerdo tu clase ${c.tipo}${canchaTxt} el ${c.fecha} a las ${c.hora}.`;
-                                const msg = contactosExpandId === c.id && contactosMsg ? contactosMsg : base;
-                                const wa = `https://api.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(msg)}`;
-                                return (
-                                  <tr key={id} className="border-t">
-                                    <td className="px-2 py-2">{nombre}</td>
-                                    <td className="px-2 py-2 break-words">{telRaw || '-'}</td>
-                                    <td className="px-2 py-2">
-                                      <a className="underline text-emerald-700" href={wa} target="_blank" rel="noopener">WhatsApp</a>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-      </div>
-
-      {/* ===== Calendario semanal ===== */}
-      <Card
-        title={<span className="text-[#34745B]">Calendario Semanal</span>}
-        right={
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-[15px]">
-              <input
-                type="checkbox"
-                id="vista-compacta"
-                checked={mostrarSoloHorarioLaboral}
-                onChange={(e) => setMostrarSoloHorarioLaboral(e.target.checked)}
-              />
-              <span className="text-slate-600">Mostrar solo horario laboral</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setCurrentDate(prev => addDays(prev, -7))} className={btnGhost}>‹ Ant</button>
-              <button onClick={() => setCurrentDate(new Date())} className={btnGhost}>Hoy</button>
-              <button onClick={() => setCurrentDate(prev => addDays(prev, 7))} className={btnGhost}>Sig ›</button>
-            </div>
-          </div>
-        }
-      >
-        {/* Scroll horizontal sin márgenes negativos (evita “cortes”) */}
-        <div className="overflow-x-auto">
-          <div className="min-w-[720px] md:min-w-0">
-            <CalendarioSemanal
-              week={weekDates}
-              clases={(clases || []).filter(c => weekDates.includes(c.fecha))}
-              alumnos={alumnos || []}
-              onEdit={goToEditClass}
-              horarioLaboral={horarioData}
-              mostrarSoloHorarioLaboral={mostrarSoloHorarioLaboral}
-            />
+          <div className="mt-3 sm:mt-0 sm:text-right">
+            <strong>Horario Laboral:</strong>
+            <div className="text-slate-600">{horarioFormateado.map((linea, index) => (<div key={index}>{linea}</div>))}</div>
           </div>
         </div>
       </Card>
+      
+      <Card title={<span className="text-[#34745B]">Agenda del Día</span>}>
+        {clasesHoy.length === 0 ? (
+          <p className="text-sm text-slate-500">No hay clases programadas para hoy.</p>
+        ) : (
+          <ul className="space-y-2">
+            {clasesHoy.map(c => (
+              <li key={c.id} className="p-2 border-b flex justify-between items-center gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-700 break-words">{c.hora} - {(c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')}</p>
+                  <p className="text-xs text-slate-500">{c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}</p>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold shrink-0 ${c.estado === 'Realizada' ? 'bg-green-100 text-green-800' : c.estado === 'Cancelada' ? 'bg-red-100 text-red-800' : c.estado === 'Ausente' ? 'bg-orange-100 text-orange-800' : 'bg-slate-100 text-slate-800'}`}>{c.estado}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card title={<span className="text-[#34745B]">Agenda de Mañana · Contactos</span>}>
+         {clasesManana.length === 0 ? (
+          <p className="text-sm text-slate-500">No hay clases programadas para mañana.</p>
+        ) : (
+          <ul className="space-y-2">
+            {clasesManana.map(c => (
+              <li key={c.id} className="p-2 border rounded-lg">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-700 break-words">{(c.alumnoIds || []).map(id => alumnoMap.get(id)).filter(Boolean).join(', ')}</p>
+                    <p className="text-xs text-slate-500">{c.hora} · {c.tipo}{c.cancha ? ` en ${c.cancha}` : ''}</p>
+                  </div>
+                  <button type="button" onClick={() => { setContactosMsg(`Hola! Te recuerdo tu clase ${c.tipo} mañana a las ${c.hora}.`); setContactosExpandId(contactosExpandId === c.id ? null : c.id);}} className="text-sm px-3 py-1.5 rounded-lg border bg-white hover:bg-slate-50 shrink-0">Contactos</button>
+                </div>
+                {contactosExpandId === c.id && (
+                  <div className="mt-3 p-3 bg-slate-50 rounded-lg border">
+                    <label className="text-xs text-slate-500 block mb-1">Mensaje (editable)</label>
+                    <textarea value={contactosMsg} onChange={(e)=>setContactosMsg(e.target.value)} className="w-full border rounded-lg px-2 py-1 text-sm" rows="2" />
+                    <table className="w-full text-sm mt-2"><tbody>
+                      {(c.alumnoIds || []).filter(Boolean).map(id => {
+                        const a = alumnoObjMap.get(id); if (!a) return null;
+                        const wa = waLink(a.telefono || a.contactoPadre, a.nombre);
+                        return (<tr key={id} className="border-t"><td className="py-1">{getNombreCompleto(a)}</td><td>{a.telefono || a.contactoPadre || "-"}</td><td className="text-right">{wa && <a className="text-emerald-700 underline" href={wa} target="_blank" rel="noopener">WhatsApp</a>}</td></tr>);
+                      })}
+                    </tbody></table>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      
+      <Card title={<span className="text-[#34745B]">Horario disponible para mañana</span>}>
+        <div className="text-xs text-slate-500 mb-3">{horarioDisponibleManana.length} libres</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          {horarioDisponibleManana.map(h => (
+            <div key={h} className="flex items-center justify-between gap-2 px-2 py-1 rounded-full border bg-white text-slate-700 text-sm">
+              <span>{h}</span>
+              <button type="button" onClick={() => goToNewClass && goToNewClass({ fecha: manana, hora: h })} className="text-xs px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white">Agendar</button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
+        <p className="text-sm text-green-800">Clases Realizadas Hoy</p>
+        <p className="text-3xl font-bold text-[#34745B]">{clasesHoy.filter(c=>c.estado === 'Realizada').length}</p>
+        {resumenClasesHoy.length > 0 && <div className="text-xs text-green-700 mt-2 border-t border-green-200 pt-2">{resumenClasesHoy.map((linea, i) => (<p key={i}>{linea}</p>))}</div>}
+      </div>
+
+      <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
+        <p className="text-sm text-green-800">Balance de la Semana</p>
+        <p className={`text-3xl font-bold ${balanceSemana >= 0 ? 'text-[#34745B]' : 'text-red-900'}`}>{formatCurrency(balanceSemana)}</p>
+      </div>
+
+      <Card title={<span className="text-[#34745B]">Reportes PDF</span>}>
+        <p className="text-sm text-slate-600 mb-3">Descargá reportes listos para enviar.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <button type="button" className="px-3 py-2 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => generarReportePDF({ tipo: "Diario", clases: clasesHoy.filter(c=>c.estado === 'Realizada'), pagos: (pagos || []).filter(p => p.fecha === hoy), gastos: (gastos || []).filter(g => g.fecha === hoy), perfil })}>Diario</button>
+          <button type="button" className="px-3 py-2 rounded-lg text-sm bg-slate-800 hover:bg-slate-900 text-white" onClick={() => generarReportePDF({ tipo: "Semanal", clases: (clases || []).filter(c => c.fecha >= semanaInicio && c.estado === 'Realizada'), pagos: (pagos || []).filter(p => p.fecha >= semanaInicio), gastos: (gastos || []).filter(g => g.fecha >= semanaInicio), perfil })}>Semanal</button>
+          <button type="button" className="px-3 py-2 rounded-lg text-sm bg-slate-600 hover:bg-slate-700 text-white" onClick={() => {
+            const mesInicio = formatDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+            generarReportePDF({ tipo: "Mensual", clases: (clases || []).filter(c => c.fecha >= mesInicio && c.estado === 'Realizada'), pagos: (pagos || []).filter(p => p.fecha >= mesInicio), gastos: (gastos || []).filter(g => g.fecha >= mesInicio), perfil });
+          }}>Mensual</button>
+        </div>
+      </Card>
+      
+      <Card title={<span className="text-[#34745B]">Calendario Semanal</span>} right={
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setCurrentDate(prev => addDays(prev, -7))} className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">‹ Sem. Anterior</button>
+            <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">Esta Semana</button>
+            <button onClick={() => setCurrentDate(prev => addDays(prev, 7))} className="px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">Sem. Siguiente ›</button>
+          </div>
+        </div>
+      }>
+        <CalendarioSemanal week={weekDates} clases={clases} alumnos={alumnos || []} onEdit={goToEditClass} />
+      </Card>
+
     </div>
   );
 }
@@ -2720,6 +2444,13 @@ function CuentaCorrienteAlumno({ user, clubId, alumno, perfil, desdeMes, hastaMe
     
 // --- COPIA Y REEMPLAZA TU FUNCIÓN 'Alumnos' COMPLETA CON ESTA ---
 
+const WhatsappIcon = (props) => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" {...props}>
+    <path d="M16.75 13.96c.25.13.43.28.53.49.12.21.18.44.18.7v.29c0 .21-.04.4-.13.58s-.21.33-.36.44c-.15.11-.33.2-.53.26-.2.06-.42.09-.67.09-.31 0-.63-.05-.96-.14-.33-.09-.68-.22-1.05-.38-.37-.17-.74-.38-1.11-.63-.37-.25-.72-.54-1.04-.88-.32-.34-.59-.7-.81-1.08-.22-.38-.39-.77-.5-1.17s-.17-.8-.17-1.21c0-.25.03-.49.08-.71s.14-.43.26-.61.28-.33.46-.45.4-.21.66-.21h.29c.21 0 .4.06.56.17.17.11.3.27.4.46.1.19.15.39.15.59 0 .09-.01.18-.04.27s-.06.18-.1.28-.09.19-.15.28-.13.18-.21.26c-.09.09-.18.16-.29.23-.11.07-.22.13-.33.18-.08.04-.15.08-.21.11-.11.05-.19.12-.24.2a.45.45 0 0 0-.15.31c0 .06.01.12.03.18.02.06.05.12.09.19.14.24.32.48.54.7.22.22.45.4.7.54.07.04.13.07.19.09.06.02.12.03.18.03.13 0 .25-.05.34-.15.1-.1.17-.22.24-.37.04-.06.08-.12.11-.2.05-.1.11-.19.18-.26s.14-.14.22-.2c.08-.06.17-.11.26-.15.1-.04.2-.08.31-.11.11-.03.22-.05.33-.05.26.01.5.08.7.21.2.13.35.29.43.49z" />
+  </svg>
+);
+
+// 2. Función 'Alumnos' actualizada
 function Alumnos({
   alumnos,
   grupos,
@@ -2837,10 +2568,7 @@ function Alumnos({
   return (
     <>
       <div className="grid gap-4">
-        <Card
-          title={<span className="text-[#34745B]">{editing ? "Editar alumno" : "Nuevo alumno"}</span>}
-          right={!showForm && <button onClick={openNew} className="bg-[#34745B] hover:bg-green-800 text-white text-sm px-3 py-1.5 rounded-xl">+ Nuevo</button>}
-        >
+        <Card title={<span className="text-[#34745B]">{editing ? "Editar alumno" : "Nuevo alumno"}</span>} right={!showForm && <button onClick={openNew} className="bg-[#34745B] hover:bg-green-800 text-white text-sm px-3 py-1.5 rounded-xl">+ Nuevo</button>}>
           {showForm ? (
             <AlumnoForm initialData={editing ? { ...emptyForm, ...editing } : emptyForm} onSubmit={submit} onCancel={cancel} onRegisterMonthlyPayment={onRegisterMonthlyPayment} studentBeingEdited={editing} grupos={grupos}/>
           ) : (
@@ -2850,7 +2578,6 @@ function Alumnos({
 
         <Card title={<span className="text-[#34745B]">Listado de alumnos</span>} right={<input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre..." className="border rounded-xl px-3 py-1.5 text-sm" />}>
           
-          {/* --- VISTA DE ESCRITORIO (TABLA) --- */}
           <div className="hidden md:block overflow-x-auto border rounded-xl">
             <table className="min-w-[720px] w-full text-sm">
               <thead className="bg-slate-50 text-slate-700">
@@ -2866,15 +2593,26 @@ function Alumnos({
                 {paginatedAlumnos.map((a) => (
                   <tr key={a.id} className="border-t hover:bg-slate-50/50">
                     <td className="p-3 whitespace-nowrap font-semibold">{getNombreCompleto(a)}</td>
-                    <td className="p-3 whitespace-nowrap">{a.telefono || "-"}</td>
+                    <td className="p-3 whitespace-nowrap">
+                      {/* --- INICIO DE LA CORRECCIÓN (TABLA) --- */}
+                      <div className="flex items-center gap-2">
+                        <span>{a.telefono || "-"}</span>
+                        {a.telefono && (
+                          <a href={waLink(a.telefono, a.nombre)} target="_blank" rel="noreferrer" className="text-emerald-600 hover:text-emerald-800" title="Enviar WhatsApp">
+                            <WhatsappIcon />
+                          </a>
+                        )}
+                      </div>
+                      {/* --- FIN DE LA CORRECCIÓN (TABLA) --- */}
+                    </td>
                     <td className="p-3 whitespace-nowrap">{a.plan === 'grupo_mensual' ? `Grupo: ${grupos.find(g => g.id === a.grupoId)?.nombre || 'N/A'}`: (a.plan === 'mensual' ? 'Mensual' : 'Por Clase')}</td>
                     <td className="p-3 whitespace-nowrap"><EstadoCuotaChip estado={a.estadoCuota} /></td>
                     <td className="p-3 text-right">
                       <div className="flex gap-1.5 justify-end flex-nowrap">
-                        <button type="button" onClick={() => setAlumnoFicha(a)} title="Ver ficha" className="w-8 h-8 inline-flex items-center justify-center rounded-full border bg-white hover:bg-slate-50">📋</button>
-                        <button type="button" onClick={() => openRegistrarClaseForAlumno(a.id)} title="Registrar clase" className="w-8 h-8 inline-flex items-center justify-center rounded-full border bg-white hover:bg-slate-50">✔️</button>
-                        <button onClick={() => openEdit(a)} title="Editar" className="w-8 h-8 inline-flex items-center justify-center rounded-full border bg-white hover:bg-slate-50">✏️</button>
-                        <button type="button" onClick={() => onDelete(a.id)} title="Eliminar" className="w-8 h-8 inline-flex items-center justify-center rounded-full border bg-white border-rose-300 text-rose-700 hover:bg-rose-50">🗑️</button>
+                        <button type="button" onClick={() => setAlumnoFicha(a)} title="Ver ficha">📋</button>
+                        <button type="button" onClick={() => openRegistrarClaseForAlumno(a.id)} title="Registrar clase">✔️</button>
+                        <button onClick={() => openEdit(a)} title="Editar">✏️</button>
+                        <button type="button" onClick={() => onDelete(a.id)} title="Eliminar">🗑️</button>
                       </div>
                     </td>
                   </tr>
@@ -2883,22 +2621,30 @@ function Alumnos({
             </table>
           </div>
 
-          {/* --- VISTA MÓVIL (TARJETAS) --- */}
           <div className="block md:hidden space-y-3">
             {paginatedAlumnos.map((a) => (
               <div key={a.id} className="p-3 border rounded-lg bg-white shadow-sm">
                 <div className="flex justify-between items-start">
                   <span className="font-semibold text-slate-800 pr-2">{getNombreCompleto(a)}</span>
                   <div className="flex gap-1.5 justify-end flex-nowrap shrink-0">
-                    <button type="button" onClick={() => setAlumnoFicha(a)} title="Ver ficha" className="w-8 h-8 inline-flex items-center justify-center rounded-full border bg-white hover:bg-slate-50">📋</button>
-                    <button type="button" onClick={() => openRegistrarClaseForAlumno(a.id)} title="Registrar clase" className="w-8 h-8 inline-flex items-center justify-center rounded-full border bg-white hover:bg-slate-50">✔️</button>
-                    <button onClick={() => openEdit(a)} title="Editar" className="w-8 h-8 inline-flex items-center justify-center rounded-full border bg-white hover:bg-slate-50">✏️</button>
-                    <button type="button" onClick={() => onDelete(a.id)} title="Eliminar" className="w-8 h-8 inline-flex items-center justify-center rounded-full border bg-white border-rose-300 text-rose-700 hover:bg-rose-50">🗑️</button>
+                    <button type="button" onClick={() => setAlumnoFicha(a)} title="Ver ficha">📋</button>
+                    <button type="button" onClick={() => openRegistrarClaseForAlumno(a.id)} title="Registrar clase">✔️</button>
+                    <button onClick={() => openEdit(a)} title="Editar">✏️</button>
+                    <button type="button" onClick={() => onDelete(a.id)} title="Eliminar">🗑️</button>
                   </div>
                 </div>
                 <div className="mt-2 pt-2 border-t grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm">
                   <span className="text-slate-500">Teléfono:</span>
-                  <span className="text-slate-800">{a.telefono || "-"}</span>
+                  {/* --- INICIO DE LA CORRECCIÓN (TARJETA) --- */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-800">{a.telefono || "-"}</span>
+                    {a.telefono && (
+                      <a href={waLink(a.telefono, a.nombre)} target="_blank" rel="noreferrer" className="text-emerald-600 hover:text-emerald-800" title="Enviar WhatsApp">
+                        <WhatsappIcon />
+                      </a>
+                    )}
+                  </div>
+                  {/* --- FIN DE LA CORRECCIÓN (TARJETA) --- */}
                   <span className="text-slate-500">Plan:</span>
                   <span className="text-slate-800">{a.plan === 'grupo_mensual' ? `Grupo: ${grupos.find(g => g.id === a.grupoId)?.nombre || 'N/A'}`: (a.plan === 'mensual' ? 'Mensual' : 'Por Clase')}</span>
                   <span className="text-slate-500">Cuota:</span>
@@ -2909,8 +2655,27 @@ function Alumnos({
           </div>
           
           {paginatedAlumnos.length === 0 && (<div className="text-center py-6 text-slate-400">No se encontraron alumnos.</div>)}
-
-          {totalPages > 1 && ( <div className="mt-4 flex justify-center items-center gap-2">{/* ... paginación sin cambios ... */}</div> )}
+          {totalPages > 1 && (
+  <div className="mt-4 flex justify-center items-center gap-2">
+    <button 
+      onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} 
+      disabled={currentPage === 1} 
+      className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50"
+    >
+      Anterior
+    </button>
+    <span className="text-sm text-slate-600">
+      Página {currentPage} de {totalPages}
+    </span>
+    <button 
+      onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} 
+      disabled={currentPage === totalPages} 
+      className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50"
+    >
+      Siguiente
+    </button>
+  </div>
+)}
         </Card>
         
         {alumnoFicha && (alumnoFicha.plan === "mensual" || alumnoFicha.plan === "grupo_mensual") && (
@@ -2920,23 +2685,7 @@ function Alumnos({
         )}
       </div>
 
-      <AlumnoFichaModal
-        alumno={alumnoFicha}
-        clases={clases}
-        pagos={pagos}
-        alumnos={alumnos}
-        grupos={grupos}
-        mensualidades={mensualidades}
-        perfil={perfil}
-        user={user}
-        clubId={clubActivoId}
-        onClose={() => setAlumnoFicha(null)}
-        onPagarPendiente={onPagarPendiente}
-        onRegistrarPago={onRegisterMonthlyPayment}
-        onEditarPago={onEditarPago}
-        onDeletePago={onDeletePago}
-        setToast={setToast}
-      />
+      <AlumnoFichaModal {...{alumno: alumnoFicha, clases, pagos, alumnos, grupos, mensualidades, perfil, user, clubId: clubActivoId, onClose: () => setAlumnoFicha(null), onPagarPendiente, onRegisterMonthlyPayment, onEditarPago, onDeletePago, setToast}} />
     </>
   );
 }
@@ -3367,6 +3116,8 @@ function AlumnoFichaModal({
   );
 }
 
+// --- REEMPLAZA TU FUNCIÓN 'CalendarioSemanal' COMPLETA CON ESTA VERSIÓN FINAL ---
+
 function CalendarioSemanal({
   week,
   clases,
@@ -3375,7 +3126,8 @@ function CalendarioSemanal({
   horarioLaboral,
   mostrarSoloHorarioLaboral
 }) {
-  // Colores por estado
+  const alumnoMap = useMemo(() => new Map((alumnos || []).map(a => [a.id, a])), [alumnos]);
+
   const getStatusColor = (status) => {
     switch (status) {
       case "Realizada": return "bg-emerald-100 border-emerald-300 text-emerald-800";
@@ -3385,20 +3137,7 @@ function CalendarioSemanal({
     }
   };
 
-  // Mapa id -> alumno
-  const alumnoMap = React.useMemo(
-    () => Object.fromEntries((alumnos || []).map(a => [a.id, a])),
-    [alumnos]
-  );
-
-  // Nombre corto
-  function getNombreCorto(a) {
-    if (!a) return "Sin alumno";
-    const base = `${a.nombre || ""} ${a.apellido || ""}`.trim();
-    return (base || "Sin alumno").split(" ")[0];
-  }
-
-  // Indexar clases por día/hora
+  // --- Lógica para la vista de Grilla (Desktop) ---
   const clasesPorDiaHora = React.useMemo(() => {
     const map = {};
     (clases || []).forEach(clase => {
@@ -3407,199 +3146,130 @@ function CalendarioSemanal({
       map[key].push(clase);
     });
     return map;
-  }, [clases, alumnos]);
+  }, [clases]);
 
-  // --- Helpers de calendario / horario ---
   const nombreDiaFromYMD = (ymd) => {
     const d = new Date(`${ymd}T00:00:00`);
-    const idx = (d.getDay() + 6) % 7; // 0..6 => Lun..Dom
-    return ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"][idx];
+    const idx = (d.getDay() + 6) % 7;
+    return DIAS_SEMANA_NOMBRES[idx];
   };
 
   const horaToMin = (hhmm = "00:00") => {
     const [h, m] = String(hhmm).split(":").map(Number);
     return (h * 60) + (m || 0);
   };
-
+  
   const incluyeHora = (bloque, hhmm) => {
-    // Consideramos el slot [hh:mm, hh:mm+60)
     const t = horaToMin(hhmm);
     const desde = horaToMin(bloque?.desde || "08:00");
     const hasta = horaToMin(bloque?.hasta || "20:00");
     return t >= desde && (t + 60) <= hasta;
   };
 
-  // Normalizamos horarioLaboral a un Map(diaNombre -> [{desde,hasta},...])
   const bloquesPorDia = React.useMemo(() => {
-    const out = new Map(
-      ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"].map(d => [d, []])
-    );
-
+    const out = new Map(DIAS_SEMANA_NOMBRES.map(d => [d, []]));
     const raw = horarioLaboral || [];
     const lista = Array.isArray(raw) ? raw : (raw?.bloques || []);
-
-    (lista || [])
-      .filter(b => (b?.activo ?? true))
-      .forEach(b => {
-        const arr = out.get(b.dia) || [];
-        arr.push({ desde: b.desde || "08:00", hasta: b.hasta || "20:00" });
-        out.set(b.dia, arr);
-      });
-
+    (lista || []).filter(b => (b?.activo ?? true)).forEach(b => {
+      const arr = out.get(b.dia) || [];
+      arr.push({ desde: b.desde || "08:00", hasta: b.hasta || "20:00" });
+      out.set(b.dia, arr);
+    });
     return out;
   }, [horarioLaboral]);
 
   const esHoraLaboral = (dayYMD, hora) => {
     if (!mostrarSoloHorarioLaboral || !horarioLaboral) return true;
-
     const bloques = bloquesPorDia.get(nombreDiaFromYMD(dayYMD)) || [];
-    if (bloques.length) return bloques.some(b => incluyeHora(b, hora));
-
-    // Fallback si no hay bloques: rango general (si existiera)
-    const inicio = horarioLaboral?.inicio || "08:00";
-    const fin    = horarioLaboral?.fin    || "22:00";
-    return hora >= inicio && hora < fin;
+    return bloques.length > 0 ? bloques.some(b => incluyeHora(b, hora)) : false;
   };
 
-  // Horas base (preferimos horarioLaboral.horas si existe)
   const horasBase = React.useMemo(() => {
     if (Array.isArray(horarioLaboral?.horas) && horarioLaboral.horas.length) return horarioLaboral.horas;
-    const hs = [];
-    for (let h = 8; h <= 22; h++) hs.push(String(h).padStart(2, "0") + ":00");
-    return hs;
+    const hs = []; for (let h = 8; h <= 22; h++) hs.push(String(h).padStart(2, "0") + ":00"); return hs;
   }, [horarioLaboral]);
-
-  // Si el toggle está activo, filtramos filas: solo horas con al menos un día laboral
+  
   const horasParaMostrar = React.useMemo(() => {
-  if (!mostrarSoloHorarioLaboral) return horasBase;
-  return horasBase.filter(hora =>
-    week.some(d => esHoraLaboral(d, hora))   // ← antes usaba .some(...)
-  );
-}, [mostrarSoloHorarioLaboral, horasBase, week, bloquesPorDia]);
+    if (!mostrarSoloHorarioLaboral) return horasBase;
+    return horasBase.filter(hora => week.some(d => esHoraLaboral(d, hora)));
+  }, [mostrarSoloHorarioLaboral, horasBase, week, bloquesPorDia]);
 
-  // ---------- RENDER ----------
+
   return (
-    <div className="grid grid-cols-[80px_repeat(7,1fr)]">
-      {/* Encabezado de días */}
-      <div />
-      {week.map(day => {
-        const d = new Date(`${day}T00:00:00`);
-        const dayIdx = (d.getDay() === 0 ? 6 : d.getDay() - 1); // 0..6 (Lun..Dom)
-        const nombreDia = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"][dayIdx];
-        return (
-          <div key={`head-${day}`} className="text-center p-2">
-            <div className="font-semibold">{nombreDia}</div>
+    <>
+      {/* --- VISTA DE ESCRITORIO (GRILLA SEMANAL) --- */}
+      {/* Se oculta en pantallas pequeñas/medianas (hidden) y se muestra como grid en grandes (lg:grid) */}
+      <div 
+        className="hidden lg:grid" 
+        style={{ gridTemplateColumns: '80px repeat(7, minmax(120px, 1fr))' }}
+      >
+        {/* Encabezado de días */}
+        <div />
+        {week.map(day => (
+          <div key={`head-grid-${day}`} className="text-center p-2">
+            <div className="font-semibold">{nombreDiaFromYMD(day)}</div>
             <div className="text-xs text-slate-500">{formatDate(day, 'dd/mm/yyyy')}</div>
           </div>
-        );
-      })}
+        ))}
 
-      {/* Filas por hora */}
-      {horasParaMostrar.map(hora => (
-        <React.Fragment key={hora}>
-          {/* Columna fija de horas */}
-          <div className="bg-white text-center text-xs p-2 flex items-center justify-center">
-            <span className="text-slate-500">{hora}</span>
-          </div>
-
-          {/* 7 columnas de días */}
-          {week.map(day => {
-            const laboral = esHoraLaboral(day, hora);
-            const key = `${day}_${hora}`;
-            const arr = clasesPorDiaHora[key] || [];
-
-            return (
-              <div
-                key={`${day}-${hora}`}
-                className={`${
-                  laboral
-                    ? "bg-white hover:bg-slate-50"
-                    : (mostrarSoloHorarioLaboral
-                        ? "bg-slate-100 opacity-50 pointer-events-none"
-                        : "bg-slate-100")
-                } min-h-[70px] p-1 border-t border-l border-slate-200`}
-              >
-                {arr.map(clase => (
-                  <div
-                    key={clase.id}
-                    onClick={() => onEdit && onEdit(clase)}
-                    className={`cursor-pointer border rounded-md px-2 py-1 mb-1 text-xs ${getStatusColor(clase.estado)}`}
-                  >
-                    <div className="font-semibold">
-                      {clase.tipo || "Clase"} · {
-                        (clase.alumnoIds || [])
-                          .filter(Boolean)
-                          .map(id => getNombreCorto(alumnoMap[id]))
-                          .join(", ") || "Sin alumno"
-                      }
+        {/* Filas por hora */}
+        {horasParaMostrar.map(hora => (
+          <React.Fragment key={hora}>
+            <div className="bg-white text-center text-xs p-2 flex items-center justify-center border-t border-l border-slate-200">
+              <span className="text-slate-500">{hora}</span>
+            </div>
+            {week.map(day => {
+              const laboral = esHoraLaboral(day, hora);
+              const clasesEnCelda = clasesPorDiaHora[`${day}_${hora}`] || [];
+              return (
+                <div key={`${day}-${hora}`} className={`${laboral ? "bg-white hover:bg-slate-50" : "bg-slate-100"} min-h-[70px] p-1 border-t border-l border-slate-200`}>
+                  {clasesEnCelda.map(clase => (
+                    <div key={clase.id} onClick={() => onEdit && onEdit(clase)} className={`cursor-pointer border rounded-md px-2 py-1 mb-1 text-xs ${getStatusColor(clase.estado)}`}>
+                      <div className="font-semibold truncate">{(clase.alumnoIds || []).map(id => getNombreCompleto(alumnoMap.get(id))).join(", ")}</div>
+                      {clase.notas && <div className="text-[11px] opacity-80 truncate">{clase.notas}</div>}
                     </div>
-                    {clase.notas ? (
-                      <div className="text-[11px] opacity-80 truncate">{clase.notas}</div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </React.Fragment>
-      ))}
-    </div>
-  );
+                  ))}
+                </div>
+              );
+            })}
+          </React.Fragment>
+        ))}
+      </div>
 
-  return (
-    <div className="grid grid-cols-[80px_repeat(7,1fr)]">
-      {/* encabezado de días */}
-      <div />
-      {week.map(day => (
-        <div key={`head-${day}`} className="text-center font-semibold p-2">
-          {day}
-        </div>
-      ))}
-
-      {/* grilla por horas x días */}
-      {horasParaMostrar.map(hora => (
-        <React.Fragment key={hora}>
-          {/* columna de horas */}
-          <div className="bg-white text-center text-xs p-2 flex items-center justify-center">
-            <span className="text-slate-500">{hora}</span>
-          </div>
-
-          {/* celdas por día */}
-          {week.map(day => {
-            const laboral = esHoraLaboral(day, hora);
-            const key = `${day}_${hora}`;
-            const arr = clasesPorDiaHora[key] || [];
-
-            return (
-              <div
-                key={`${day}-${hora}`}
-                className={`${laboral ? "bg-white hover:bg-slate-50" : "bg-slate-100"} min-h-[70px] p-1 border-t border-l border-slate-200`}
-              >
-                {arr.map(clase => (
-                  <div
-                    key={clase.id}
-                    onClick={() => onEdit && onEdit(clase)}
-                    className={`cursor-pointer border rounded-md px-2 py-1 mb-1 text-xs ${getStatusColor(clase.estado)}`}
-                  >
-                    <div className="font-semibold">
-                      {clase.tipo || "Clase"} · {
-                        (clase.alumnoIds || [])
-                          .filter(Boolean)
-                          .map(id => getNombreCorto(alumnoMap[id]))
-                          .join(", ") || "Sin alumno"
-                      }
-                    </div>
-                    {clase.notas ? (
-                      <div className="text-[11px] opacity-80 truncate">{clase.notas}</div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </React.Fragment>
-      ))}
-    </div>
+      {/* --- VISTA MÓVIL Y TABLET (LISTA VERTICAL) --- */}
+      {/* Se muestra en pantallas pequeñas/medianas (block) y se oculta en grandes (lg:hidden) */}
+      <div className="block lg:hidden space-y-4">
+        {week.map(day => {
+          const clasesDelDia = clases.filter(c => c.fecha === day).sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
+          const diaNombre = DIAS_SEMANA_NOMBRES[(new Date(`${day}T00:00:00`).getDay() + 6) % 7];
+          
+          return (
+            <div key={`list-${day}`}>
+              <h4 className="font-semibold text-slate-800 border-b pb-1 mb-2">
+                {diaNombre}, {formatDate(day, 'dd/mm')}
+              </h4>
+              {clasesDelDia.length > 0 ? (
+                <ul className="space-y-2">
+                  {clasesDelDia.map(clase => (
+                    <li key={clase.id} onClick={() => onEdit && onEdit(clase)} className={`cursor-pointer border rounded-lg p-2 ${getStatusColor(clase.estado)}`}>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-sm">{clase.hora}</span>
+                        <div className="text-sm min-w-0">
+                          <p className="font-semibold truncate">{(clase.alumnoIds || []).map(id => getNombreCompleto(alumnoMap.get(id))).join(', ')}</p>
+                          <p className="text-xs opacity-80 truncate">{clase.tipo}{clase.cancha ? ` en ${clase.cancha}` : ''}</p>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-slate-400 pl-2">Sin clases programadas.</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
