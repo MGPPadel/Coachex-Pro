@@ -1239,12 +1239,12 @@ const [isMoreMenuOpen, setIsMoreMenuOpen] = React.useState(false);
     { id: "dashboard", label: "Dashboard", icon: I("Home", ic.Home) },
     { id: "alumnos",  label: "Alumnos",   icon: I("Users", ic.Users) },
     { id: "clases",   label: "Clases",    icon: I("Calendar", ic.Calendar) },
-    { id: "pagos",    label: "Pagos",     icon: I("Cash", ic.Cash) },
     { id: "grupos",   label: "Grupos",    icon: I("Layers", ic.Layers) },
-    { id: "torneos",  label: "Torneos",   icon: (window.NavIcons && (window.NavIcons.Tournament || window.NavIcons.Brackets)) || ic.Brackets },
     { id: "rankings", label: "Ranking",   icon: I("Trophy", ic.Trophy) },
-    { id: "gastos",   label: "Gastos",    icon: I("Receipt", ic.Receipt) },
+    { id: "torneos",  label: "Torneos",   icon: (window.NavIcons && (window.NavIcons.Tournament || window.NavIcons.Brackets)) || ic.Brackets },
     { id: "reportes", label: "Reportes",  icon: I("Chart", ic.Chart) },
+    { id: "pagos",    label: "Pagos",     icon: I("Cash", ic.Cash) },
+    { id: "gastos",   label: "Gastos",    icon: I("Receipt", ic.Receipt) },
     { id: "perfil",   label: "Perfil",    icon: I("User", ic.User) },
   ];
 
@@ -2732,10 +2732,11 @@ function Alumnos({
   grupos,
   onCreate, onUpdate, onDelete,
   onRegisterMonthlyPayment,
-  clases, pagos, perfil,
+  clases, pagos, perfil, mensualidades, // <-- Prop agregada
   onRegistrarClase, onPagarPendiente, onEditarPago, onDeletePago,
   user,
   clubActivoId,
+  setToast, // <-- Prop agregada
   openRegistrarClaseForAlumno = () => {}
 }) {
   const [q, setQ] = useState("");
@@ -2930,12 +2931,16 @@ function Alumnos({
         pagos={pagos}
         alumnos={alumnos}
         grupos={grupos}
+        mensualidades={mensualidades} // <-- Prop agregada
         perfil={perfil}
-        onPagarPendiente={onPagarPendiente}
+        user={user} // <-- Prop agregada
+        clubId={clubActivoId} // <-- Prop agregada
         onClose={() => setAlumnoFicha(null)}
+        onPagarPendiente={onPagarPendiente}
         onRegistrarPago={onRegisterMonthlyPayment}
         onEditarPago={onEditarPago}
         onDeletePago={onDeletePago}
+        setToast={setToast} // <-- Prop agregada
       />
     </>
   );
@@ -6047,9 +6052,13 @@ function BracketViewSVG({ cuadro, labelEntrada, resumenMarcador, onMatchClick, c
 }
 
 // --- Helper: tabla de posiciones para un grupo (Liga) ---
+// --- Helper: tabla de posiciones para un grupo (Liga) ---
 function computeTablaGrupo(torneo, gid) {
-  // Config de puntos (grupos)
-  const cfg = (torneo?.reglas?.grupos?.puntos) || { win: 3, draw: 1, loss: 0 };
+  // --- INICIO DE LA CORRECCIÓN ---
+  // Se asegura de que la configuración de puntos siempre tenga valores por defecto.
+  const defaultPoints = { win: 3, draw: 1, loss: 0 };
+  const cfg = { ...defaultPoints, ...(torneo?.reglas?.grupos?.puntos || {}) };
+  // --- FIN DE LA CORRECCIÓN ---
 
   // Helpers locales
   const normId = (e) => {
@@ -8145,7 +8154,8 @@ async function applyAwardsToRanking({ user, clubId, torneo, force = false }) {
   } else if (torneo.formato === 'grupos') {
     const tabla = computeTablaGrupo(torneo, torneo.grupos[0].id) || [];
     tabla.forEach((row, index) => {
-      assignPoints(row.eid, cfg.liga.top[index] || 0);
+      // --- CORRECCIÓN: Se usa 'alumnoId' en lugar del inexistente 'eid' ---
+      assignPoints(row.alumnoId, cfg.liga.top[index] || 0);
     });
   }
 
@@ -8160,7 +8170,8 @@ async function applyAwardsToRanking({ user, clubId, torneo, force = false }) {
   (torneo.grupos || []).forEach(g => {
     const tabla = computeTablaGrupo(torneo, g.id) || [];
     tabla.forEach(row => {
-      const playerIds = expandEntryToAlumnoIds(row.eid, torneo);
+      // --- CORRECCIÓN: Se usa 'alumnoId' en lugar del inexistente 'eid' ---
+      const playerIds = expandEntryToAlumnoIds(row.alumnoId, torneo);
       playerIds.forEach(id => {
         const stats = ensureStats(id);
         stats.PJ += row.PJ || 0;
@@ -8248,12 +8259,21 @@ async function applyAwardsToRanking({ user, clubId, torneo, force = false }) {
 // Regla: 1º de cada grupo se cruza con 2º de OTRO grupo (evita mismo grupo).
 // Para K>2, empareja 3º vs 4º, 5º vs 6º, etc. con la misma lógica.
 // Si sobra un "bucket" (K impar), esos entran al final y pueden cruzarse entre sí.
+// REEMPLAZA ESTA FUNCIÓN COMPLETA
 function computeQualifiers(torneo, K = 2) {
   const grupos = Array.isArray(torneo?.grupos) ? torneo.grupos : [];
   if (grupos.length === 0 || K <= 0) return [];
 
   // Tablas ordenadas por grupo (usa tu computeTablaGrupo actual)
   const tablas = grupos.map(g => (computeTablaGrupo(torneo, g.id) || []));
+
+  // --- INICIO DE LA CORRECCIÓN ---
+  // Caso especial y mucho más simple para un solo grupo.
+  if (grupos.length === 1) {
+    // Simplemente tomamos los primeros K jugadores de la tabla ya ordenada.
+    return (tablas[0] || []).slice(0, K).map(row => row.alumnoId).filter(Boolean);
+  }
+  // --- FIN DE LA CORRECCIÓN ---
 
   // Buckets por posición: pos[0] => 1ºs, pos[1] => 2ºs, ...
   // Para favorecer cruces de grupos distintos, los "pares" (2º, 4º, ...) se invierten.
@@ -9338,9 +9358,6 @@ function HistorialPagos({
     </div>
   );
 }
-
-
-
     
     function ControlMensual({ pagos, alumnos, perfil, onPay }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -12904,7 +12921,7 @@ function MainApp({ user, onLogout }) {
   // ===== Hooks arriba =====
   const [current, setCurrent] = useState("dashboard");
   const [prefillClase, setPrefillClase] = useState(null);
-  const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {}, grupos: [], otrosIngresos: [] });
+  const [state, setState] = useState({ alumnos: [], clases: [], pagos: [], gastos: [], perfil: {}, grupos: [], otrosIngresos: [], mensualidades: [] });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
@@ -13006,7 +13023,7 @@ function MainApp({ user, onLogout }) {
     );
     unsubscribes.push(profileUnsubscribe);
 
-    ['alumnos', 'clases', 'pagos', 'gastos', 'grupos', 'otrosIngresos'].forEach((collectionName) => {
+    ['alumnos', 'clases', 'pagos', 'gastos', 'grupos', 'otrosIngresos', 'mensualidades'].forEach((collectionName) => {
       const unsubscribe = baseRef.collection(collectionName).onSnapshot(
         (snapshot) => {
           if (!alive) return;
@@ -13588,6 +13605,7 @@ const otrosIngresosCrud = {
               pagos={state.pagos}
               alumnos={state.alumnos}
               grupos={state.grupos}
+              mensualidades={state.mensualidades} // <-- Prop agregada
               onCreate={alumnoCrud.create}
               onUpdate={alumnoCrud.update}
               onDelete={alumnoCrud.delete}
@@ -13599,6 +13617,7 @@ const otrosIngresosCrud = {
               user={user}
               clubActivoId={clubActivoId}
               perfil={state.perfil}
+              setToast={setToast} // <-- Prop agregada
               openRegistrarClaseForAlumno={openRegistrarClaseForAlumno}
             />
           )}
