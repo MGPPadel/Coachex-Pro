@@ -345,12 +345,22 @@ function labelSinClase(tipo) {
 }
     const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
     const toDigits = (s = "") => String(s).replace(/[^0-9]/g, "");
-    const waLink = (telefono = "", nombre = "") => {
+    
+    // --- FUNCIÓN MODIFICADA ---
+    const waLink = (telefono = "", nombre = "", customMsg = "") => {
       const digits = toDigits(telefono);
       if (!digits) return null;
-      const msg = encodeURIComponent(`Hola ${nombre || ""}!`);
+      
+      // Si hay un mensaje personalizado, lo usamos. Si no, usamos el mensaje por defecto.
+      const msgText = customMsg 
+        ? customMsg 
+        : `Hola ${nombre || ""}!`;
+        
+      const msg = encodeURIComponent(msgText);
       return `https://wa.me/${digits}?text=${msg}`;
     };
+    // --- FIN DE LA MODIFICACIÓN ---
+
     const getWeekStartDate = (date) => {
       const d = new Date(date);
       const day = d.getDay();
@@ -2147,18 +2157,20 @@ function normalizarTelefonoParaWhatsApp(rawDigits, defaultCountry = "54") {
                   <button type="button" onClick={() => { setContactosMsg(`Hola! Te recuerdo tu clase ${c.tipo} mañana a las ${c.hora}.`); setContactosExpandId(contactosExpandId === c.id ? null : c.id);}} className="text-sm px-3 py-1.5 rounded-lg border bg-white hover:bg-slate-50 shrink-0">Contactos</button>
                 </div>
                 {contactosExpandId === c.id && (
-                  <div className="mt-3 p-3 bg-slate-50 rounded-lg border">
-                    <label className="text-xs text-slate-500 block mb-1">Mensaje (editable)</label>
-                    <textarea value={contactosMsg} onChange={(e)=>setContactosMsg(e.target.value)} className="w-full border rounded-lg px-2 py-1 text-sm" rows="2" />
-                    <table className="w-full text-sm mt-2"><tbody>
-                      {(c.alumnoIds || []).filter(Boolean).map(id => {
-                        const a = alumnoObjMap.get(id); if (!a) return null;
-                        const wa = waLink(a.telefono || a.contactoPadre, a.nombre);
-                        return (<tr key={id} className="border-t"><td className="py-1">{getNombreCompleto(a)}</td><td>{a.telefono || a.contactoPadre || "-"}</td><td className="text-right">{wa && <a className="text-emerald-700 underline" href={wa} target="_blank" rel="noopener">WhatsApp</a>}</td></tr>);
-                      })}
-                    </tbody></table>
-                  </div>
-                )}
+  <div className="mt-3 p-3 bg-slate-50 rounded-lg border">
+    <label className="text-xs text-slate-500 block mb-1">Mensaje (editable)</label>
+    <textarea value={contactosMsg} onChange={(e)=>setContactosMsg(e.target.value)} className="w-full border rounded-lg px-2 py-1 text-sm" rows="2" />
+    <table className="w-full text-sm mt-2"><tbody>
+      {(c.alumnoIds || []).filter(Boolean).map(id => {
+        const a = alumnoObjMap.get(id); if (!a) return null;
+        
+              const wa = waLink(a.telefono || a.contactoPadre, a.nombre, contactosMsg);
+        
+        return (<tr key={id} className="border-t"><td className="py-1">{getNombreCompleto(a)}</td><td>{a.telefono || a.contactoPadre || "-"}</td><td className="text-right">{wa && <a className="text-emerald-700 underline" href={wa} target="_blank" rel="noopener">WhatsApp</a>}</td></tr>);
+      })}
+    </tbody></table>
+  </div>
+)}
               </li>
             ))}
           </ul>
@@ -9276,7 +9288,7 @@ function HistorialPagos({
   );
 }
 
-// --- REEMPLAZA TU FUNCIÓN 'OtrosIngresos' COMPLETA CON ESTA ---
+// --- COMIENZA LA FUNCIÓN CORREGIDA ---
 
 function OtrosIngresos({ ingresos, onCreate, onUpdate, onDelete, perfil }) {
   const [showForm, setShowForm] = useState(false);
@@ -9293,14 +9305,23 @@ function OtrosIngresos({ ingresos, onCreate, onUpdate, onDelete, perfil }) {
   ];
 
   useEffect(() => {
+    // Solo actuar si no estamos editando un ingreso existente
     if (perfil.preciosServicios && !editing) {
       const conceptoSeleccionado = conceptosLuz.find(c => c.label === form.concepto);
       if (conceptoSeleccionado && conceptoSeleccionado.key !== 'otro') {
         const monto = perfil.preciosServicios[conceptoSeleccionado.key] || "";
-        setForm(f => ({ ...f, monto: String(monto) }));
+        
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Solo se actualiza el monto si el campo está vacío o es cero.
+        // Esto respeta cualquier valor que el usuario haya escrito manualmente.
+        if (form.monto === "" || form.monto === "0" || form.monto === 0) {
+          setForm(f => ({ ...f, monto: String(monto) }));
+        }
+        // --- FIN DE LA CORRECCIÓN ---
       }
     }
-  }, [form.concepto, perfil.preciosServicios, editing]);
+    // Se añade form.monto a las dependencias porque ahora se lee dentro del efecto.
+  }, [form.concepto, perfil.preciosServicios, editing, form.monto]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -9317,16 +9338,47 @@ function OtrosIngresos({ ingresos, onCreate, onUpdate, onDelete, perfil }) {
     cancel();
   }
 
-  const sortedIngresos = [...(ingresos || [])].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+  const sortedIngresos = [...(ingresos || [])].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
 
   return (
     <div className="grid gap-4">
       <Card title={<span className="text-[#34745B]">{editing ? "Editar Ingreso" : "Nuevo Ingreso"}</span>} right={!showForm && <button onClick={openNew} className="bg-[#34745B] hover:bg-green-800 text-white text-sm px-3 py-1.5 rounded-xl">+ Nuevo</button>}>
-        {showForm ? ( <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">{/* ... formulario sin cambios ... */}</form> ) : ( <p className="text-sm text-slate-500">Registra ingresos adicionales.</p> )}
+        {showForm ? ( 
+          <form onSubmit={submit} className="grid md:grid-cols-6 gap-3">
+            <div className="md:col-span-2">
+              <label className="text-sm">Fecha</label>
+              <input type="date" name="fecha" value={form.fecha} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 mt-1" required />
+            </div>
+            <div className="md:col-span-4">
+              <label className="text-sm">Concepto</label>
+              <select name="concepto" value={form.concepto} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 mt-1">
+                {conceptosLuz.map(c => <option key={c.key} value={c.label}>{c.label}</option>)}
+              </select>
+            </div>
+            <div className="md:col-span-3">
+              <label className="text-sm">Monto</label>
+              <input type="number" name="monto" value={form.monto} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 mt-1" placeholder="0" required />
+            </div>
+            <div className="md:col-span-3">
+              <label className="text-sm">Método</label>
+              <select name="metodo" value={form.metodo} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 mt-1">
+                <option>Efectivo</option>
+                <option>Transferencia</option>
+              </select>
+            </div>
+            <div className="md:col-span-6">
+              <label className="text-sm">Notas (Opcional)</label>
+              <textarea name="notas" value={form.notas} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 mt-1" rows="2" />
+            </div>
+            <div className="md:col-span-6 flex justify-end gap-2">
+              <button type="button" onClick={cancel} className="px-3 py-2 rounded-lg border">Cancelar</button>
+              <button type="submit" className="px-3 py-2 rounded-lg bg-[#34745B] text-white">Guardar</button>
+            </div>
+          </form>
+         ) : ( <p className="text-sm text-slate-500">Registra ingresos que no provienen de clases (ej: venta de pelotas, alquiler de luz, etc.).</p> )}
       </Card>
 
       <Card title={<span className="text-[#34745B]">Historial de Otros Ingresos</span>}>
-        {/* --- VISTA DE ESCRITORIO (TABLA) --- */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-slate-600"><th className="p-2">Fecha</th><th className="p-2">Concepto</th><th className="p-2">Monto</th><th className="p-2">Método</th><th className="p-2 text-right">Acciones</th></tr></thead>
@@ -9337,8 +9389,6 @@ function OtrosIngresos({ ingresos, onCreate, onUpdate, onDelete, perfil }) {
             </tbody>
           </table>
         </div>
-
-        {/* --- VISTA MÓVIL (TARJETAS) --- */}
         <div className="block md:hidden space-y-3">
           {sortedIngresos.map(ingreso => (
             <div key={ingreso.id} className="p-3 border rounded-lg bg-white shadow-sm">
@@ -10151,7 +10201,7 @@ await baseRef.collection('perfil').doc('main').set({
   );
 }
     
-function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user, setToast, getCollection, perfilCrud }) {
+function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user, setToast, getCollection, perfilCrud, clubActivoId }) {
   const fileInputRef = React.useRef(null);
 
   // === Estado inicial seguro (strings) ===
@@ -10159,20 +10209,15 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
     moneda: 'ARS',
     preciosClase: { individual:'', dupla:'', trio:'', cuarteto:'', escuelita:'' },
     preciosMensuales: { "1xSemana":'', "2xSemana":'', "3xSemana":'', "libre":'' },
-    preciosServicios: { luz_30min: '', luz_60min: '', luz_90min: '', luz_120min: '' }, // <-- AÑADIDO
-    datosBancarios: { 
-        alias:'', 
-        cbu:'', 
-        banco:'',
-        titular: ''
-    },
+    preciosServicios: { luz_30min: '', luz_60min: '', luz_90min: '', luz_120min: '' },
+    datosBancarios: { alias:'', cbu:'', banco:'', titular: '' },
     horarioLaboral: (initialState?.perfil?.horarioLaboral) || [],
     modoTrabajo: 'Club',
     pin: ''
   };
   const [form, setForm] = useState(emptyPerfil);
 
-  // === Resto de estados que ya tenías ===
+  // === Estados para el componente ===
   const [pinInput, setPinInput] = useState({ newPin: "", confirmPin: "" });
   const [plantillas, setPlantillas] = useState([]);
   const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
@@ -10183,7 +10228,11 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
   const [editingPlantilla, setEditingPlantilla] = useState(null);
   const { abrirModalPago, Modal: ModalAbono } = useModalPagoAbono();
 
-  // === Plantillas (igual que antes) ===
+  // === Estados para el flujo de modales ===
+  const [wipeStep, setWipeStep] = useState(0); // 0: inactivo, 1: confirmar, 2: escribir texto, 3: ingresar PIN
+  const [confirmDeleteInfo, setConfirmDeleteInfo] = useState(null); // Para confirmaciones genéricas
+
+  // === Carga de Datos ===
   useEffect(() => {
     if (!user) return;
     const plantillasCollection = db.collection('users').doc(user.uid).collection('plantillas');
@@ -10194,13 +10243,10 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
     return () => unsubscribe();
   }, [user]);
 
-  // === Hidratar form desde perfil (club) → todo a string; sin undefined ===
-  const hydratedRef = React.useRef(false);
   useEffect(() => {
     const S = (v) => (v == null ? '' : String(v));
     const p = perfil || {};
     const pc = p.preciosClase || p.precios || {};
-
     setForm(prev => ({
       ...prev,
       nombre: p.nombre || '',
@@ -10223,11 +10269,11 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
         "3xSemana": S(p.preciosMensuales?.["3xSemana"]),
         "libre":    S(p.preciosMensuales?.["libre"]),
       },
-      preciosServicios: p.preciosServicios || emptyPerfil.preciosServicios, // <-- AÑADIDO
+      preciosServicios: p.preciosServicios || emptyPerfil.preciosServicios,
     }));
   }, [perfil]);
 
-  // === Handlers genéricos ===
+  // === Handlers de Formularios ===
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value ?? '' }));
@@ -10243,39 +10289,31 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
       return { ...prev, horarioLaboral: nuevo };
     });
   };
-
-  // === Precios (ahora en preciosClase / preciosMensuales) ===
   const handlePrecioClaseChange = (e) => {
-    const { name, value } = e.target; // name: individual | dupla | trio | cuarteto | escuelita
+    const { name, value } = e.target;
     setForm(prev => ({ ...prev, preciosClase: { ...prev.preciosClase, [name]: value ?? '' } }));
   };
   const handlePrecioMensualChange = (e) => {
-    const { name, value } = e.target; // name: 1xSemana | 2xSemana | 3xSemana | libre
+    const { name, value } = e.target;
     setForm(prev => ({ ...prev, preciosMensuales: { ...prev.preciosMensuales, [name]: value ?? '' } }));
   };
   const handlePreciosServiciosChange = (e) => {
     const { name, value } = e.target;
-    setForm(prev => ({ 
-        ...prev, 
-        preciosServicios: { 
-            ...prev.preciosServicios, 
-            [name]: value 
-        } 
-    }));
+    setForm(prev => ({ ...prev, preciosServicios: { ...prev.preciosServicios, [name]: value } }));
   };
 
-  // === PIN (igual que antes) ===
+  // === Handler de PIN ===
   const handleSetPin = () => {
     if (pinInput.newPin.length !== 3 || !/^\d{3}$/.test(pinInput.newPin)) {
-      alert("El PIN debe ser exactamente de 3 números.");
+      setToast("El PIN debe ser exactamente de 3 números.");
       return;
     }
     if (pinInput.newPin !== pinInput.confirmPin) {
-      alert("Los PINs no coinciden. Por favor, vuelve a intentarlo.");
+      setToast("Los PINs no coinciden.");
       return;
     }
     setForm(prev => ({ ...prev, pin: pinInput.newPin }));
-    setToast?.("PIN actualizado. No olvides guardar los cambios.");
+    setToast("PIN actualizado. No olvides guardar los cambios.");
     setPinInput({ newPin: "", confirmPin: "" });
   };
   const handlePinInputChange = (e) => {
@@ -10285,27 +10323,159 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
     }
   };
 
-  // === Export / Import / Wipe (tal cual los tenías) ===
+  // === Gestión de Datos ===
   const sanitizeDataForJSON = (data) => {
     const replacer = (key, value) => (value === undefined ? null : value);
     return JSON.parse(JSON.stringify(data, replacer));
   };
-  const handleExportData = () => { /* ... igual que tu versión ... */ };
-  const handleImportData = async (event) => { /* ... igual que tu versión ... */ };
-  const handleWipeData = async () => { /* ... igual que tu versión ... */ };
+  
+  const handleExportData = () => {
+    const dataToExport = {
+      alumnos, clases, pagos, gastos, grupos, otrosIngresos: (state && state.otrosIngresos) || [], perfil
+    };
+    const sanitizedData = sanitizeDataForJSON(dataToExport);
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(sanitizedData, null, 2))}`;
+    const link = document.createElement("a");
+    link.href = jsonString;
+    const date = new Date().toISOString().slice(0, 10);
+    link.download = `coachex_backup_${clubActivoId}_${date}.json`;
+    link.click();
+    setToast("Backup de datos exportado con éxito.");
+  };
 
-  // === WhatsApp / Plantillas (tal cual) ===
+  const handleImportData = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      setConfirmDeleteInfo({
+          title: "Importar Datos",
+          message: "¡ATENCIÓN! Al importar datos, se borrarán TODOS los datos existentes del club actual y se reemplazarán por los del archivo. ¿Deseas continuar?",
+          onConfirm: async () => {
+              try {
+                const importedData = JSON.parse(e.target.result);
+                if (!user || !clubActivoId) throw new Error("Usuario o club no identificado.");
+                setToast("Iniciando importación... Esto puede tardar.");
+                const baseRef = db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId);
+                const collectionsToWipe = ['alumnos', 'clases', 'pagos', 'gastos', 'grupos', 'otrosIngresos', 'mensualidades', 'perfil'];
+                for (const coll of collectionsToWipe) {
+                  const snapshot = await baseRef.collection(coll).get();
+                  const batch = db.batch();
+                  snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                  await batch.commit();
+                }
+                for (const coll of collectionsToWipe) {
+                  if (Array.isArray(importedData[coll])) {
+                    const batch = db.batch();
+                    (importedData[coll] || []).forEach(item => {
+                      const docRef = item.id ? baseRef.collection(coll).doc(item.id) : baseRef.collection(coll).doc();
+                      batch.set(docRef, item);
+                    });
+                    await batch.commit();
+                  }
+                }
+                if (importedData.perfil) {
+                  await baseRef.collection('perfil').doc('main').set(importedData.perfil);
+                }
+                setToast("¡Importación completada con éxito!");
+              } catch (error) {
+                console.error("Error al importar:", error);
+                setToast("Error al importar el archivo. Revisa que sea un backup válido.");
+              } finally {
+                event.target.value = null;
+              }
+          },
+          onCancel: () => {
+              event.target.value = null;
+          }
+      });
+    };
+    reader.readAsText(file);
+  };
+  
+  const handleWipeData = () => {
+    setWipeStep(1); 
+  };
+
+  const executeWipe = async () => {
+    try {
+      if (!user || !clubActivoId) throw new Error("Usuario o club no identificado.");
+      setToast("Borrando datos... Por favor espera.");
+      const baseRef = db.collection('users').doc(user.uid).collection('clubs').doc(clubActivoId);
+      const collections = ['alumnos', 'clases', 'pagos', 'gastos', 'grupos', 'otrosIngresos', 'mensualidades', 'perfil', 'rankings', 'torneos'];
+      for (const coll of collections) {
+        while (true) {
+          const snapshot = await baseRef.collection(coll).limit(500).get();
+          if (snapshot.size === 0) break;
+          const batch = db.batch();
+          snapshot.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+        }
+      }
+      setToast("¡Todos los datos del club han sido eliminados!");
+    } catch(error) {
+      console.error("Error al borrar datos:", error);
+      setToast("Error: No se pudieron borrar los datos.");
+    } finally {
+      setWipeStep(0);
+    }
+  };
+
+  // === Comunicaciones ===
   const alumnosFiltrados = useMemo(() => {
-    if (!busquedaAlumno) return [];
     return (alumnos || []).filter(a => a.estado === 'activo' && getNombreCompleto(a).toLowerCase().includes(busquedaAlumno.toLowerCase()));
   }, [busquedaAlumno, alumnos]);
-  const handleAgregarDestinatario = (alumno) => { /* ... */ };
-  const handleQuitarDestinatario  = (alumnoId) => { /* ... */ };
-  const handleSendMessage         = (destinatario) => { /* ... */ };
-  const handleSavePlantilla       = (plantillaData) => { /* ... */ };
-  const handleDeletePlantilla     = () => { /* ... */ };
 
-  // === Guardar Perfil en /clubs/{clubId}/perfil/main (vía perfilCrud.update) ===
+  const handleAgregarDestinatario = (alumno) => {
+    if (!destinatarios.some(d => d.id === alumno.id)) {
+      setDestinatarios(prev => [...prev, alumno]);
+    }
+    setBusquedaAlumno("");
+    setListaBusquedaAbierta(false);
+  };
+
+  const handleQuitarDestinatario = (alumnoId) => {
+    setDestinatarios(prev => prev.filter(d => d.id !== alumnoId));
+  };
+
+  const handleSendMessage = (destinatario) => {
+    const mensajeFinal = mensajePersonalizado.replace(/{nombre_alumno}/g, destinatario.nombre || '');
+    const link = waLink(destinatario.telefono, destinatario.nombre, mensajeFinal);
+    if (link) {
+      window.open(link, '_blank');
+    } else {
+      setToast(`El alumno ${getNombreCompleto(destinatario)} no tiene un teléfono válido.`);
+    }
+  };
+
+  const handleSavePlantilla = (plantillaData) => {
+    if (!user) return;
+    const plantillasCollection = db.collection('users').doc(user.uid).collection('plantillas');
+    if (plantillaData.id) {
+      const { id, ...data } = plantillaData;
+      plantillasCollection.doc(id).update(data).then(() => { setToast("Plantilla actualizada"); });
+    } else {
+      plantillasCollection.add(plantillaData).then(() => { setToast("Plantilla creada"); });
+    }
+    setEditingPlantilla(null);
+  };
+
+  const handleDeletePlantilla = () => {
+    if (!plantillaSeleccionada) return;
+    setConfirmDeleteInfo({
+        title: "Eliminar Plantilla",
+        message: `¿Estás seguro de que quieres eliminar la plantilla "${plantillaSeleccionada.titulo}"?`,
+        onConfirm: () => {
+            db.collection('users').doc(user.uid).collection('plantillas').doc(plantillaSeleccionada.id).delete().then(() => {
+                setToast("Plantilla eliminada");
+                setPlantillaSeleccionada(null);
+                setMensajePersonalizado("");
+            });
+        }
+    });
+  };
+
+  // === Guardado y Submit ===
   async function guardarPerfil() {
     try {
       const u = auth.currentUser;
@@ -10314,7 +10484,6 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
       const tok = await u.getIdTokenResult();
       if (!tok.claims.email_verified) { setToast?.("Verificá tu email para continuar"); return; }
       await u.getIdToken(true);
-
       const payload = {
         nombre: form.nombre || '',
         apellido: form.apellido || '',
@@ -10336,7 +10505,6 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
           "3xSemana": Number(form.preciosMensuales?.["3xSemana"]) || 0,
           "libre":    Number(form.preciosMensuales?.["libre"])    || 0,
         },
-        // NUEVO
         preciosServicios: {
             luz_30min: Number(form.preciosServicios?.luz_30min) || 0,
             luz_60min: Number(form.preciosServicios?.luz_60min) || 0,
@@ -10345,13 +10513,8 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
         },
         updatedAt: new Date().toISOString(),
       };
-
       if (perfilCrud && typeof perfilCrud.update === 'function') {
-        await perfilCrud.update(payload);  // <- tu CRUD debe escribir en .../clubs/{clubId}/perfil/main
-      } else {
-        // Fallback directo si hiciera falta:
-        // const baseRef = db.collection('users').doc(u.uid).collection('clubs').doc(clubActivoId);
-        // await baseRef.collection('perfil').doc('main').set(payload, { merge:true });
+        await perfilCrud.update(payload);
       }
       setToast?.("Perfil guardado");
     } catch (e) {
@@ -10360,23 +10523,22 @@ function Perfil({ perfil, alumnos, clases, pagos, gastos, grupos, onUpdate, user
     }
   }
 
-  // === Submit del formulario: ahora usa guardarPerfil ===
   const handleSubmit = async (e) => {
     e.preventDefault();
     await guardarPerfil();
   };
-      const handlePasswordReset = () => {
-        if(user && user.email) {
-            auth.sendPasswordResetEmail(user.email)
-                .then(() => setToast("Email para restablecer contraseña enviado."))
-                .catch((error) => setToast(`Error: ${error.message}`));
-        }
-      };
+  const handlePasswordReset = () => {
+      if(user && user.email) {
+          auth.sendPasswordResetEmail(user.email)
+              .then(() => setToast("Email para restablecer contraseña enviado."))
+              .catch((error) => setToast(`Error: ${error.message}`));
+      }
+  };
 
-return (
-  <>
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-      <Card title={<span className="text-[#34745B]">Perfil y Configuración</span>}>
+  return (
+    <>
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <Card title={<span className="text-[#34745B]">Perfil y Configuración</span>}>
           <h4 className="text-md font-semibold text-slate-700 mb-2">Datos Personales</h4>
           <div className="grid gap-3">
             <div><label className="text-sm text-slate-600">Nombre del Profesor</label><input name="nombre" value={form.nombre} onChange={handleChange} className="w-full border rounded-lg px-3 py-2" /></div>
@@ -10402,169 +10564,213 @@ return (
                 <div><button type="button" onClick={handlePasswordReset} className="w-full px-4 py-2 rounded-lg border text-sm bg-slate-100 hover:bg-slate-200">Restablecer Contraseña</button></div>
               </div>
           </div>
-      </Card>
-      
-      <div className="space-y-6"> {/* <-- ESTE ES EL DIV CONTENEDOR NUEVO */}
-      
-        {/* Tu Card de Datos Bancarios (sin cambios) */}
-        <Card title={<span className="text-[#34745B]">Datos Bancarios para Transferencias</span>}>
-          <div className="grid gap-4">
-              {['alias', 'cbu', 'banco', 'titular'].map(field => (
-                  <div key={field}>
-                      <label className="text-sm font-medium text-slate-600 capitalize">{field}</label>
-                      <div className="flex gap-2 mt-1">
-                          <input type="text" name={field} value={(form.datosBancarios || {})[field] || ''} onChange={handleDatosBancariosChange} className="w-full border rounded-lg px-3 py-2" />
-                          <button type="button" onClick={() => navigator.clipboard.writeText((form.datosBancarios || {})[field] || '')} className="px-3 py-2 rounded-lg border text-sm hover:bg-slate-100">Copiar</button>
-                      </div>
-                  </div>
-              ))}
-          </div>
         </Card>
-
-        {/* Tu Card de Precios de Servicios Adicionales (ahora dentro del mismo div) */}
-        <Card title={<span className="text-[#34745B]">Precios de Servicios Adicionales</span>}>
-          <h4 className="text-md font-semibold text-slate-700 mb-2">Luz Artificial</h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-                <label className="text-sm text-slate-600">Precio por 30 min</label>
-                <input 
-                    type="number" 
-                    name="luz_30min" 
-                    value={form.preciosServicios?.luz_30min || ''} 
-                    onChange={handlePreciosServiciosChange} 
-                    className="w-full border rounded-lg px-3 py-2" />
-            </div>
-            <div>
-                <label className="text-sm text-slate-600">Precio por 60 min (1 hr)</label>
-                <input 
-                    type="number" 
-                    name="luz_60min" 
-                    value={form.preciosServicios?.luz_60min || ''} 
-                    onChange={handlePreciosServiciosChange} 
-                    className="w-full border rounded-lg px-3 py-2" />
-            </div>
-            <div>
-                <label className="text-sm text-slate-600">Precio por 90 min</label>
-                <input 
-                    type="number" 
-                    name="luz_90min" 
-                    value={form.preciosServicios?.luz_90min || ''} 
-                    onChange={handlePreciosServiciosChange} 
-                    className="w-full border rounded-lg px-3 py-2" />
-            </div>
-            <div>
-                <label className="text-sm text-slate-600">Precio por 120 min (2 hs)</label>
-                <input 
-                    type="number" 
-                    name="luz_120min" 
-                    value={form.preciosServicios?.luz_120min || ''} 
-                    onChange={handlePreciosServiciosChange} 
-                    className="w-full border rounded-lg px-3 py-2" />
-            </div>
-          </div>
-        </Card>
-
-      </div>
-
-      <div className="md:col-span-2">
-        <Card title={<span className="text-[#34745B]">Centro de Comunicaciones</span>}>
-            <div className="grid gap-4">
-                <div>
-                    <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
-                    <div className="flex gap-2 mt-1">
-                        <select className="w-full border rounded-lg px-3 py-2" value={plantillaSeleccionada ? plantillaSeleccionada.id : ""} onChange={(e) => { const p = plantillas.find(p => p.id === e.target.value); setPlantillaSeleccionada(p || null); setMensajePersonalizado(p ? p.texto : ""); }}>
-                            <option value="">Seleccionar plantilla...</option>
-                            {plantillas.map(p => (<option key={p.id} value={p.id}>{p.titulo}</option>))}
-                        </select>
-                        <button type="button" onClick={() => setEditingPlantilla({})} className="px-3 py-2 text-sm rounded-lg bg-[#34745B] hover:bg-green-800 text-white whitespace-nowrap">+ Nueva</button>
-                        <button type="button" onClick={() => plantillaSeleccionada && setEditingPlantilla(plantillaSeleccionada)} disabled={!plantillaSeleccionada} className="px-3 py-2 text-sm rounded-lg border disabled:opacity-50">Editar</button>
-                        <button type="button" onClick={handleDeletePlantilla} disabled={!plantillaSeleccionada} className="px-3 py-2 text-sm rounded-lg border text-red-600 disabled:opacity-50">Eliminar</button>
-                    </div>
-                    <textarea value={mensajePersonalizado} onChange={(e) => setMensajePersonalizado(e.target.value)} className="w-full mt-2 border rounded-lg px-3 py-2" rows={5} placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar." />
-                </div>
-                <div className="relative">
-                    <label className="text-sm font-medium text-slate-600">2. Selecciona los destinatarios</label>
-                    <input type="text" value={busquedaAlumno} onChange={(e) => { setBusquedaAlumno(e.target.value); setListaBusquedaAbierta(true); }} onBlur={() => setTimeout(() => setListaBusquedaAbierta(false), 200)} placeholder="Escribe para buscar alumnos..." className="w-full mt-1 border rounded-lg px-3 py-2" />
-                    {listaBusquedaAbierta && busquedaAlumno && (
-                        <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
-                            {alumnosFiltrados.length > 0 ? alumnosFiltrados.map(a => (<li key={a.id} onMouseDown={() => handleAgregarDestinatario(a)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">{getNombreCompleto(a)}</li>)) : <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>}
-                        </ul>
-                    )}
-                    <div className="mt-2">
-                        <p className="text-xs font-semibold text-slate-500">Destinatarios ({destinatarios.length}):</p>
-                        {destinatarios.length > 0 && (<div className="flex flex-wrap gap-2 mt-1 p-2 border rounded-lg bg-slate-50">{destinatarios.map(d => (<span key={d.id} className="flex items-center gap-2 bg-sky-100 text-sky-800 text-sm rounded-full px-2 py-1">{getNombreCompleto(d)}<button type="button" onClick={() => handleQuitarDestinatario(d.id)} className="w-4 h-4 rounded-full bg-sky-200 text-sky-800 flex items-center justify-center font-bold text-xs">x</button></span>))}</div>)}
-                    </div>
-                </div>
-                <div>
-                    <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
-                    <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2 max-h-48 overflow-y-auto">{destinatarios.length > 0 ? (destinatarios.map(destinatario => (<button key={destinatario.id} type="button" onClick={() => handleSendMessage(destinatario)} className="w-full flex justify-between items-center text-left px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"><span>Enviar a: <strong>{getNombreCompleto(destinatario)}</strong></span><span role="img" aria-label="send">💬</span></button>))) : (<p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>)}</div>
-                </div>
-            </div>
-            <PlantillaModal isOpen={editingPlantilla !== null} plantilla={editingPlantilla?.id ? editingPlantilla : null} onCancel={() => setEditingPlantilla(null)} onSave={handleSavePlantilla} />
-        </Card>
-      </div>
-      
-      <div className="md:col-span-2">
-        <Card title={<span className="text-[#34745B]">Mis Clubes</span>}>
-            <GestionClubes user={user} />
-        </Card>
-      </div>
-
-      <div className="md:col-span-2">
-        <Card title={<span className="text-[#34745B]">Gestión de Datos</span>}>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button type="button" onClick={handleExportData} className="w-full px-4 py-2 rounded-lg border bg-[#34745B] hover:bg-green-800 text-white font-semibold">Exportar Datos (Backup)</button>
-                <button type="button" onClick={() => fileInputRef.current.click()} className="w-full px-4 py-2 rounded-lg border bg-slate-600 hover:bg-slate-700 text-white font-semibold">Importar Datos</button>
-                <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleImportData} />
-            </div>
-            <p className="text-xs text-slate-500 mt-3"><strong>Atención:</strong> La importación de datos reemplazará toda la información existente en el modo de trabajo que tengas seleccionado.</p>
-        </Card>
-      </div>
-      
-      <div className="md:col-span-2">
-        <Card title={<span className="text-[#34745B]">Seguridad y PIN</span>}>
-            <div className="space-y-4">
-                <div>
-                    <label className="text-sm text-slate-600 block mb-1">
-                        {form.pin ? "Cambiar PIN de seguridad (3 dígitos)" : "Crear PIN de seguridad (3 dígitos)"}
-                    </label>
-                    <p className="text-xs text-slate-500 mb-2">
-                        Este PIN se solicitará para acciones críticas.
-                    </p>
-                    <div className="grid grid-cols-2 gap-3">
-                        <input type="password" name="newPin" value={pinInput.newPin} onChange={handlePinInputChange} placeholder="Nuevo PIN" maxLength="3" className="w-full border rounded-lg px-3 py-2 text-center" />
-                        <input type="password" name="confirmPin" value={pinInput.confirmPin} onChange={handlePinInputChange} placeholder="Confirmar PIN" maxLength="3" className="w-full border rounded-lg px-3 py-2 text-center" />
-                    </div>
-                </div>
-                <button type="button" onClick={handleSetPin} className="w-full px-4 py-2 rounded-lg bg-slate-600 hover:bg-slate-700 text-white font-semibold">
-                    {form.pin ? "Actualizar PIN" : "Establecer PIN"}
-                </button>
-            </div>
-        </Card>
-      </div>
-
-      <div className="md:col-span-2">
-        <div className="p-4 border-2 border-red-300 bg-red-50 rounded-2xl">
-            <h3 className="text-base font-semibold text-red-800">Zona de Peligro</h3>
-            <p className="text-sm text-red-700 mt-2 mb-3">
-                La siguiente acción es permanente y no se puede deshacer.
-            </p>
-            <button type="button" onClick={handleWipeData} className="w-full px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold">
-                Borrar Todos los Datos de este Modo de Trabajo
-            </button>
+        
+        <div className="space-y-6">
+          <Card title={<span className="text-[#34745B]">Datos Bancarios para Transferencias</span>}>
+  <div className="grid gap-4">
+    {['alias', 'cbu', 'banco', 'titular'].map(field => (
+      <div key={field}>
+        <label className="text-sm font-medium text-slate-600 capitalize">{field}</label>
+        <div className="flex gap-2 mt-1">
+          <input 
+            type="text" 
+            name={field} 
+            value={(form.datosBancarios || {})[field] || ''} 
+            onChange={handleDatosBancariosChange} 
+            className="w-full border rounded-lg px-3 py-2" 
+          />
+          <button 
+            type="button" 
+            onClick={() => {
+              navigator.clipboard.writeText((form.datosBancarios || {})[field] || '');
+              setToast(`${field.toUpperCase()} copiado al portapapeles`);
+            }} 
+            className="px-3 py-2 rounded-lg border text-sm hover:bg-slate-100"
+          >
+            Copiar
+          </button>
         </div>
       </div>
+    ))}
+  </div>
+</Card>
+          <Card title={<span className="text-[#34745B]">Precios de Servicios Adicionales</span>}>
+            <h4 className="text-md font-semibold text-slate-700 mb-2">Luz Artificial</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="text-sm text-slate-600">Precio por 30 min</label><input type="number" name="luz_30min" value={form.preciosServicios?.luz_30min || ''} onChange={handlePreciosServiciosChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Precio por 60 min (1 hr)</label><input type="number" name="luz_60min" value={form.preciosServicios?.luz_60min || ''} onChange={handlePreciosServiciosChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Precio por 90 min</label><input type="number" name="luz_90min" value={form.preciosServicios?.luz_90min || ''} onChange={handlePreciosServiciosChange} className="w-full border rounded-lg px-3 py-2" /></div>
+              <div><label className="text-sm text-slate-600">Precio por 120 min (2 hs)</label><input type="number" name="luz_120min" value={form.preciosServicios?.luz_120min || ''} onChange={handlePreciosServiciosChange} className="w-full border rounded-lg px-3 py-2" /></div>
+            </div>
+          </Card>
+        </div>
 
-      <div className="md:col-span-2 flex justify-end">
-         <button type="submit" className="px-6 py-3 rounded-xl bg-[#34745B] hover:bg-green-800 text-white font-semibold">Guardar Todos los Cambios</button>
-      </div>
-    </form>
+        <div className="md:col-span-2">
+          <Card title={<span className="text-[#34745B]">Centro de Comunicaciones</span>}>
+              <div className="grid gap-4">
+                  <div>
+                      <label className="text-sm font-medium text-slate-600">1. Elige una plantilla o escribe un mensaje</label>
+                      <div className="flex gap-2 mt-1">
+                          <select className="w-full border rounded-lg px-3 py-2" value={plantillaSeleccionada ? plantillaSeleccionada.id : ""} onChange={(e) => { const p = plantillas.find(p => p.id === e.target.value); setPlantillaSeleccionada(p || null); setMensajePersonalizado(p ? p.texto : ""); }}>
+                              <option value="">Seleccionar plantilla...</option>
+                              {plantillas.map(p => (<option key={p.id} value={p.id}>{p.titulo}</option>))}
+                          </select>
+                          <button type="button" onClick={() => setEditingPlantilla({})} className="px-3 py-2 text-sm rounded-lg bg-[#34745B] hover:bg-green-800 text-white whitespace-nowrap">+ Nueva</button>
+                          <button type="button" onClick={() => plantillaSeleccionada && setEditingPlantilla(plantillaSeleccionada)} disabled={!plantillaSeleccionada} className="px-3 py-2 text-sm rounded-lg border disabled:opacity-50">Editar</button>
+                          <button type="button" onClick={handleDeletePlantilla} disabled={!plantillaSeleccionada} className="px-3 py-2 text-sm rounded-lg border text-red-600 disabled:opacity-50">Eliminar</button>
+                      </div>
+                      <textarea value={mensajePersonalizado} onChange={(e) => setMensajePersonalizado(e.target.value)} className="w-full mt-2 border rounded-lg px-3 py-2" rows={5} placeholder="O escribe un mensaje personalizado aquí... Usa {nombre_alumno} para personalizar." />
+                  </div>
+                  <div className="relative">
+                      <label className="text-sm font-medium text-slate-600">2. Selecciona los destinatarios</label>
+                      <input type="text" value={busquedaAlumno} onChange={(e) => { setBusquedaAlumno(e.target.value); setListaBusquedaAbierta(true); }} onBlur={() => setTimeout(() => setListaBusquedaAbierta(false), 200)} placeholder="Escribe para buscar alumnos..." className="w-full mt-1 border rounded-lg px-3 py-2" />
+                      {listaBusquedaAbierta && busquedaAlumno && (
+                          <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
+                              {alumnosFiltrados.length > 0 ? alumnosFiltrados.map(a => (<li key={a.id} onMouseDown={() => handleAgregarDestinatario(a)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer">{getNombreCompleto(a)}</li>)) : <li className="px-3 py-2 text-slate-500">No se encontraron alumnos.</li>}
+                          </ul>
+                      )}
+                      <div className="mt-2">
+                          <p className="text-xs font-semibold text-slate-500">Destinatarios ({destinatarios.length}):</p>
+                          {destinatarios.length > 0 && (<div className="flex flex-wrap gap-2 mt-1 p-2 border rounded-lg bg-slate-50">{destinatarios.map(d => (<span key={d.id} className="flex items-center gap-2 bg-sky-100 text-sky-800 text-sm rounded-full px-2 py-1">{getNombreCompleto(d)}<button type="button" onClick={() => handleQuitarDestinatario(d.id)} className="w-4 h-4 rounded-full bg-sky-200 text-sky-800 flex items-center justify-center font-bold text-xs">x</button></span>))}</div>)}
+                      </div>
+                  </div>
+                  <div>
+                      <label className="text-sm font-medium text-slate-600">3. Envía los mensajes</label>
+                      <div className="mt-2 p-3 border rounded-lg bg-slate-50 space-y-2 max-h-48 overflow-y-auto">{destinatarios.length > 0 ? (destinatarios.map(destinatario => (<button key={destinatario.id} type="button" onClick={() => handleSendMessage(destinatario)} className="w-full flex justify-between items-center text-left px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"><span>Enviar a: <strong>{getNombreCompleto(destinatario)}</strong></span><span role="img" aria-label="send">💬</span></button>))) : (<p className="text-xs text-slate-400">Selecciona al menos un destinatario para ver los botones de envío.</p>)}</div>
+                  </div>
+              </div>
+              <PlantillaModal isOpen={editingPlantilla !== null} plantilla={editingPlantilla?.id ? editingPlantilla : null} onCancel={() => setEditingPlantilla(null)} onSave={handleSavePlantilla} />
+          </Card>
+        </div>
+        
+        <div className="md:col-span-2">
+          <Card title={<span className="text-[#34745B]">Mis Clubes</span>}>
+              <GestionClubes user={user} />
+          </Card>
+        </div>
 
-    {/* 👇 Montado una sola vez, fuera del <form> */}
-    <ModalAbono />
-  </>
-);
-    }
+        <div className="md:col-span-2">
+          <Card title={<span className="text-[#34745B]">Gestión de Datos</span>}>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button type="button" onClick={handleExportData} className="w-full px-4 py-2 rounded-lg border bg-[#34745B] hover:bg-green-800 text-white font-semibold">Exportar Datos (Backup)</button>
+                  <button type="button" onClick={() => fileInputRef.current.click()} className="w-full px-4 py-2 rounded-lg border bg-slate-600 hover:bg-slate-700 text-white font-semibold">Importar Datos</button>
+                  <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleImportData} />
+              </div>
+              <p className="text-xs text-slate-500 mt-3"><strong>Atención:</strong> La importación de datos reemplazará toda la información existente en el modo de trabajo que tengas seleccionado.</p>
+          </Card>
+        </div>
+        
+        <div className="md:col-span-2">
+          <Card title={<span className="text-[#34745B]">Seguridad y PIN</span>}>
+              <div className="space-y-4">
+                  <div>
+                      <label className="text-sm text-slate-600 block mb-1">
+                          {form.pin ? "Cambiar PIN de seguridad (3 dígitos)" : "Crear PIN de seguridad (3 dígitos)"}
+                      </label>
+                      <p className="text-xs text-slate-500 mb-2">
+                          Este PIN se solicitará para acciones críticas.
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                          <input type="password" name="newPin" value={pinInput.newPin} onChange={handlePinInputChange} placeholder="Nuevo PIN" maxLength="3" className="w-full border rounded-lg px-3 py-2 text-center" />
+                          <input type="password" name="confirmPin" value={pinInput.confirmPin} onChange={handlePinInputChange} placeholder="Confirmar PIN" maxLength="3" className="w-full border rounded-lg px-3 py-2 text-center" />
+                      </div>
+                  </div>
+                  <button type="button" onClick={handleSetPin} className="w-full px-4 py-2 rounded-lg bg-slate-600 hover:bg-slate-700 text-white font-semibold">
+                      {form.pin ? "Actualizar PIN" : "Establecer PIN"}
+                  </button>
+              </div>
+          </Card>
+        </div>
+
+        <div className="md:col-span-2">
+          <div className="p-4 border-2 border-red-300 bg-red-50 rounded-2xl">
+              <h3 className="text-base font-semibold text-red-800">Zona de Peligro</h3>
+              <p className="text-sm text-red-700 mt-2 mb-3">
+                  La siguiente acción es permanente y no se puede deshacer.
+              </p>
+              <button type="button" onClick={handleWipeData} className="w-full px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold">
+                  Borrar Todos los Datos de este Modo de Trabajo
+              </button>
+          </div>
+        </div>
+
+        <div className="md:col-span-2 flex justify-end">
+           <button type="submit" className="px-6 py-3 rounded-xl bg-[#34745B] hover:bg-green-800 text-white font-semibold">Guardar Todos los Cambios</button>
+        </div>
+      </form>
+
+      {/* --- INICIO DEL BLOQUE DE MODALES --- */}
+      
+      {/* Modal para confirmaciones genéricas (ej. eliminar plantilla) */}
+      <Modal
+        isOpen={!!confirmDeleteInfo}
+        title={confirmDeleteInfo?.title || "Confirmar Acción"}
+        onCancel={() => setConfirmDeleteInfo(null)}
+        onConfirm={() => {
+          confirmDeleteInfo?.onConfirm();
+          setConfirmDeleteInfo(null);
+        }}
+        confirmText="Confirmar"
+        size="md"
+      >
+        <p className="text-slate-600">{confirmDeleteInfo?.message}</p>
+      </Modal>
+
+      {/* Flujo de Modales para Borrar Datos */}
+      <Modal
+        isOpen={wipeStep === 1}
+        title="Confirmar Borrado de Datos"
+        onCancel={() => setWipeStep(0)}
+        onConfirm={() => setWipeStep(2)}
+        confirmText="Sí, quiero continuar"
+        size="md"
+      >
+        <div className="text-center">
+          <p className="text-lg font-bold text-red-700">¡ACCIÓN IRREVERSIBLE!</p>
+          <p className="mt-2 text-slate-600">
+            ¿Estás absolutamente seguro de que quieres borrar TODOS los datos de este club?
+            Toda la información de alumnos, clases, pagos y configuraciones se eliminará permanentemente.
+          </p>
+        </div>
+      </Modal>
+
+      <InputModal
+        isOpen={wipeStep === 2}
+        title="Confirmación Final"
+        message="Para confirmar, escribe 'BORRAR DATOS' en el campo de abajo."
+        placeholder="BORRAR DATOS"
+        onCancel={() => setWipeStep(0)}
+        onConfirm={(inputValue) => {
+          if (inputValue === "BORRAR DATOS") {
+            if (perfil.pin) {
+              setWipeStep(3);
+            } else {
+              executeWipe();
+            }
+          } else {
+            setToast("Texto incorrecto. Borrado cancelado.");
+            setWipeStep(0);
+          }
+        }}
+      />
+
+      <PinConfirmModal
+        isOpen={wipeStep === 3}
+        onClose={() => setWipeStep(0)}
+        onConfirm={executeWipe}
+        perfil={perfil}
+        title="PIN de Seguridad Requerido"
+        message="Ingresa tu PIN de 3 dígitos para autorizar el borrado definitivo de los datos."
+      />
+      
+      {/* Otros modales que ya tenías */}
+      <ModalAbono />
+      
+      {/* --- FIN DEL BLOQUE DE MODALES --- */}
+    </>
+  );
+}
 
 function PinConfirmModal({ isOpen, onClose, onConfirm, perfil, title, message }) {
   const [pinInput, setPinInput] = React.useState("");
